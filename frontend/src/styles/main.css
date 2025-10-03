@@ -1,0 +1,485 @@
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+@import 'tippy.js/dist/tippy.css';
+
+/* Dark mode for AG-Grid */
+.dark .ag-theme-alpine {
+  --ag-background-color: #1f2937;
+  --ag-foreground-color: #f9fafb;
+  --ag-header-background-color: #374151;
+  --ag-odd-row-background-color: #111827;
+  --ag-row-hover-color: #374151;
+  --ag-selected-row-background-color: #3b82f6;
+  --ag-border-color: #4b5563;
+  --ag-cell-horizontal-border: solid #4b5563;
+  --ag-row-border-color: #4b5563;
+  --ag-header-foreground-color: #f9fafb;
+  --ag-font-family: 'Inter', system-ui, sans-serif;
+  --ag-header-column-resize-handle-color: transparent;
+}
+
+/* Custom AG-Grid styles */
+.ag-theme-alpine {
+  --ag-font-family: 'Inter', system-ui, sans-serif;
+  --ag-font-size: 14px;
+  --ag-row-height: 60px;
+  --ag-header-height: 50px;
+  --ag-border-radius: 8px;
+  --ag-cell-horizontal-padding: 12px;
+  --ag-cell-vertical-padding: 8px;
+  --ag-border-color: transparent;
+  --ag-header-column-resize-handle-color: transparent;
+}
+
+.ag-theme-alpine .ag-header-cell {
+  font-weight: 600;
+  color: #374151;
+}
+
+.dark .ag-theme-alpine .ag-header-cell {
+  color: #f9fafb;
+}
+
+.ag-theme-alpine .ag-row {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .ag-theme-alpine .ag-row {
+  border-bottom: 1px solid #4b5563;
+}
+
+.ag-theme-alpine .ag-row:hover {
+  background-color: #f3f4f6;
+}
+
+.dark .ag-theme-alpine .ag-row:hover {
+  background-color: #374151;
+}
+
+.ag-theme-alpine .ag-paging-panel {
+  color: #707172;
+  background-color: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  display: flex; 
+  justify-content: center; 
+}
+
+.dark .ag-theme-alpine .ag-paging-panel {
+  color: #d1d5db;
+  background-color: #1f2937;
+  border-top: 1px solid #374151;
+  display: flex; 
+  justify-content: center; 
+}
+
+.stable-render {
+  contain: layout style paint;
+}
+
+.employee-modal-content .text-xs {
+  font-size: 12px;    
+  line-height: 0.8rem; 
+}
+
+.employee-modal-content .text-sm {
+  font-size: 13px;
+  line-height: 1rem; 
+}
+
+/* ====================================================================== */
+/* ==  ESTILOS CUSTOMIZADOS PARA O FULLCALENDAR (VERSÃO FINAL)         == */
+/* ====================================================================== */
+
+/* 1. APARÊNCIA GERAL */
+.fc {
+  font-size: 0.875rem;
+  border: none !important;
+}
+.fc .fc-view-harness {
+  border: none !important;
+}
+
+/* 2. BARRA DE FERRAMENTAS (BOTÕES E TÍTULO) */
+.fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.fc .fc-button {
+  background-color: #f3f4f6 !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
+  font-weight: 500 !important;
+}
+.fc .fc-button-primary:hover {
+  background-color: #e5e7eb !important;
+}
+.fc .fc-button-primary:active, .fc .fc-button-primary:focus {
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5) !important;
+}
+.fc .fc-button-primary.fc-button-active {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border-color: #2563eb !important;
+}
+
+/* 3. ÁREA DE RECURSOS E CABEÇALHO */
+.fc .fc-resource-area-main {
+  font-weight: 500;
+}
+.fc .fc-col-header-cell-cushion {
+    padding: 0.75rem 0.5rem !important;
+}
+
+
+/* 4. LINHAS DE GRADE */
+.fc-theme-standard td, .fc-theme-standard th {
+  border-color: #d1d5db; /* cinza claro para grade (modo claro) */
+}
+.dark .fc-theme-standard td, 
+.dark .fc-theme-standard th {
+  border-color: #4b5563; /* cinza escuro para grade (modo escuro) */
+}
+
+/* 5. ESTILOS DOS EVENTOS */
+.fc-event {
+  padding: 0.25rem 0.5rem !important;
+  cursor: pointer;
+  border-radius: 0.375rem !important;
+  border: none;
+  overflow: visible !important;
+}
+
+.fc-event-title.fc-sticky {
+    position: sticky;
+    left: 0;
+    /* opcional: top: 0; bottom: 0; 
+       background: <cor do fundo>; 
+       z-index: 2; (se precisar sobrepor bordas/linhas) */
+}
+
+/* 6. INDICADOR DE "AGORA" - VERSÃO CORRIGIDA */
+.fc .fc-timeline-now-indicator-line {
+  border-color: #ef4444 !important;
+  border-width: 0 0 0 2px !important;
+  border-style: solid !important;
+  z-index: 999 !important;
+}
+
+/* Garante que o indicador apareça no cabeçalho */
+.fc .fc-timeline-now-indicator-arrow {
+  border-bottom-color: #ef4444 !important;
+  border-top-color: #ef4444 !important;
+}
+
+/* Força exibição do nowIndicator */
+.fc-timeline-now-indicator-line,
+.fc-timeline-now-indicator-arrow {
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* 7. ESTILOS DE FUNDO (DIAS NÃO-ÚTEIS) */
+.fc .fc-non-business {
+  background-color: #f9fafb !important;
+}
+.dark .fc .fc-non-business {
+  background-color: #374151 !important;
+}
+
+/* Fundo branco exclusivo para a visão semanal */
+.fc-resourceTimelineWeek-view .fc-timeline-body {
+  background-color: #fff !important;
+}
+
+/* Na visão semanal, ignorar sombreamento de fim de semana */
+.fc-resourceTimelineWeek-view .fc-non-business {
+  background-color: transparent !important;
+}
+
+/* Modo escuro para FullCalendar */
+.dark .fc {
+  color: #f9fafb;
+}
+
+.dark .fc .fc-toolbar-title {
+  color: #f9fafb;
+}
+
+.dark .fc .fc-button {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+.dark .fc .fc-button:hover {
+  background-color: #4b5563 !important;
+}
+
+.dark .fc .fc-button-primary.fc-button-active {
+  background-color: #3b82f6 !important;
+  border-color: #2563eb !important;
+}
+
+.dark .fc-resourceTimelineWeek-view .fc-timeline-body {
+  background-color: #1f2937 !important;
+}
+
+/* Estilos adicionais para nowIndicator mais visível */
+.fc .fc-timeline-now-indicator-line {
+  background: linear-gradient(to right, #ef4444, transparent) !important;
+  width: 2px !important;
+}
+
+.fc-license-message {
+  display: none !important;
+}
+
+.fc .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
+  top: -24px !important; 
+  background-color: #f3f4f6 !important;
+}
+
+.dark .fc .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
+  top: -24px !important; 
+  background-color: #1f2937 !important;
+
+}
+.fc .fc-scrollgrid-section-footer.fc-scrollgrid-section-sticky > * {
+    bottom: -23px;
+}
+
+.fc .fc-timeline-header-row:last-child .fc-timeline-slot-frame {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: normal !important;
+} 
+
+.fc-theme-standard td, .fc-theme-standard th {
+    border-color: #e5e5e5;
+}
+
+.dark .text-gray-500
+ {
+    --tw-text-opacity: 1;
+    color: #ffffff;
+}
+
+.dark .text-gray-800 {
+    --tw-text-opacity: 1;
+    color: #ffffff;
+}
+
+.plogo {
+    padding: 1rem 0 1rem 0.5rem;
+}
+
+/* ======================================================== */
+/* ==  ESTILOS PARA O MODO APRESENTAÇÃO (TELA CHEIA)     == */
+/* ======================================================== */
+/* 
+  1. Define o card como um container flex vertical em tela cheia
+     e aplica um fundo branco.
+*/
+
+.fullscreen-card:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  overflow: auto; /* permite barras de rolagem vertical e horizontal quando necessário */
+}
+
+.fullscreen-card:fullscreen,
+.fullscreen-card:-webkit-full-screen,
+.fullscreen-card:-moz-full-screen {
+  background-color: white;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 
+  2. Força o #calendar-container a crescer e a se tornar um flex container também.
+*/
+.fullscreen-card:fullscreen > #calendar-container,
+.fullscreen-card:-webkit-full-screen > #calendar-container,
+.fullscreen-card:-moz-full-screen > #calendar-container {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 
+  3. ESTA É A CORREÇÃO CRUCIAL:
+  Força o container principal do FullCalendar (.fc) a crescer dentro do #calendar-container.
+*/
+.fullscreen-card:fullscreen .fc,
+.fullscreen-card:-webkit-full-screen .fc,
+.fullscreen-card:-moz-full-screen .fc {
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+
+
+/* O contêiner principal do select */
+.react-select-container .react-select__control {
+  border-width: 1px;
+  border-color: #d1d5db; /* Cor de `border-gray-300` */
+  border-radius: 8px; /* Cor de `rounded-lg` */
+  background-color: #ffffff;
+ /*  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); `shadow-sm`
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s; */
+  min-height: 39px !important; /* Garante a mesma altura dos outros inputs */
+}
+
+
+.react-select-container .react-select__control:hover {
+  border-width: 1px;
+  border-color: #d1d5db; /* Cor de `border-gray-300` */
+  border-radius: 8px; /* Cor de `rounded-lg` */
+  background-color: #ffffff;
+ /*  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); `shadow-sm`
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s; */
+  min-height: 39px !important; /* Garante a mesma altura dos outros inputs */
+}
+
+.dark .react-select-container .react-select__control {
+  border-color: #4b5563; /* Cor de `dark:border-gray-600` */
+  background-color: #1f2937; /* Cor de `dark:bg-gray-800` */
+}
+
+/* Estilo do contêiner quando focado */
+.react-select-container .react-select__control--is-focused {
+  border-color: transparent !important;
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000) !important;
+  --tw-ring-color: #f97316; /* Cor de `focus:ring-orange-500` */
+}
+
+/* Placeholder ("Todos") */
+.react-select-container .react-select__placeholder {
+  color: #707172; /* Cor de `text-gray-500` */
+}
+.dark .react-select-container .react-select__placeholder {
+  color: #d1d5db; /* Cor de `text-gray-400` */
+}
+
+/* Valor de seleção única */
+.react-select-container .react-select__single-value {
+  color: #374151; /* Cor de `text-gray-900` */
+}
+.dark .react-select-container .react-select__single-value {
+  color: #f9fafb; /* Cor de `text-gray-100` */
+}
+
+/* Remove a linha separadora vertical */
+.react-select-container .react-select__indicator-separator {
+  background-color: transparent; /* Cor de `bg-transparent` */
+}
+
+/* O menu dropdown que aparece */
+.react-select-container .react-select__menu {
+  margin-top: 1px;
+  background-color: #ffffff;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-width: 1px;
+  border-color: #e5e7eb;
+}
+.dark .react-select-container .react-select__menu {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+/* Cada opção no menu */
+.react-select-container .react-select__option {
+  color: #374151; /* Cor de `text-gray-900` */
+}
+.dark .react-select-container .react-select__option {
+  color: #f9fafb; /* Cor de `text-gray-100` */
+}
+
+/* Opção com mouse por cima */
+.react-select-container .react-select__option--is-focused {
+  background-color: #f3f4f6; /* Cor de `bg-gray-100` */
+}
+.dark .react-select-container .react-select__option--is-focused {
+  background-color: #374151; /* Cor de `bg-gray-700` */
+}
+
+/* Opção que está selecionada */
+.react-select-container .react-select__option--is-selected {
+  background-color: #3b82f6; /* Cor de `bg-primary-500` */
+  color: white; /* Cor de `text-white` */
+}
+.dark .react-select-container .react-select__option--is-selected {
+  background-color: #2563eb; /* Cor de `bg-primary-600` */
+}
+
+/* As "pílulas" de seleção múltipla */
+.react-select-container .react-select__multi-value {
+  background-color: #e5e7eb; /* Cor de `bg-gray-200` */
+  border-radius: 0.375rem; /* Cor de `rounded-md` */
+}
+.dark .react-select-container .react-select__multi-value {
+  background-color: #4b5563; /* Cor de `bg-gray-700` */
+}
+
+/* O texto dentro da pílula */
+.react-select-container .react-select__multi-value__label {
+  color: #4b5563; /* Cor de `text-gray-800` */
+  font-weight: 500; /* Cor de `font-medium` */
+}
+.dark .react-select-container .react-select__multi-value__label {
+  color: #f9fafb; /* Cor de `text-gray-200` */
+}
+
+/* O 'x' para remover a pílula */
+.react-select-container .react-select__multi-value__remove:hover {
+  background-color: #ef4444; /* Cor de `bg-gray-300` */
+  color: white; /* Cor de `text-red-600` */
+}
+.dark .react-select-container .react-select__multi-value__remove:hover {
+  background-color: #991b1b; /* Cor de `bg-gray-600` */
+  color: #ef4444; /* Cor de `text-red-400` */
+}
+
+
+/* 1. Regra principal para o corpo do tooltip */
+.dark .tippy-box[data-theme~='light-border'] {
+  background-color: #1f2937; /* Cor de `dark:bg-gray-700` */
+  border-width: 1px; /* Cor de `border-gray-600` */
+  border-color: #4b5563; /* Cor de `border-gray-600` */
+  color: #d1d5db; /* Cor de `text-gray-200` */
+}
+
+/* 2. Regras para a seta do tooltip (para todas as direções) */
+.dark .tippy-box[data-theme~='light-border'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #4b5563; /* Cor de `border-t-gray-700` */
+}
+.dark .tippy-box[data-theme~='light-border'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #4b5563; /* Cor de `border-b-gray-700` */
+}
+.dark .tippy-box[data-theme~='light-border'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #4b5563; /* Cor de `border-l-gray-700` */
+}
+.dark .tippy-box[data-theme~='light-border'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #4b5563; /* Cor de `border-r-gray-700` */
+}
+
+/* 3. Regras para sobrescrever as cores do texto dentro do tooltip */
+/*    Isso garante que o texto fique claro, mesmo que as classes originais
+      sejam para texto escuro. */
+.dark .tippy-box[data-theme~='light-border'] .text-gray-500,
+.dark .tippy-box[data-theme~='light-border'] .text-gray-600 {
+  color: #d1d5db; /* Cor de `text-gray-300` */
+}
+
+.dark .tippy-box[data-theme~='light-border'] .text-gray-800 {
+  color: #f9fafb; /* Cor de `text-gray-50` */
+}
+
+.dark .tippy-box[data-theme~='light-border'] hr {
+  border-color: #4b5563; /* Cor de `border-gray-600` */
+}

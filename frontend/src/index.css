@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* AG-Grid Styles */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+/* Dark mode for AG-Grid */
+.dark .ag-theme-alpine {
+  --ag-background-color: #1f2937;
+  --ag-foreground-color: #f9fafb;
+  --ag-header-background-color: #374151;
+  --ag-odd-row-background-color: #111827;
+  --ag-row-hover-color: #374151;
+  --ag-selected-row-background-color: #3b82f6;
+  --ag-border-color: #4b5563;
+  --ag-cell-horizontal-border: solid #4b5563;
+  --ag-row-border-color: #4b5563;
+  --ag-header-foreground-color: #f9fafb;
+  --ag-font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Custom AG-Grid styles */
+.ag-theme-alpine {
+  --ag-font-family: 'Inter', system-ui, sans-serif;
+  --ag-font-size: 14px;
+  --ag-row-height: 60px;
+  --ag-header-height: 50px;
+  --ag-border-radius: 8px;
+  --ag-cell-horizontal-padding: 12px;
+  --ag-cell-vertical-padding: 8px;
+}
+
+.ag-theme-alpine .ag-header-cell {
+  font-weight: 600;
+  color: #374151;
+}
+
+.dark .ag-theme-alpine .ag-header-cell {
+  color: #f9fafb;
+}
+
+.ag-theme-alpine .ag-row {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .ag-theme-alpine .ag-row {
+  border-bottom: 1px solid #4b5563;
+}
+
+.ag-theme-alpine .ag-row:hover {
+  background-color: #f3f4f6;
+}
+
+.dark .ag-theme-alpine .ag-row:hover {
+  background-color: #374151;
+}
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-500 text-white hover:bg-primary-600 focus:ring-primary-500;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+  }
+  
+  .input {
+    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+  
+  .sidebar-collapsed {
+    @apply w-16;
+  }
+  
+  .sidebar-collapsed .nav-text {
+    @apply hidden;
+  }
+  
+  .sidebar-collapsed .logo-text {
+    @apply hidden;
+  }
+  
+  .sidebar-collapsed .expand-icon {
+    @apply rotate-180;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-in-from-top {
+    animation: slideInFromTop 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+} 
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateX(100%) translateY(-20px) scale(0.95);
+    pointer-events: none;
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0) scale(1);
+    pointer-events: auto;
+  }
+}
+
+/* Garantir que elementos com position fixed não afetem o layout */
+.notification-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.notification-portal > * {
+  pointer-events: auto;
+}
