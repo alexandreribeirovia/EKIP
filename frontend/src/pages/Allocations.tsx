@@ -191,7 +191,10 @@ const Allocations = () => {
   const handleResourceClick = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('users').select('*').eq('user_id', userId).single();
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao buscar detalhes do funcionário:", error);
+        return;
+      }
       if (data) {
         setSelectedEmployee(data);
         setIsModalOpen(true);
@@ -212,7 +215,7 @@ const Allocations = () => {
     if (!document.fullscreenElement) {
       cardElement.requestFullscreen().catch(err => console.error(err));
     } else {
-      document.exitFullscreen();
+      void document.exitFullscreen();
     }
   };
   
@@ -359,7 +362,11 @@ const scrollToNowFallbackDOM = () => {
       const fetchUsers = async () => {
         try {
           const { data, error } = await supabase.from('users').select('*').eq('is_active', true).order('name');
-          if (error) throw error;
+          if (error) {
+            console.error("Erro ao buscar consultores:", error);
+            setError("Não foi possível carregar os consultores.");
+            return;
+          }
           const calendarResources = (data as DbUser[]).map(user => ({
             id: user.user_id!.trim(),
             title: user.name || 'Usuário sem nome'
@@ -370,7 +377,7 @@ const scrollToNowFallbackDOM = () => {
           setError("Não foi possível carregar os consultores.");
         }
       };
-      fetchUsers();
+      void fetchUsers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -382,7 +389,10 @@ const scrollToNowFallbackDOM = () => {
       const fetchProjects = async () => {
         try {
           const { data, error } = await supabase.rpc('get_distinct_projects');
-          if (error) throw error;
+          if (error) {
+            console.error("Erro ao buscar lista de projetos:", error);
+            return;
+          }
           const projectOptions = data.map((p: { project_name: string }) => ({
             value: p.project_name,
             label: p.project_name,
@@ -392,7 +402,7 @@ const scrollToNowFallbackDOM = () => {
           console.error("Erro ao buscar lista de projetos:", err);
         }
       };
-      fetchProjects();
+      void fetchProjects();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -461,7 +471,7 @@ const scrollToNowFallbackDOM = () => {
       }
     };
 
-    filterResourcesBySkills();
+    void filterResourcesBySkills();
   }, [skillFilter, resources]);
 
   useEffect(() => {
@@ -494,7 +504,11 @@ const scrollToNowFallbackDOM = () => {
           .rpc('get_filtered_assignments', params)
           .select('*, tasks(*)'); 
 
-        if (assignmentsError) throw assignmentsError;
+        if (assignmentsError) {
+          console.error("Erro ao buscar alocações:", assignmentsError);
+          setError("Não foi possível carregar as alocações.");
+          return;
+        }
 
         let finalEvents: EventInput[] = [];
 
@@ -679,7 +693,7 @@ const scrollToNowFallbackDOM = () => {
         requestAnimationFrame(() => scrollToNow());
       }
     };
-    fetchAssignments();
+    void fetchAssignments();
   }, [statusFilter, selectedConsultants, selectedProjects, isGrouped]);
 
   

@@ -424,7 +424,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     if (!hasLoadedTasks.current) {
       hasLoadedTasks.current = true;
       
-      const fetchTasks = async () => {
+      void (async () => {
         if (!project.project_id) return;
         setIsLoadingTasks(true);
 
@@ -441,9 +441,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           setTasks(tasksData);
         }
         setIsLoadingTasks(false);
-      };
-
-      fetchTasks();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
@@ -453,7 +451,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     if (!hasLoadedTimeWorked.current) {
       hasLoadedTimeWorked.current = true;
       
-      const fetchTimeWorked = async () => {
+      void (async () => {
         if (!project.project_id) return;
 
         const { data, error } = await supabase
@@ -490,9 +488,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
           setTimeWorkedData(consultorsList);
         }
-      };
-
-      fetchTimeWorked();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
@@ -502,7 +498,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     if (!hasLoadedPhases.current) {
       hasLoadedPhases.current = true;
       
-      const fetchProjectPhases = async () => {
+      void (async () => {
         if (!project.project_id) return;
         setIsLoadingPhases(true);
 
@@ -547,9 +543,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
         setProjectPhases(phasesWithNames as DbProjectPhase[]);
         setIsLoadingPhases(false);
-      };
-
-      fetchProjectPhases();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
@@ -666,7 +660,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     if (!hasLoadedRisks.current && domains.length > 0) {
       hasLoadedRisks.current = true;
       
-      const fetchRisks = async () => {
+      void (async () => {
         if (!project.project_id || domains.length === 0) return;
         setIsLoadingRisks(true);
 
@@ -696,9 +690,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           setRisks(risksWithValues as DbRisk[]);
         }
         setIsLoadingRisks(false);
-      };
-
-      fetchRisks();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id, domains]);
@@ -707,7 +699,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     if (!hasLoadedDomains.current) {
       hasLoadedDomains.current = true;
       
-      const fetchDomains = async () => {
+      void (async () => {
         const { data, error } = await supabase
           .from('domains')
           .select('*')
@@ -719,9 +711,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         } else {
           setDomains(data as DbDomain[] || []);
         }
-      };
-
-      fetchDomains();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -731,7 +721,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     if (!hasLoadedOwners.current) {
       hasLoadedOwners.current = true;
       
-      const fetchProjectOwners = async () => {
+      void (async () => {
         if (!project.project_id) return;
         setIsLoadingProjectOwners(true);
 
@@ -774,9 +764,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           setProjectOwners(transformedData);
         }
         setIsLoadingProjectOwners(false);
-      };
-
-      fetchProjectOwners();
+      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
@@ -893,8 +881,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
   const saveRisk = useCallback(async (riskData: Partial<DbRisk>) => {
     try {
-      let savedRiskId = riskData.id;
-      
       // Apenas pegar o texto do campo manual_owner
       const manualOwner = riskData.manual_owner || null;
       
@@ -918,7 +904,11 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           .update(updateData)
           .eq('id', riskData.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erro ao atualizar risco:', error);
+          showErrorNotification('Erro ao salvar risco. Verifique se todos os campos estão preenchidos corretamente e tente novamente.');
+          return;
+        }
       } else {
         const insertData: any = {
           project_id: project.project_id,
@@ -935,14 +925,17 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           owner_name: null
         };
 
-        const { data: newRisk, error } = await supabase
+        const { error } = await supabase
           .from('risks')
           .insert([insertData])
           .select()
           .single();
 
-        if (error) throw error;
-        savedRiskId = newRisk.id;
+        if (error) {
+          console.error('Erro ao inserir risco:', error);
+          showErrorNotification('Erro ao salvar risco. Verifique se todos os campos estão preenchidos corretamente e tente novamente.');
+          return;
+        }
       }
 
       const { data, error: fetchError } = await supabase
@@ -1075,7 +1068,13 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         .delete()
         .eq('id', riskToDelete.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao deletar risco:', error);
+        showErrorNotification('Erro ao excluir risco. Tente novamente.');
+        setIsDeleteRiskConfirmModalOpen(false);
+        setRiskToDelete(null);
+        return;
+      }
 
       // Atualizar o estado local removendo o risco deletado
       setRisks(prev => prev.filter(risk => risk.id !== riskToDelete.id));
@@ -1554,19 +1553,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const calculateSCurveData = useMemo(() => {
 
     // Mapeamento dos tipos de tarefa para fases
-    const taskTypeMapping = {
+    const taskTypeMapping: Record<string, string[]> = {
       'Levantamento': ['02.Desenho Funcional', '03.Desenho Técnico'],
       'Desenvolvimento': ['04.Desenvolvimento'], // Removido '05.Prova Integrada' que não existe
-      'Homologação': ['06.Certificação'], // Mantido mesmo não tendo tarefas cadastradas
+      'Homologacao': ['06.Certificação'], // Mantido mesmo não tendo tarefas cadastradas
       'Deploy': ['07.Implantação'], // Mantido mesmo não tendo tarefas cadastradas
       'Acompanhamento': ['08.Acompanhamento'] // Corrigido para o tipo real
     };
 
     // Pesos padrão das fases
-    const defaultWeights = {
+    const defaultWeights: Record<string, number> = {
       'Levantamento': 10,
       'Desenvolvimento': 50,
-      'Homologação': 20,
+      'Homologacao': 20,
       'Deploy': 10,
       'Acompanhamento': 10
     };

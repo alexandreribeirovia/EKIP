@@ -4,11 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { 
   LayoutDashboard, 
   Users, 
-  Calendar, 
-  FolderOpen, 
   Settings, 
-  Menu, 
-  X, 
   Moon, 
   Sun,
   Bell,
@@ -27,7 +23,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [dashboardExpanded, setDashboardExpanded] = useState(false)
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const location = useLocation()
 
   const toggleDarkMode = () => {

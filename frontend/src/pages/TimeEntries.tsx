@@ -255,7 +255,11 @@ const TimeEntries = () => {
         .eq('log_hours', true)
         .order('name', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar consultores:', error);
+        setAllUsers([]);
+        return;
+      }
 
       // Armazenar todos os usuários
       setAllUsers(data || []);
@@ -402,7 +406,7 @@ const TimeEntries = () => {
   useEffect(() => {
     if (!hasLoadedInitially.current) {
       hasLoadedInitially.current = true;
-      fetchConsultants();
+      void fetchConsultants();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -429,7 +433,7 @@ const TimeEntries = () => {
     setAllTimeWorkedData(new Map());
     setDailyTimeEntries(new Map());
     
-    fetchTimeEntries();
+    void fetchTimeEntries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allUsers, periodType, startDate, endDate, selectedConsultants, statusFilter]);
 

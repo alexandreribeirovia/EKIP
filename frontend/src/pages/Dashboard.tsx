@@ -34,19 +34,24 @@ const getWeekDateRange = (weeksFromNow = 0) => {
 // == NOVA FUNÇÃO PARA DETERMINAR AS CORES DO CARD DE UTILIZAÇÃO      ==
 // =====================================================================
 const getUtilizationStyle = (percentage: number) => {
-  let backgroundColor = '';
-  let textColor = ''; // Cor de texto padrão (preto/branco dependendo do tema)
+  let backgroundColor: string;
+  let textColor: string; // Cor de texto padrão (preto/branco dependendo do tema)
 
   if (percentage === 100) {
     backgroundColor = '#b6d7a8'; // Verde
+    textColor = '';
   } else if (percentage >= 91) {
     backgroundColor = '#d8ffcc'; // Verde Claro 
+    textColor = '';
   } else if (percentage >= 81) {
     backgroundColor = '#f5f095'; // Amarelo Claro
+    textColor = '';
   } else if (percentage >= 51) {
     backgroundColor = '#faf264'; // Amarelo Escuro
+    textColor = '';
   } else if (percentage >= 21) {
     backgroundColor = '#f4cccc'; // Vermelho Claro
+    textColor = '';
   } else {
     backgroundColor = '#e06666'; // Vermelho Escuro
     textColor = '#ffffff';       // Texto branco para melhor contraste
@@ -82,8 +87,16 @@ const Dashboard = () => {
             supabase.from('users').select('user_id', { count: 'exact' }).eq('is_active', true).not('position', 'ilike', '%Gestor%')
           ]);
         
-        if (projectsPromise.error) throw projectsPromise.error;
-        if (usersPromise.error) throw usersPromise.error;
+        if (projectsPromise.error) {
+          console.error("Erro ao buscar projetos:", projectsPromise.error);
+          setError("Não foi possível carregar os projetos.");
+          return;
+        }
+        if (usersPromise.error) {
+          console.error("Erro ao buscar consultores:", usersPromise.error);
+          setError("Não foi possível carregar os consultores.");
+          return;
+        }
 
         const activeProjectsCount = projectsPromise.count ?? 0;
         const activeConsultantsCount = usersPromise.count ?? 0;
@@ -138,7 +151,7 @@ const Dashboard = () => {
       }
     };
 
-      fetchDashboardData();
+      void fetchDashboardData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

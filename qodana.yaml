@@ -1,0 +1,37 @@
+#-------------------------------------------------------------------------------#
+#               Qodana analysis is configured by qodana.yaml file               #
+#             https://www.jetbrains.com/help/qodana/qodana-yaml.html            #
+#-------------------------------------------------------------------------------#
+version: "1.0"
+
+# Specify inspection profile for code analysis
+profile:
+  name: qodana.starter
+
+# Specify Qodana linter for analysis
+linter: jetbrains/qodana-js:latest
+
+# Project root directories to analyze
+projectJDK: "Node.js"
+
+# Exclude paths from analysis
+exclude:
+  - name: All
+    paths:
+      - node_modules
+      - backend/node_modules
+      - frontend/node_modules
+      - dist
+      - build
+      - .git
+      - .vscode
+      - coverage
+
+# Disable specific inspections that may cause issues
+#exclude:
+#  - name: <SomeDisabledInspectionId>
+
+# Run commands before analysis (install dependencies)
+bootstrap: |
+  npm install --prefix backend
+  npm install --prefix frontend

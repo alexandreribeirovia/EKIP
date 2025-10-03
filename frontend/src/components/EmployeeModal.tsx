@@ -382,7 +382,11 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         .gt('time', 0) // Filtra apenas registros com tempo maior que zero
         .order('time_worked_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar registros:', error);
+        setTimeRecords([]);
+        return;
+      }
       setTimeRecords(data || []);
     } catch (error) {
       console.error('Erro ao carregar registros:', error);
@@ -410,7 +414,11 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         `)
         .eq('user_id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar habilidades do usuário:', error);
+        setUserSkills([]);
+        return;
+      }
       
       const formattedSkills = (data || []).map((item: any) => ({
         id: item.id,
@@ -443,7 +451,11 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         .order('category')
         .order('skill');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar habilidades:', error);
+        setAllSkills([]);
+        return;
+      }
       setAllSkills(data || []);
     } catch (error) {
       console.error('Erro ao carregar habilidades:', error);
@@ -465,7 +477,10 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
           skill_id: skillId
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao adicionar habilidade:', error);
+        return;
+      }
       
       // Recarrega as habilidades do usuário
       await loadUserSkills(employee.user_id);
@@ -482,7 +497,10 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         .delete()
         .eq('id', userSkillId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao remover habilidade:', error);
+        return;
+      }
       
       // Remove da lista local
       setUserSkills(prev => prev.filter(skill => skill.id !== userSkillId));
@@ -720,7 +738,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         });
       } else if (currentLevel === 'skills' && selectedArea) {
         const areaData = skillsHierarchy[selectedArea];
-        let skills: Skill[] = [];
+        let skills: Skill[];
         
         // Adiciona opção de voltar
         options.push({
@@ -798,7 +816,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
           
           if (availableSkills.length === 1) {
             // Adiciona a única habilidade disponível
-            addSkillToUser(availableSkills[0].id);
+            void addSkillToUser(availableSkills[0].id);
             // Reseta para o início e fecha o menu
             setCurrentLevel('areas');
             setSelectedArea('');
@@ -830,7 +848,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         setIsMenuOpen(true);
       } else if (type === 'skill') {
         // Adiciona a habilidade
-        addSkillToUser(value);
+        void addSkillToUser(value);
         // Reseta para o início e fecha o menu
         setCurrentLevel('areas');
         setSelectedArea('');
@@ -846,7 +864,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
     const handleMenuOpen = () => {
       setIsMenuOpen(true);
       if (allSkills.length === 0) {
-        loadAllSkills();
+        void loadAllSkills();
       }
     };
     
@@ -868,7 +886,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
     // Carrega habilidades quando o componente monta
     useEffect(() => {
       if (allSkills.length === 0) {
-        loadAllSkills();
+        void loadAllSkills();
       }
     }, []);
     
@@ -1033,7 +1051,11 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         .gt('time', 0)
         .order('time_worked_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar meses disponíveis:', error);
+        setAvailableMonths([]);
+        return;
+      }
 
       // Extrai meses únicos dos registros
       const months = new Set(
@@ -1100,17 +1122,17 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
       })();
 
       // Carrega meses disponíveis
-      fetchAvailableMonths(employee.user_id);
+      void fetchAvailableMonths(employee.user_id);
       
       // Carrega habilidades do usuário
-      loadUserSkills(employee.user_id);
+      void loadUserSkills(employee.user_id);
     }
   }, [isOpen, employee?.user_id]);
 
   // Efeito separado para atualizar apenas o grid quando o mês muda
   useEffect(() => {
     if (employee?.user_id && selectedMonth) {
-      loadTimeRecords(employee.user_id, selectedMonth);
+      void loadTimeRecords(employee.user_id, selectedMonth);
     }
   }, [selectedMonth, employee?.user_id]);
 

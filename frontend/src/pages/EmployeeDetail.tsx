@@ -516,7 +516,11 @@ const EmployeeDetail = () => {
         .gt('time', 0)
         .order('time_worked_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar registros:', error);
+        setTimeRecords([]);
+        return;
+      }
       setTimeRecords(data || []);
     } catch (error) {
       console.error('Erro ao carregar registros:', error);
@@ -544,7 +548,11 @@ const EmployeeDetail = () => {
         `)
         .eq('user_id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar habilidades do usuário:', error);
+        setUserSkills([]);
+        return;
+      }
       
       const formattedSkills = (data || []).map((item: any) => ({
         id: item.id,
@@ -574,7 +582,10 @@ const EmployeeDetail = () => {
         .delete()
         .eq('id', userSkillId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao remover habilidade:', error);
+        return;
+      }
       
       setUserSkills(prev => prev.filter(skill => skill.id !== userSkillId));
     } catch (error) {
@@ -601,7 +612,11 @@ const EmployeeDetail = () => {
         .gt('time', 0)
         .order('time_worked_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar meses disponíveis:', error);
+        setAvailableMonths([]);
+        return;
+      }
 
       const months = new Set(
         (data || []).map(record => {
@@ -633,7 +648,11 @@ const EmployeeDetail = () => {
         .order('category')
         .order('skill');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar habilidades:', error);
+        setAllSkills([]);
+        return;
+      }
       setAllSkills(data || []);
     } catch (error) {
       console.error('Erro ao carregar habilidades:', error);
@@ -655,7 +674,10 @@ const EmployeeDetail = () => {
           skill_id: skillId
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao adicionar habilidade:', error);
+        return;
+      }
       
       await loadUserSkills(employee.user_id);
     } catch (error) {
@@ -688,7 +710,10 @@ const EmployeeDetail = () => {
         error = response.error;
       }
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao atualizar status do funcionário:', error);
+        return;
+      }
       
       // Atualiza o estado local apenas se a atualização foi bem-sucedida
       if (data && data.length > 0) {
@@ -724,7 +749,10 @@ const EmployeeDetail = () => {
         error = response.error;
       }
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao atualizar lança Horas do funcionário:', error);
+        return;
+      }
       
       // Atualiza o estado local apenas se a atualização foi bem-sucedida
       if (data && data.length > 0) {
@@ -823,7 +851,7 @@ const EmployeeDetail = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [selectOptions, setSelectOptions] = useState<Array<{value: string, label: string, type: string}>>([]);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [inputValue, setInputValue] = useState('');
+    const [inputValue, setInputValue] = useState<string>('');
     
     const userSkillIds = new Set(userSkills.map(us => us.skill_id));
     const skillsHierarchy = organizeSkillsHierarchy(allSkills);
@@ -895,7 +923,7 @@ const EmployeeDetail = () => {
         });
       } else if (currentLevel === 'skills' && selectedArea) {
         const areaData = skillsHierarchy[selectedArea];
-        let skills: Skill[] = [];
+        let skills: Skill[];
         
         // Adiciona opção de voltar
         options.push({
@@ -962,7 +990,7 @@ const EmployeeDetail = () => {
           // Encontra a habilidade da área e adiciona
           const areaSkill = areaData.directSkills?.find((skill: any) => skill.area === value);
           if (areaSkill) {
-            addSkillToUser(areaSkill.id);
+            void addSkillToUser(areaSkill.id);
             setCurrentLevel('areas');
             setSelectedArea('');
             setIsMenuOpen(false);
@@ -991,7 +1019,7 @@ const EmployeeDetail = () => {
         setIsMenuOpen(true);
       } else if (type === 'skill') {
         // Adiciona a habilidade
-        addSkillToUser(value);
+        void addSkillToUser(value);
         // Reseta para o início e fecha o menu
         setCurrentLevel('areas');
         setSelectedArea('');
@@ -1007,7 +1035,7 @@ const EmployeeDetail = () => {
     const handleMenuOpen = () => {
       setIsMenuOpen(true);
       if (allSkills.length === 0) {
-        loadAllSkills();
+        void loadAllSkills();
       }
     };
     
@@ -1029,7 +1057,7 @@ const EmployeeDetail = () => {
     // Carrega habilidades quando o componente monta
     useEffect(() => {
       if (allSkills.length === 0) {
-        loadAllSkills();
+        void loadAllSkills();
       }
     }, []);
     
@@ -1137,7 +1165,7 @@ const EmployeeDetail = () => {
   useEffect(() => {
     if (!hasLoadedEmployee.current) {
       hasLoadedEmployee.current = true;
-      fetchEmployee();
+      void fetchEmployee();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -1159,7 +1187,11 @@ const EmployeeDetail = () => {
             .eq('responsible_id', employee.user_id)
             .order('created_at', { ascending: false });
 
-          if (error) throw error;
+          if (error) {
+            console.error('Erro ao carregar tarefas:', error);
+            setTasks([]);
+            return;
+          }
           setTasks(data || []);
         } catch (error) {
           console.error('Erro ao carregar tarefas:', error);
@@ -1184,8 +1216,8 @@ const EmployeeDetail = () => {
         }
       })();
 
-      fetchAvailableMonths(employee.user_id);
-      loadUserSkills(employee.user_id);
+      void fetchAvailableMonths(employee.user_id);
+      void loadUserSkills(employee.user_id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee?.user_id]);
@@ -1196,7 +1228,7 @@ const EmployeeDetail = () => {
       
       if (!loadedTimeRecordsKeys.current.has(currentKey)) {
         loadedTimeRecordsKeys.current.add(currentKey);
-        loadTimeRecords(employee.user_id, selectedMonth);
+        void loadTimeRecords(employee.user_id, selectedMonth);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

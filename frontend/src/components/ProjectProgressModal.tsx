@@ -164,7 +164,9 @@ const ProjectProgressModal = ({
         const hasInsertError = insertResults.some(result => result.error);
         
         if (hasInsertError) {
-          throw new Error('Erro ao inserir novas fases');
+          const errorResult = insertResults.find(result => result.error);
+          console.error('Erro ao inserir novas fases:', errorResult?.error);
+          return; // Retorna sem lançar exceção
         }
       }
 
@@ -185,7 +187,9 @@ const ProjectProgressModal = ({
         const hasUpdateError = updateResults.some(result => result.error);
         
         if (hasUpdateError) {
-          throw new Error('Erro ao atualizar fases');
+          const errorResult = updateResults.find(result => result.error);
+          console.error('Erro ao atualizar fases:', errorResult?.error);
+          return; // Retorna sem lançar exceção
         }
       }
 
@@ -356,7 +360,11 @@ const ProjectProgressModal = ({
         .eq('id', phaseToDelete.id);
 
       if (error) {
-        throw error;
+        console.error('Erro ao deletar fase:', error);
+        onError('Erro ao deletar fase. Tente novamente.');
+        setIsDeleteConfirmModalOpen(false);
+        setPhaseToDelete(null);
+        return;
       }
 
       // Remover da lista local
@@ -511,7 +519,7 @@ const ProjectProgressModal = ({
       const hasCorruptedChars = (text: string): boolean => {
         // � = caractere de substituição Unicode (U+FFFD)
         // Sequências comuns de UTF-8 mal interpretado
-        return /\uFFFD|�/.test(text) || /Ã[§£¡©­³º\s]|Ã[A-Z]|Ã[a-z]|â€|Â/.test(text);
+        return /[\uFFFD�Â]|â€/.test(text) || /Ã[§£¡©­³º\sA-Za-z]/.test(text);
       };
 
       // Ler arquivo como ArrayBuffer
@@ -569,7 +577,8 @@ const ProjectProgressModal = ({
       const lines = fileContent.split(/\r?\n/).filter(line => line.trim());
       
       if (lines.length < 2) {
-        throw new Error('Arquivo CSV vazio ou sem dados.');
+        onError('Arquivo CSV vazio ou sem dados.');
+        return;
       }
 
       // Detectar delimitador
@@ -583,7 +592,8 @@ const ProjectProgressModal = ({
       const missingColumns = requiredColumns.filter(col => !headers.includes(col));
       
       if (missingColumns.length > 0) {
-        throw new Error(`Colunas obrigatórias ausentes: ${missingColumns.join(', ')}`);
+        onError(`Colunas obrigatórias ausentes: ${missingColumns.join(', ')}`);
+        return;
       }
 
       // Mapear índices das colunas
@@ -603,7 +613,8 @@ const ProjectProgressModal = ({
         .select('project_id, name');
 
       if (projectsError) {
-        throw new Error(`Erro ao buscar projetos: ${projectsError.message}`);
+        onError(`Erro ao buscar projetos: ${projectsError.message}`);
+        return;
       }
 
       // Buscar todos os domínios de fases uma vez
@@ -615,7 +626,8 @@ const ProjectProgressModal = ({
         .eq('is_active', true);
 
       if (phasesError) {
-        throw new Error(`Erro ao buscar fases: ${phasesError.message}`);
+        onError(`Erro ao buscar fases: ${phasesError.message}`);
+        return;
       }
 
       // Criar mapas para busca rápida
@@ -759,12 +771,14 @@ const ProjectProgressModal = ({
         const errorMessage = `Encontrados ${errors.length} erro(s):\n\n${errors.slice(0, 10).join('\n')}${errors.length > 10 ? `\n... e mais ${errors.length - 10} erro(s)` : ''}`;
         
         if (!confirm(`${errorMessage}\n\nDeseja continuar com os ${recordsToInsert.length} registro(s) válido(s)?`)) {
-          throw new Error('Importação cancelada pelo usuário.');
+          onError('Importação cancelada pelo usuário.');
+          return;
         }
       }
 
       if (recordsToInsert.length === 0) {
-        throw new Error('Nenhum registro válido para importar.');
+        onError('Nenhum registro válido para importar.');
+        return;
       }
 
       // Inserir/atualizar registros no Supabase
@@ -1073,7 +1087,7 @@ const ProjectProgressModal = ({
 
     // Trocar para a nova semana
     onWeekChange(newWeek);
-    loadPhasesForWeek(newWeek);
+    await loadPhasesForWeek(newWeek);
   };
 
   // Handler para fechar modal
@@ -1106,7 +1120,7 @@ const ProjectProgressModal = ({
   // Carregar fases da semana selecionada quando o modal abrir
   useEffect(() => {
     if (isOpen && selectedWeek) {
-      loadPhasesForWeek(selectedWeek);
+      void loadPhasesForWeek(selectedWeek);
     }
   }, [isOpen, selectedWeek, loadPhasesForWeek]);
 
