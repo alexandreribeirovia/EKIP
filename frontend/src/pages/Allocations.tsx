@@ -4,7 +4,7 @@ import { EventInput, EventClickArg } from '@fullcalendar/core';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
 import ptBrLocale from '@fullcalendar/core/locales/pt-br';
-import Select, { StylesConfig } from 'react-select';
+import Select from 'react-select';
 import { supabase } from '../lib/supabaseClient';
 import { DbUser } from '../types';
 import EmployeeModal from '../components/EmployeeModal';
@@ -152,23 +152,6 @@ const Allocations = () => {
   const [filteredResourcesBySkills, setFilteredResourcesBySkills] = useState<FullCalendarResource[]>([]);
 
   const menuPortalTarget = (isPresentationMode && cardRef.current) ? cardRef.current : document.body
-
-  const customSelectStyles: StylesConfig<SelectOption, true> = {
-    control: (baseStyles, state) => ({
-      ...baseStyles,
-      minHeight: '42px',
-      borderColor: state.isFocused ? '#F97316' : '#D1D5DB', // Laranja quando focado, cinza normal
-      boxShadow: state.isFocused ? '0 0 0 1px #F97316' : baseStyles.boxShadow,
-      borderRadius: '0.5rem',
-      '&:hover': {
-        borderColor: state.isFocused ? '#F97316' : '#9CA3AF', // Laranja quando focado, cinza mais escuro no hover
-      },
-    }),
-    menuPortal: base => ({
-      ...base,
-      zIndex: 9999,
-    }),
-  };
 
 
   // ... (useMemo e funções de manipulação de eventos inalteradas) ...
@@ -745,9 +728,8 @@ const handleDatesSet = () => {
                   options={consultantOptions}
                   onChange={(options) => setSelectedConsultants(options.map(o => o.value))}
                   placeholder="Filtrar consultor"
-                  className="text-sm w-full"
+                  className="text-sm w-full react-select-container"
                   classNamePrefix="react-select"
-                  styles={customSelectStyles}
                   menuPortalTarget={menuPortalTarget}
                   menuPosition={'fixed'}
                 />
@@ -763,9 +745,8 @@ const handleDatesSet = () => {
                   options={availableProjects}
                   onChange={(options) => setSelectedProjects(options.map(o => o.value))}
                   placeholder="Filtrar projeto"
-                  className="text-sm w-full"
+                  className="text-sm w-full react-select-container"
                   classNamePrefix="react-select"
-                  styles={customSelectStyles}
                   menuPortalTarget={menuPortalTarget}
                   menuPosition={'fixed'}
                 />

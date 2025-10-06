@@ -237,12 +237,13 @@
 .fc .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
   top: -24px !important; 
   background-color: #f3f4f6 !important;
+  z-index: 1 !important; /* Z-index baixo para não sobrepor dropdowns */
 }
 
 .dark .fc .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
   top: -24px !important; 
   background-color: #1f2937 !important;
-
+  z-index: 1 !important; /* Z-index baixo para não sobrepor dropdowns */
 }
 .fc .fc-scrollgrid-section-footer.fc-scrollgrid-section-sticky > * {
     bottom: -23px;
@@ -378,43 +379,83 @@
   background-color: transparent; /* Cor de `bg-transparent` */
 }
 
-/* O menu dropdown que aparece */
-.react-select-container .react-select__menu {
+/* Portal do menu (quando usa menuPortalTarget) - seleciona o div criado no body */
+.react-select__menu-portal {
+  z-index: 9999 !important; /* Garante que o portal fique sobre tudo */
+}
+
+/* O menu dropdown que aparece dentro do portal */
+.react-select__menu-portal .css-helv3a,
+.react-select__menu-portal > div,
+.react-select__menu {
   margin-top: 1px;
   background-color: #ffffff;
   border-radius: 0.375rem;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   border-width: 1px;
   border-color: #e5e7eb;
-}
-.dark .react-select-container .react-select__menu {
-  background-color: #1f2937;
-  border-color: #374151;
+  z-index: 9999 !important;
 }
 
-/* Cada opção no menu */
-.react-select-container .react-select__option {
-  color: #374151; /* Cor de `text-gray-900` */
-}
-.dark .react-select-container .react-select__option {
-  color: #f9fafb; /* Cor de `text-gray-100` */
-}
-
-/* Opção com mouse por cima */
-.react-select-container .react-select__option--is-focused {
-  background-color: #f3f4f6; /* Cor de `bg-gray-100` */
-}
-.dark .react-select-container .react-select__option--is-focused {
-  background-color: #374151; /* Cor de `bg-gray-700` */
+.dark .react-select__menu-portal .css-helv3a,
+.dark .react-select__menu-portal > div,
+.dark .react-select__menu {
+  background-color: #1f2937 !important; /* dark:bg-gray-800 - igual ao select nativo */
+  border-color: #4b5563 !important; /* dark:border-gray-600 - igual ao select nativo */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
 }
 
-/* Opção que está selecionada */
-.react-select-container .react-select__option--is-selected {
-  background-color: #3b82f6; /* Cor de `bg-primary-500` */
-  color: white; /* Cor de `text-white` */
+/* Lista de opções dentro do menu portal */
+.react-select__menu-portal .react-select__menu-list,
+.react-select__menu-list {
+  background-color: #ffffff;
+  border-radius: 0.375rem;
 }
-.dark .react-select-container .react-select__option--is-selected {
-  background-color: #2563eb; /* Cor de `bg-primary-600` */
+
+.dark .react-select__menu-portal .react-select__menu-list,
+.dark .react-select__menu-list {
+  background-color: #1f2937 !important; /* dark:bg-gray-800 - igual ao select nativo */
+}
+
+/* Cada opção no menu portal */
+.react-select__menu-portal .react-select__option,
+.react-select__option {
+  color: #111827; /* text-gray-900 */
+  background-color: #ffffff;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.dark .react-select__menu-portal .react-select__option,
+.dark .react-select__option {
+  color: #f9fafb !important; /* dark:text-gray-100 - igual ao select nativo */
+  background-color: #1f2937 !important; /* dark:bg-gray-800 - igual ao select nativo */
+}
+
+/* Opção com mouse por cima no portal */
+.react-select__menu-portal .react-select__option--is-focused,
+.react-select__option--is-focused {
+  background-color: #f3f4f6; /* bg-gray-100 */
+  color: #111827;
+}
+
+.dark .react-select__menu-portal .react-select__option--is-focused,
+.dark .react-select__option--is-focused {
+  background-color: #4b5563 !important; /* dark:bg-gray-600 - hover mais claro para contraste */
+  color: #f9fafb !important; /* dark:text-gray-100 */
+}
+
+/* Opção que está selecionada no portal */
+.react-select__menu-portal .react-select__option--is-selected,
+.react-select__option--is-selected {
+  background-color: #3b82f6 !important; /* Cor de `bg-primary-500` */
+  color: white !important; /* Cor de `text-white` */
+}
+
+.dark .react-select__menu-portal .react-select__option--is-selected,
+.dark .react-select__option--is-selected {
+  background-color: #2563eb !important; /* Cor de `bg-primary-600` */
+  color: white !important;
 }
 
 /* As "pílulas" de seleção múltipla */

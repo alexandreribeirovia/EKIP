@@ -519,7 +519,7 @@ const ProjectProgressModal = ({
       const hasCorruptedChars = (text: string): boolean => {
         // � = caractere de substituição Unicode (U+FFFD)
         // Sequências comuns de UTF-8 mal interpretado
-        return /[\uFFFD�Â]|â€/.test(text) || /Ã[§£¡©­³º\sA-Za-z]/.test(text);
+        return /[\uFFFDÂ]|â€/.test(text) || /Ã[§£¡©­³º\sA-Za-z]/.test(text);
       };
 
       // Ler arquivo como ArrayBuffer

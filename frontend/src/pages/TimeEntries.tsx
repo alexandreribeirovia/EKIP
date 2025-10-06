@@ -2,29 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { TimeEntryData, DailyTimeEntry, TimesheetReportRow, ConsultantOption } from '../types';
 import '../styles/main.css';
-
-interface TimeEntryData {
-  user_id: string;
-  user_name: string;
-  expected_hours: number;
-  worked_hours: number;
-  expected_hours_until_yesterday?: number;
-}
-
-interface DailyTimeEntry {
-  date: string;
-  dayOfWeek: string;
-  expected_hours: number;
-  worked_hours: number;
-  isInsufficient: boolean;
-  isMoresufficient: boolean;
-}
-
-interface ConsultantOption {
-  value: string;
-  label: string;
-}
 
 const TimeEntries = () => {
   const [timeEntries, setTimeEntries] = useState<TimeEntryData[]>([]);
@@ -47,7 +26,7 @@ const TimeEntries = () => {
   const [dailyTimeEntries, setDailyTimeEntries] = useState<Map<string, DailyTimeEntry[]>>(new Map());
   
   // Controle de ordenação
-  const [sortColumn, setSortColumn] = useState<'user_name' | 'expected_hours' | 'worked_hours' | 'percentage' | null>(null);
+  const [sortColumn, setSortColumn] = useState<'user_name' | 'expected_hours' | 'worked_hours' | 'overtime_hours_in_period' | 'positive_comp_hours_in_period' | 'negative_comp_hours_in_period' | 'total_positive_comp_hours' | 'total_negative_comp_hours' | 'time_balance' | 'percentage' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Função para calcular o intervalo de datas baseado no tipo de período
@@ -292,14 +271,26 @@ const TimeEntries = () => {
     try {
       const dateRange = getDateRange();
       
-      // **OTIMIZAÇÃO: Usar usuários já carregados ao invés de buscar novamente**
+      // Chamar a função timesheet_report do banco de dados
+      const { data: reportData, error: reportError } = await supabase
+        .rpc('timesheet_report', {
+          start_date: dateRange.start,
+          end_date: dateRange.end
+        });
+
+      if (reportError) {
+        console.error('Erro ao buscar relatório de horas:', reportError);
+        setTimeEntries([]);
+        return;
+      }
+
       // Filtrar por status
       let filteredUsers = allUsers;
       
       if (statusFilter === 'active') {
         filteredUsers = filteredUsers.filter(u => u.is_active === true);
       } else if (statusFilter === 'inactive') {
-        filteredUsers = filteredUsers.filter(u => u.is_active === false);
+        filteredUsers = filteredUsers.filter(u => !u.is_active);
       }
 
       // Filtrar por consultores selecionados
@@ -308,7 +299,12 @@ const TimeEntries = () => {
         filteredUsers = filteredUsers.filter(u => selectedIds.includes(u.user_id));
       }
 
-      // **OTIMIZAÇÃO: Fazer UMA única chamada ao banco buscando todos os time_worked do período**
+      // Criar mapa dos dados do relatório por nome de usuário
+      const reportDataMap = new Map<string, TimesheetReportRow>(
+        (reportData || []).map((row: TimesheetReportRow) => [row.user_name, row])
+      );
+
+      // Buscar time_worked para popular o cache (para detalhamento diário)
       const { data: allTimeWorked, error: timeError } = await supabase
         .from('time_worked')
         .select('user_id, time_worked_date, time')
@@ -319,17 +315,12 @@ const TimeEntries = () => {
         console.error('Erro ao buscar horas trabalhadas:', timeError);
       }
 
-      // Agrupar dados por usuário e por data no frontend
+      // Agrupar dados por usuário e por data no frontend (para o detalhamento diário)
       const timeWorkedByUser = new Map<string, Map<string, number>>();
-      const totalHoursByUser = new Map<string, number>();
 
       (allTimeWorked || []).forEach(record => {
         const { user_id, time_worked_date, time } = record;
         const hours = (time || 0) / 3600; // Converter segundos para horas
-
-        // Atualizar total de horas por usuário
-        const currentTotal = totalHoursByUser.get(user_id) || 0;
-        totalHoursByUser.set(user_id, currentTotal + hours);
 
         // Atualizar mapa de horas por data por usuário
         if (!timeWorkedByUser.has(user_id)) {
@@ -343,7 +334,7 @@ const TimeEntries = () => {
       // Armazenar dados em cache para uso posterior (quando expandir)
       setAllTimeWorkedData(timeWorkedByUser);
 
-      // **OTIMIZAÇÃO: Buscar feriados UMA única vez para reusar**
+      // Buscar feriados para cálculo de horas esperadas
       const holidays = await getHolidays(dateRange.start, dateRange.end);
       
       // Calcular horas esperadas usando os feriados já buscados
@@ -381,16 +372,22 @@ const TimeEntries = () => {
         }
       }
       
-      // Montar dados de entrada usando os totais calculados
+      // Montar dados de entrada usando os dados do relatório
       const entriesData: TimeEntryData[] = filteredUsers.map((user) => {
-        const totalHours = totalHoursByUser.get(user.user_id) || 0;
+        const reportRow = reportDataMap.get(user.name);
 
         return {
           user_id: user.user_id,
           user_name: user.name,
           expected_hours: expectedHours,
-          worked_hours: parseFloat(totalHours.toFixed(2)),
-          expected_hours_until_yesterday: expectedHoursUntilYesterday
+          worked_hours: reportRow ? Number(reportRow.hours_worked_in_period) : 0,
+          expected_hours_until_yesterday: expectedHoursUntilYesterday,
+          overtime_hours_in_period: reportRow ? Number(reportRow.overtime_hours_in_period) : 0,
+          positive_comp_hours_in_period: reportRow ? Number(reportRow.positive_comp_hours_in_period) : 0,
+          negative_comp_hours_in_period: reportRow ? Number(reportRow.negative_comp_hours_in_period) : 0,
+          total_positive_comp_hours: reportRow ? Number(reportRow.total_positive_comp_hours) : 0,
+          total_negative_comp_hours: reportRow ? Number(reportRow.total_negative_comp_hours) : 0,
+          time_balance: reportRow ? Number(reportRow.time_balance) : 0
         };
       });
 
@@ -438,7 +435,7 @@ const TimeEntries = () => {
   }, [allUsers, periodType, startDate, endDate, selectedConsultants, statusFilter]);
 
   // Função para alternar ordenação
-  const handleSort = (column: 'user_name' | 'expected_hours' | 'worked_hours' | 'percentage') => {
+  const handleSort = (column: 'user_name' | 'expected_hours' | 'worked_hours' | 'overtime_hours_in_period' | 'positive_comp_hours_in_period' | 'negative_comp_hours_in_period' | 'total_positive_comp_hours' | 'total_negative_comp_hours' | 'time_balance' | 'percentage') => {
     if (sortColumn === column) {
       // Se já está ordenando por essa coluna, inverte a direção
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -466,6 +463,24 @@ const TimeEntries = () => {
         case 'worked_hours':
           compareValue = a.worked_hours - b.worked_hours;
           break;
+        case 'overtime_hours_in_period':
+          compareValue = a.overtime_hours_in_period - b.overtime_hours_in_period;
+          break;
+        case 'positive_comp_hours_in_period':
+          compareValue = a.positive_comp_hours_in_period - b.positive_comp_hours_in_period;
+          break;
+        case 'negative_comp_hours_in_period':
+          compareValue = a.negative_comp_hours_in_period - b.negative_comp_hours_in_period;
+          break;
+        case 'total_positive_comp_hours':
+          compareValue = a.total_positive_comp_hours - b.total_positive_comp_hours;
+          break;
+        case 'total_negative_comp_hours':
+          compareValue = a.total_negative_comp_hours - b.total_negative_comp_hours;
+          break;
+        case 'time_balance':
+          compareValue = a.time_balance - b.time_balance;
+          break;
         case 'percentage':
           const percentageA = a.expected_hours > 0 ? (a.worked_hours / a.expected_hours) * 100 : 0;
           const percentageB = b.expected_hours > 0 ? (b.worked_hours / b.expected_hours) * 100 : 0;
@@ -483,11 +498,23 @@ const TimeEntries = () => {
   const totals = useMemo(() => {
     const totalExpected = timeEntries.reduce((sum, entry) => sum + entry.expected_hours, 0);
     const totalWorked = timeEntries.reduce((sum, entry) => sum + entry.worked_hours, 0);
+    const totalOvertime = timeEntries.reduce((sum, entry) => sum + entry.overtime_hours_in_period, 0);
+    const totalPositiveComp = timeEntries.reduce((sum, entry) => sum + entry.positive_comp_hours_in_period, 0);
+    const totalNegativeComp = timeEntries.reduce((sum, entry) => sum + entry.negative_comp_hours_in_period, 0);
+    const totalPositiveCompTotal = timeEntries.reduce((sum, entry) => sum + entry.total_positive_comp_hours, 0);
+    const totalNegativeCompTotal = timeEntries.reduce((sum, entry) => sum + entry.total_negative_comp_hours, 0);
+    const totalBalance = timeEntries.reduce((sum, entry) => sum + entry.time_balance, 0);
     const utilizationRate = totalExpected > 0 ? (totalWorked / totalExpected) * 100 : 0;
 
     return {
       expected: totalExpected.toFixed(2),
       worked: totalWorked.toFixed(2),
+      overtime: totalOvertime.toFixed(2),
+      positiveComp: totalPositiveComp.toFixed(2),
+      negativeComp: totalNegativeComp.toFixed(2),
+      positiveCompTotal: totalPositiveCompTotal.toFixed(2),
+      negativeCompTotal: totalNegativeCompTotal.toFixed(2),
+      balance: totalBalance.toFixed(2),
       utilization: utilizationRate.toFixed(0)
     };
   }, [timeEntries]);
@@ -565,18 +592,42 @@ const TimeEntries = () => {
 
         {/* Resumo dos Totais */}
         <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-2">
             <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Total Hrs Esperadas</p>
-              <p className="text-lg font-bold text-center text-gray-900 dark:text-gray-100">{totals.expected}h</p>
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Hrs Esperadas</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.expected}h</p>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Total Hrs Lançadas</p>
-              <p className="text-lg font-bold text-center text-gray-900 dark:text-gray-100">{totals.worked}h</p>
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Hrs Lançadas</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.worked}h</p>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-2 rounded-lg">
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Extra Período</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.overtime}h</p>
+            </div>
+            <div className="bg-teal-50 dark:bg-teal-900/20 p-2 rounded-lg">
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. + Período</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.positiveComp}h</p>
             </div>
             <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Taxa de Lançamento</p>
-              <p className="text-lg font-bold text-center text-gray-900 dark:text-gray-100">{totals.utilization}%</p>
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. - Período</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.negativeComp}h</p>
+            </div>
+            <div className="bg-cyan-50 dark:bg-cyan-900/20 p-2 rounded-lg">
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. + Total</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.positiveCompTotal}h</p>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. - Total</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.negativeCompTotal}h</p>
+            </div>
+            <div className={`p-2 rounded-lg ${parseFloat(totals.balance) >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Saldo</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.balance}h</p>
+            </div>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-lg">
+              <p className="text-xs text-center text-gray-600 dark:text-gray-400">% Lançamento</p>
+              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.utilization}%</p>
             </div>
           </div>
         </div>
@@ -584,12 +635,12 @@ const TimeEntries = () => {
 
       {/* Card com Tabela */}
       <div className="card p-6 pt-3">
-        <div className="overflow-hidden">
+        <div className="overflow-x-auto">
           {/* Cabeçalho da tabela */}
-          <div className="grid grid-cols-4 gap-4 pb-3 border-b border-gray-200 dark:border-gray-600 mb-3">
+          <div className="grid gap-2 pb-3 border-b border-gray-200 dark:border-gray-600 mb-1 min-w-[1400px]" style={{ gridTemplateColumns: '250px repeat(9, 1fr)' }}>
             <button
               onClick={() => handleSort('user_name')}
-              className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+              className="flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
             >
               Consultor
               {sortColumn === 'user_name' && (
@@ -599,7 +650,7 @@ const TimeEntries = () => {
             </button>
             <button
               onClick={() => handleSort('expected_hours')}
-              className="flex items-center justify-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
             >
               Hrs Esperadas
               {sortColumn === 'expected_hours' && (
@@ -609,7 +660,7 @@ const TimeEntries = () => {
             </button>
             <button
               onClick={() => handleSort('worked_hours')}
-              className="flex items-center justify-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
             >
               Hrs Lançadas
               {sortColumn === 'worked_hours' && (
@@ -618,8 +669,68 @@ const TimeEntries = () => {
               {sortColumn !== 'worked_hours' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
             </button>
             <button
+              onClick={() => handleSort('overtime_hours_in_period')}
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+            >
+              Hora Extra Período
+              {sortColumn === 'overtime_hours_in_period' && (
+                sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+              )}
+              {sortColumn !== 'overtime_hours_in_period' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
+            </button>
+            <button
+              onClick={() => handleSort('positive_comp_hours_in_period')}
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+            >
+              Comp. + Período
+              {sortColumn === 'positive_comp_hours_in_period' && (
+                sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+              )}
+              {sortColumn !== 'positive_comp_hours_in_period' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
+            </button>
+            <button
+              onClick={() => handleSort('negative_comp_hours_in_period')}
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+            >
+              Comp. - Período
+              {sortColumn === 'negative_comp_hours_in_period' && (
+                sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+              )}
+              {sortColumn !== 'negative_comp_hours_in_period' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
+            </button>
+            <button
+              onClick={() => handleSort('total_positive_comp_hours')}
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+            >
+              Comp. + Total
+              {sortColumn === 'total_positive_comp_hours' && (
+                sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+              )}
+              {sortColumn !== 'total_positive_comp_hours' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
+            </button>
+            <button
+              onClick={() => handleSort('total_negative_comp_hours')}
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+            >
+              Comp. - Total
+              {sortColumn === 'total_negative_comp_hours' && (
+                sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+              )}
+              {sortColumn !== 'total_negative_comp_hours' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
+            </button>
+            <button
+              onClick={() => handleSort('time_balance')}
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+            >
+              Saldo
+              {sortColumn === 'time_balance' && (
+                sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+              )}
+              {sortColumn !== 'time_balance' && <ArrowUpDown className="w-3 h-3 opacity-30" />}
+            </button>
+            <button
               onClick={() => handleSort('percentage')}
-              className="flex items-center justify-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
+              className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
             >
               % Lançamento
               {sortColumn === 'percentage' && (
@@ -631,7 +742,7 @@ const TimeEntries = () => {
 
           {/* Linhas da tabela */}
           {sortedTimeEntries.length > 0 ? (
-            <div className="space-y-1 max-h-[550px] overflow-y-auto">
+            <div className="space-y-1">
               {sortedTimeEntries.map((entry) => {
                 const percentage = entry.expected_hours > 0 
                   ? (entry.worked_hours / entry.expected_hours) * 100 
@@ -676,7 +787,8 @@ const TimeEntries = () => {
                   <div key={entry.user_id}>
                     {/* Linha principal do consultor */}
                     <div 
-                      className="grid grid-cols-4 gap-4 py-0 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="grid gap-2 py-0 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-w-[1400px]"
+                      style={{ gridTemplateColumns: '250px repeat(9, 1fr)' }}
                       onClick={() => toggleConsultantExpansion(entry.user_id)}
                     >
                       <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -692,6 +804,24 @@ const TimeEntries = () => {
                       </div>
                       <div className="text-sm font-semibold text-green-600 dark:text-green-400 text-center">
                         {entry.worked_hours.toFixed(2)}h
+                      </div>
+                      <div className="text-sm font-semibold text-purple-600 dark:text-purple-400 text-center">
+                        {entry.overtime_hours_in_period.toFixed(2)}h
+                      </div>
+                      <div className="text-sm font-semibold text-teal-600 dark:text-teal-400 text-center">
+                        {entry.positive_comp_hours_in_period.toFixed(2)}h
+                      </div>
+                      <div className="text-sm font-semibold text-orange-600 dark:text-orange-400 text-center">
+                        {entry.negative_comp_hours_in_period.toFixed(2)}h
+                      </div>
+                      <div className="text-sm font-semibold text-cyan-600 dark:text-cyan-400 text-center">
+                        {entry.total_positive_comp_hours.toFixed(2)}h
+                      </div>
+                      <div className="text-sm font-semibold text-red-600 dark:text-red-400 text-center">
+                        {entry.total_negative_comp_hours.toFixed(2)}h
+                      </div>
+                      <div className={`text-sm font-semibold text-center ${entry.time_balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                        {entry.time_balance.toFixed(2)}h
                       </div>
                       <div 
                         className="text-sm font-semibold text-center dark:text-gray-950 rounded px-2 py-1"
@@ -721,7 +851,7 @@ const TimeEntries = () => {
                         </div>
 
                         {/* Linhas dos dias */}
-                        <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                        <div className="space-y-1">
                           {dailyData.map((day, index) => (
                             <div 
                               key={`${entry.user_id}-${day.date}-${index}`}

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, RowClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
 import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize } from 'lucide-react';
-import Select, { StylesConfig } from 'react-select';
+import Select from 'react-select';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea } from 'recharts';
 import { supabase } from '../lib/supabaseClient';
 import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase } from '../types';
@@ -394,31 +394,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     
     return filtered;
   }, [trackingPeriodFilter, trackingStatusFilter, getDateRange]);
-
-  const customSelectStyles: StylesConfig<SelectOption, true> = {
-    control: (baseStyles, state) => {
-      const isFocused = state.isFocused || state.menuIsOpen;
-      return {
-        ...baseStyles,
-        minHeight: '42px',
-        backgroundColor: 'var(--ag-background-color, #fff)',
-        borderColor: isFocused
-          ? 'var(--color-primary-500, #F97316)'
-          : 'rgb(209 213 219)', 
-        boxShadow: isFocused ? '0 0 0 1px var(--color-primary-500, #F97316)' : 'none',
-        borderRadius: '0.5rem',
-        '&:hover': {
-          borderColor: isFocused
-            ? 'var(--color-primary-500, #F97316)'
-            : 'rgb(156 163 175)',
-        },
-      };
-    },
-    menuPortal: base => ({
-      ...base,
-      zIndex: 9999,
-    }),
-  };
 
   useEffect(() => {
     if (!hasLoadedTasks.current) {
@@ -1976,7 +1951,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       </div>
       
       {!isFullScreen && (
-        <div className="card px-6 pt-2 pb-4 mb-6">
+        <div className="card px-6 pt-2 pb-4 mb-3">
         <h2 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">{project.name}</h2>
         <div className="grid grid-cols-1 md:grid-cols-7 gap-6 items-center">
           <div>
@@ -2026,7 +2001,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
       <div 
         ref={statusReportRef}
-        className={`card flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'h-full' : 'mb-6'}`}
+        className={`card flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'h-full' : 'mb-0'}`}
       >
           {isFullScreen && (
            <div className="flex items-center justify-center p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
@@ -2119,9 +2094,8 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       options={typeOptions}
                       onChange={(options) => setSelectedTypes(options as SelectOption[])}
                       placeholder="Filtrar por tipo..."
-                      className="text-sm w-full"
+                      className="text-sm w-full react-select-container"
                       classNamePrefix="react-select"
-                      styles={customSelectStyles}
                       menuPortalTarget={document.body}
                       menuPosition={'fixed'}
                     />
@@ -2214,9 +2188,8 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       options={riskStatusOptions}
                       onChange={(options) => setSelectedRiskStatuses(options as SelectOption[])}
                       placeholder="Filtrar por status..."
-                      className="text-sm w-full"
+                      className="text-sm w-full react-select-container"
                       classNamePrefix="react-select"
-                      styles={customSelectStyles}
                       menuPortalTarget={document.body}
                       menuPosition={'fixed'}
                     />

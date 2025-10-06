@@ -206,3 +206,43 @@ export interface DbProjectPhase {
     value: string;
   };
 }
+
+// Time Entries Types
+export interface TimeEntryData {
+  user_id: string;
+  user_name: string;
+  expected_hours: number;
+  worked_hours: number;
+  expected_hours_until_yesterday?: number;
+  overtime_hours_in_period: number;
+  positive_comp_hours_in_period: number;
+  negative_comp_hours_in_period: number;
+  total_positive_comp_hours: number;
+  total_negative_comp_hours: number;
+  time_balance: number;
+}
+
+export interface DailyTimeEntry {
+  date: string;
+  dayOfWeek: string;
+  expected_hours: number;
+  worked_hours: number;
+  isInsufficient: boolean;
+  isMoresufficient: boolean;
+}
+
+export interface TimesheetReportRow {
+  user_name: string;
+  hours_worked_in_period: number;
+  overtime_hours_in_period: number;
+  positive_comp_hours_in_period: number;
+  negative_comp_hours_in_period: number;
+  total_positive_comp_hours: number;
+  total_negative_comp_hours: number;
+  time_balance: number;
+}
+
+export interface ConsultantOption {
+  value: string;
+  label: string;
+}
