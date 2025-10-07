@@ -288,7 +288,7 @@ const TimeEntries = () => {
       let filteredUsers = allUsers;
       
       if (statusFilter === 'active') {
-        filteredUsers = filteredUsers.filter(u => u.is_active === true);
+        filteredUsers = filteredUsers.filter(u => u.is_active);
       } else if (statusFilter === 'inactive') {
         filteredUsers = filteredUsers.filter(u => !u.is_active);
       }

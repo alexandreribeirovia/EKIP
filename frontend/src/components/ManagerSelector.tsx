@@ -37,7 +37,7 @@ const ManagerSelector = ({ projectId, currentOwners, onOwnerChange, onError }: M
     };
 
     if (isOpen) {
-      fetchManagers();
+      void fetchManagers();
     }
   }, [isOpen]);
 

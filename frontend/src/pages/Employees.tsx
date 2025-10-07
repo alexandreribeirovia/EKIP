@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
-import { ColDef, GridReadyEvent, RowClickedEvent } from 'ag-grid-community'
+import { ColDef, RowClickedEvent } from 'ag-grid-community'
 import { Search, User } from 'lucide-react'
 import { DbUser } from '../types'
 import { supabase } from '../lib/supabaseClient'; 
@@ -13,7 +13,6 @@ const Employees = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active')
-  const [gridApi, setGridApi] = useState<any>(null)
   
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);
@@ -182,15 +181,8 @@ const Employees = () => {
     // },
   ]
 
-  const onGridReady = (params: GridReadyEvent) => {
-    setGridApi(params.api)
-  }
-
   const handleSearch = (value: string) => {
     setSearchTerm(value)
-    if (gridApi) {
-      gridApi.setQuickFilter(value)
-    }
   }
 
   const handleSkillFilter = (skillText: string) => {
@@ -201,9 +193,6 @@ const Employees = () => {
     setSearchTerm('')
     setSelectedSkill('')
     setStatusFilter('active')
-    if (gridApi) {
-      gridApi.setQuickFilter('')
-    }
   }
 
   const handleRowClick = (event: RowClickedEvent) => {
@@ -279,7 +268,6 @@ const Employees = () => {
           <AgGridReact
             columnDefs={columnDefs}
             rowData={filteredEmployees}
-            onGridReady={onGridReady}
             onRowClicked={handleRowClick}
             pagination={false}
             paginationPageSize={10}
