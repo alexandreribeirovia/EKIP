@@ -318,7 +318,7 @@ const Dashboard = () => {
                   Nenhuma férias agendada
                 </p>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-[530px] overflow-y-auto">
                   {upcomingVacations.map((vacation, index) => {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);

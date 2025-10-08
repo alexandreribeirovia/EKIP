@@ -87,6 +87,13 @@ const Projects = () => {
       project.client_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [searchTerm, statusFilter, projects]);
+
+  // Estatísticas totais (independentes dos filtros)
+  const totalStats = useMemo(() => ({
+    total: projects.length,
+    open: projects.filter(proj => !proj.is_closed).length,
+    closed: projects.filter(proj => proj.is_closed).length
+  }), [projects]);
   
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
@@ -166,7 +173,7 @@ const Projects = () => {
           </div> */}
           
           <div className="card p-6 flex-1 flex flex-col overflow-hidden">
-            <div className="flex flex-col lg:flex-row gap-4 mb-4">
+            <div className="flex flex-col lg:flex-row gap-4 mb-2">
               <div className="flex-1 min-w-0">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -190,6 +197,13 @@ const Projects = () => {
                   <option value="all">Todos</option>
                 </select>
               </div>
+            </div>
+
+            {/* Estatísticas */}
+            <div className="mb-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{totalStats.total} projetos</span></span>
+              <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Abertos: <span className="font-bold text-green-600 dark:text-green-400">{totalStats.open}</span></span>
+              <span>Fechados: <span className="font-bold text-blue-600 dark:text-blue-400">{totalStats.closed}</span></span>
             </div>
 
             <div className="ag-theme-alpine w-full flex-1">

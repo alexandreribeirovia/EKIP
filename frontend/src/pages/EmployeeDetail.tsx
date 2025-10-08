@@ -58,7 +58,7 @@ const EmployeeDetail = () => {
     const age = new Date().getFullYear() - date.getFullYear();
     const m = new Date().getMonth() - date.getMonth();
     if (m < 0 || (m === 0 && new Date().getDate() < date.getDate())) return `– ${age - 1} anos`;
-    return `– ${age} anos`;
+    return ` – ${age} anos`;
   };
 
   const calculateTenure = (startDate: string): string => {
@@ -84,7 +84,7 @@ const EmployeeDetail = () => {
     } else {
       const yearText = years === 1 ? 'ano' : 'anos';
       const monthText = months === 1 ? 'mês' : 'meses';
-      return `– ${years} ${yearText} e ${months} ${monthText}`;
+      return ` – ${years} ${yearText} e ${months} ${monthText}`;
     }
   };
 

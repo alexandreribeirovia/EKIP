@@ -115,6 +115,13 @@ const Employees = () => {
     });
   }, [searchTerm, selectedSkill, statusFilter, employees])
 
+  // Estatísticas totais (independentes dos filtros)
+  const totalStats = useMemo(() => ({
+    total: employees.length,
+    active: employees.filter(emp => emp.is_active).length,
+    inactive: employees.filter(emp => !emp.is_active).length
+  }), [employees])
+
   // Configuração das colunas do AG-Grid
   const columnDefs: ColDef[] = [
     {
@@ -256,15 +263,15 @@ const Employees = () => {
           </div>
 
           {/* Estatísticas */}
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <span>Total: {filteredEmployees.length} funcionários</span>
-            <span>Ativos: {filteredEmployees.filter((emp) => emp.is_active).length}</span>
-            <span>Inativos: {filteredEmployees.filter((emp) => !emp.is_active).length}</span>
+          <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+            <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{totalStats.total} funcionários</span></span>
+            <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Ativos: <span className="font-bold text-green-600 dark:text-green-400">{totalStats.active}</span></span>
+            <span>Inativos: <span className="font-bold text-red-600 dark:text-red-400">{totalStats.inactive}</span></span>
           </div>
         </div>
 
         {/* Tabela de funcionários */}
-        <div className="ag-theme-alpine w-full mt-6 flex-1">
+        <div className="ag-theme-alpine w-full mt-2 flex-1">
           <AgGridReact
             columnDefs={columnDefs}
             rowData={filteredEmployees}

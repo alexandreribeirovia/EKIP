@@ -151,8 +151,8 @@ const Layout = ({ children }: LayoutProps) => {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        {/* Header - sticky top-0 z-50 garante que fique sempre fixo no topo e acima de todos elementos */}
+        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
           <div className="flex items-center justify-between px-6 py-2">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">

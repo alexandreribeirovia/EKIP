@@ -99,6 +99,34 @@
   border: none !important;
 }
 
+/* Z-index baixo para todo o calendário garantir que fique abaixo do header do Layout */
+#calendar-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Controle de z-index para evitar sobreposição do grid sobre o cabeçalho e scrollbar */
+.fc .fc-scrollgrid-section-header,
+.fc .fc-scrollgrid-section-header * {
+  z-index: 3 !important; /* Header fixo por cima do conteúdo */
+}
+
+.fc .fc-scrollgrid-section-body,
+.fc .fc-scrollgrid-section-body *,
+.fc .fc-scrollgrid-section-liquid {
+  z-index: 1 !important; /* Conteúdo do grid por baixo */
+}
+
+.fc .fc-scrollgrid-section-footer,
+.fc .fc-scrollgrid-section-footer * {
+  z-index: 2 !important; /* Footer (scrollbar horizontal) acima do conteúdo mas abaixo do header */
+}
+
+.fc-event,
+.fc-event * {
+  z-index: 1 !important; /* Eventos no mesmo nível do conteúdo */
+}
+
 /* 2. BARRA DE FERRAMENTAS (BOTÕES E TÍTULO) */
 .fc .fc-toolbar-title {
   font-size: 1.125rem;
@@ -162,7 +190,7 @@
   border-color: #ef4444 !important;
   border-width: 0 0 0 2px !important;
   border-style: solid !important;
-  z-index: 999 !important;
+  z-index: 5 !important; /* Z-index 5 para ficar acima dos eventos mas abaixo do header do Layout (z-50) */
 }
 
 /* Garante que o indicador apareça no cabeçalho */
@@ -185,6 +213,121 @@
 .dark .fc .fc-non-business {
   background-color: #374151 !important;
 }
+
+/* Garante que o scroller tenha overflow correto */
+.fc .fc-scroller {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.fc .fc-timeline-body {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.fc .fc-timeline-header {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+/* SCROLLBAR HORIZONTAL FIXO - Criado via JavaScript */
+#fixed-horizontal-scrollbar,
+.fixed-horizontal-scrollbar {
+  position: fixed !important;
+  bottom: 0 !important;
+  /* left e width são definidos dinamicamente via JavaScript */
+  height: 20px !important;
+  background: #ffffff !important;
+  border-top: 2px solid #e5e7eb !important;
+  border-left: 1px solid #e5e7eb !important;
+  border-right: 1px solid #e5e7eb !important;
+  z-index: 9999 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15) !important;
+  display: block !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.dark #fixed-horizontal-scrollbar,
+.dark .fixed-horizontal-scrollbar {
+  background: #1f2937 !important;
+  border-top-color: #4b5563 !important;
+  border-left-color: #4b5563 !important;
+  border-right-color: #4b5563 !important;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Estiliza o scrollbar fixo */
+#fixed-horizontal-scrollbar::-webkit-scrollbar,
+.fixed-horizontal-scrollbar::-webkit-scrollbar {
+  height: 18px !important;
+}
+
+#fixed-horizontal-scrollbar::-webkit-scrollbar-track,
+.fixed-horizontal-scrollbar::-webkit-scrollbar-track {
+  background: #f9fafb !important;
+  border-radius: 0 !important;
+}
+
+.dark #fixed-horizontal-scrollbar::-webkit-scrollbar-track,
+.dark .fixed-horizontal-scrollbar::-webkit-scrollbar-track {
+  background: #111827 !important;
+}
+
+#fixed-horizontal-scrollbar::-webkit-scrollbar-thumb,
+.fixed-horizontal-scrollbar::-webkit-scrollbar-thumb {
+  background: #9ca3af !important;
+  border: 4px solid #f9fafb !important;
+  border-radius: 10px !important;
+}
+
+#fixed-horizontal-scrollbar::-webkit-scrollbar-thumb:hover,
+.fixed-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
+}
+
+.dark #fixed-horizontal-scrollbar::-webkit-scrollbar-thumb,
+.dark .fixed-horizontal-scrollbar::-webkit-scrollbar-thumb {
+  background: #6b7280 !important;
+  border-color: #111827 !important;
+}
+
+.dark #fixed-horizontal-scrollbar::-webkit-scrollbar-thumb:hover,
+.dark .fixed-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af !important;
+}
+
+/* Garante que o scrollbar fixo funcione em modo fullscreen */
+#fixed-horizontal-scrollbar,
+.fixed-horizontal-scrollbar {
+  position: fixed !important;
+  bottom: 0 !important;
+  z-index: 2147483647 !important;
+  transform: translateZ(0) !important;
+}
+
+/* Ajusta o z-index do card em fullscreen para não sobrepor o scrollbar */
+.fullscreen-card:fullscreen,
+.fullscreen-card:-webkit-full-screen,
+.fullscreen-card:-moz-full-screen {
+  z-index: auto !important;
+  isolation: isolate !important; /* Cria um contexto de stacking isolado */
+}
+
+/* Garante que o calendário dentro do fullscreen não sobreponha */
+.fullscreen-card:fullscreen .fc,
+.fullscreen-card:-webkit-full-screen .fc,
+.fullscreen-card:-moz-full-screen .fc {
+  z-index: 1 !important;
+  position: relative !important;
+}
+
+
 
 /* Fundo branco exclusivo para a visão semanal */
 .fc-resourceTimelineWeek-view .fc-timeline-body {
@@ -235,18 +378,22 @@
 }
 
 .fc .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
-  top: -24px !important; 
+  position: sticky !important;
+  top: -25px !important; 
   background-color: #f3f4f6 !important;
-  z-index: 1 !important; /* Z-index baixo para não sobrepor dropdowns */
+  z-index: 3 !important; /* Z-index 3 para ficar por cima do conteúdo do grid */
 }
 
 .dark .fc .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
-  top: -24px !important; 
+  position: sticky !important;
+  top: 0 !important; 
   background-color: #1f2937 !important;
-  z-index: 1 !important; /* Z-index baixo para não sobrepor dropdowns */
+  z-index: 3 !important; /* Z-index 3 para ficar por cima do conteúdo do grid */
 }
 .fc .fc-scrollgrid-section-footer.fc-scrollgrid-section-sticky > * {
-    bottom: -23px;
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 2 !important; /* Z-index 2 para ficar por cima do conteúdo mas abaixo do header */
 }
 
 .fc .fc-timeline-header-row:last-child .fc-timeline-slot-frame {
@@ -286,6 +433,8 @@
   width: 100vw;
   height: 100vh;
   overflow: auto; /* permite barras de rolagem vertical e horizontal quando necessário */
+  position: relative !important; /* Não cria novo contexto de posicionamento fixo */
+  transform: none !important; /* Remove qualquer transform que crie contexto */
 }
 
 .fullscreen-card:fullscreen,
@@ -293,8 +442,11 @@
 .fullscreen-card:-moz-full-screen {
   background-color: white;
   padding: 1rem;
+  padding-bottom: 25px !important; /* Espaço para o scrollbar fixo */
   display: flex;
   flex-direction: column;
+  position: relative !important;
+  transform: none !important;
 }
 
 /* 

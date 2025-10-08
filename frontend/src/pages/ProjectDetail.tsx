@@ -2575,7 +2575,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                   <div className="flex items-center gap-2 mb-6">
                     <BarChart3 className="w-6 h-6 text-primary-600 dark:text-primary-400" />
                     <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-                      Curva S - Avanço do Projeto
+                      Avanço do Projeto
                     </h3>
                   </div>
                   {(() => {
@@ -2699,7 +2699,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                         <BarChart3 className="w-16 h-16 mb-4 opacity-50" />
                         <p className="text-lg font-medium">Dados insuficientes</p>
                         <p className="text-sm text-center mt-2">
-                          Para gerar a curva S, é necessário ter tarefas com datas planejadas e fases configuradas.
+                          Para gerar avanço do projeto, é necessário ter tarefas com datas planejadas e fases configuradas.
                         </p>
                       </div>
                     );

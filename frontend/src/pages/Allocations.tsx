@@ -133,7 +133,6 @@ const Allocations = () => {
   const cardRef = useRef<HTMLDivElement>(null);
   const hasLoadedUsers = useRef(false);
   const hasLoadedProjects = useRef(false);
-  const loadedAssignmentsKeys = useRef<Set<string>>(new Set());
   const skillsFilterCache = useRef<Map<string, any>>(new Map());
   
   const [resources, setResources] = useState<FullCalendarResource[]>([]);
@@ -210,6 +209,191 @@ const Allocations = () => {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  // Cria scrollbar horizontal fixo sincronizado
+  useEffect(() => {
+    let cleanupFn: (() => void) | null = null;
+
+    const setupFixedScrollbar = () => {
+      const calendarContainer = document.getElementById('calendar-container');
+      if (!calendarContainer) return;
+
+      // Encontra TODOS os scrollers e pega o que tem maior scrollWidth
+      const allScrollers = Array.from(calendarContainer.querySelectorAll('.fc-scroller')) as HTMLElement[];
+      
+      // Filtra scrollers com scrollWidth > 1000 (conteúdo real)
+      const validScrollers = allScrollers.filter(s => s.scrollWidth > 1000);
+
+      // Pega o scroller com maior scrollWidth (é o do conteúdo principal)
+      const timelineScroller = validScrollers.reduce((max, current) => 
+        current.scrollWidth > max.scrollWidth ? current : max
+      , validScrollers[0] || allScrollers[0]) as HTMLElement;
+
+      if (!timelineScroller || timelineScroller.scrollWidth < 1000) return;
+
+      // Remove scrollbar fixo anterior se existir
+      const existingFixedScrollbar = document.getElementById('fixed-horizontal-scrollbar');
+      if (existingFixedScrollbar) {
+        existingFixedScrollbar.remove();
+      }
+
+      // Calcula a posição e largura do timeline scroller
+      const scrollerRect = timelineScroller.getBoundingClientRect();
+      const timelineBody = timelineScroller.closest('.fc-timeline-body');
+      const timelineRect = timelineBody?.getBoundingClientRect() || scrollerRect;
+
+      // Cria container do scrollbar fixo
+      const fixedScrollbarContainer = document.createElement('div');
+      fixedScrollbarContainer.id = 'fixed-horizontal-scrollbar';
+      fixedScrollbarContainer.className = 'fixed-horizontal-scrollbar';
+      
+      // Define posição e largura baseadas no timeline
+      fixedScrollbarContainer.style.position = 'fixed';
+      fixedScrollbarContainer.style.bottom = '0px';
+      fixedScrollbarContainer.style.left = `${timelineRect.left}px`;
+      fixedScrollbarContainer.style.width = `${timelineRect.width}px`;
+      fixedScrollbarContainer.style.height = '20px';
+      fixedScrollbarContainer.style.zIndex = '2147483647'; // Maior z-index possível
+      fixedScrollbarContainer.style.overflowX = 'auto';
+      fixedScrollbarContainer.style.overflowY = 'hidden';
+      fixedScrollbarContainer.style.background = 'white';
+      fixedScrollbarContainer.style.borderTop = '2px solid #e5e7eb';
+      fixedScrollbarContainer.style.boxShadow = '0 -4px 12px rgba(0, 0, 0, 0.15)';
+      fixedScrollbarContainer.style.display = 'block';
+      fixedScrollbarContainer.style.visibility = 'visible';
+      fixedScrollbarContainer.style.opacity = '1';
+      fixedScrollbarContainer.style.pointerEvents = 'auto';
+      fixedScrollbarContainer.style.transform = 'translateZ(0)'; // Força um novo contexto de stacking
+      
+      // Cria conteúdo interno para corresponder à largura do scroll
+      const fixedScrollbarContent = document.createElement('div');
+      fixedScrollbarContent.id = 'fixed-scrollbar-content';
+      fixedScrollbarContent.style.height = '1px';
+      fixedScrollbarContent.style.pointerEvents = 'none';
+      fixedScrollbarContainer.appendChild(fixedScrollbarContent);
+
+      // Adiciona ao body OU ao elemento fullscreen
+      const fullscreenElement = document.fullscreenElement;
+      const targetContainer = fullscreenElement || document.body;
+      targetContainer.appendChild(fixedScrollbarContainer);
+
+      // Função para sincronizar larguras e posição
+      const syncWidthAndPosition = () => {
+        const width = timelineScroller.scrollWidth;
+        fixedScrollbarContent.style.width = `${width}px`;
+        
+        // Atualiza posição (importante quando há resize ou scroll vertical)
+        const timelineBody = timelineScroller.closest('.fc-timeline-body');
+        const timelineRect = timelineBody?.getBoundingClientRect() || timelineScroller.getBoundingClientRect();
+        
+        fixedScrollbarContainer.style.left = `${timelineRect.left}px`;
+        fixedScrollbarContainer.style.width = `${timelineRect.width}px`;
+      };
+
+      // Sincroniza scroll do fixo para o original
+      const handleFixedScroll = () => {
+        if (!fixedScrollbarContainer.dataset.syncing) {
+          timelineScroller.dataset.syncing = 'true';
+          timelineScroller.scrollLeft = fixedScrollbarContainer.scrollLeft;
+          setTimeout(() => delete timelineScroller.dataset.syncing, 0);
+        }
+      };
+
+      // Sincroniza scroll do original para o fixo
+      const handleTimelineScroll = () => {
+        if (!timelineScroller.dataset.syncing) {
+          fixedScrollbarContainer.dataset.syncing = 'true';
+          fixedScrollbarContainer.scrollLeft = timelineScroller.scrollLeft;
+          setTimeout(() => delete fixedScrollbarContainer.dataset.syncing, 0);
+        }
+      };
+
+      fixedScrollbarContainer.addEventListener('scroll', handleFixedScroll);
+      timelineScroller.addEventListener('scroll', handleTimelineScroll);
+
+      // Sincroniza largura e posição inicial
+      syncWidthAndPosition();
+      
+      // Observer para mudanças de tamanho
+      const resizeObserver = new ResizeObserver(syncWidthAndPosition);
+      resizeObserver.observe(timelineScroller);
+      
+      // Listener para scroll vertical da página (reposiciona o scrollbar fixo)
+      const handlePageScroll = () => {
+        const timelineBody = timelineScroller.closest('.fc-timeline-body');
+        const timelineRect = timelineBody?.getBoundingClientRect() || timelineScroller.getBoundingClientRect();
+        fixedScrollbarContainer.style.left = `${timelineRect.left}px`;
+      };
+      
+      // Listener para scroll no card (importante para fullscreen)
+      const cardElement = document.querySelector('.fullscreen-card');
+      const handleCardScroll = () => {
+        if (document.fullscreenElement) {
+          syncWidthAndPosition();
+        }
+      };
+      if (cardElement) {
+        cardElement.addEventListener('scroll', handleCardScroll);
+      }
+      
+      // Listener para mudanças de fullscreen
+      const handleFullscreenChange = () => {
+        // Remove scrollbar antigo e recria no container correto
+        fixedScrollbarContainer.remove();
+        
+        setTimeout(() => {
+          // Readiciona ao container correto (body ou fullscreen element)
+          const targetContainer = document.fullscreenElement || document.body;
+          targetContainer.appendChild(fixedScrollbarContainer);
+          syncWidthAndPosition();
+        }, 200);
+        
+        // Segunda tentativa para garantir
+        setTimeout(() => {
+          syncWidthAndPosition();
+        }, 500);
+      };
+      
+      window.addEventListener('scroll', handlePageScroll, true);
+      window.addEventListener('resize', syncWidthAndPosition);
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+      // Função de cleanup
+      cleanupFn = () => {
+        resizeObserver.disconnect();
+        window.removeEventListener('scroll', handlePageScroll, true);
+        window.removeEventListener('resize', syncWidthAndPosition);
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        if (cardElement) {
+          cardElement.removeEventListener('scroll', handleCardScroll);
+        }
+        fixedScrollbarContainer.removeEventListener('scroll', handleFixedScroll);
+        timelineScroller.removeEventListener('scroll', handleTimelineScroll);
+        fixedScrollbarContainer.remove();
+      };
+    };
+
+    // Tenta configurar múltiplas vezes até encontrar o elemento com conteúdo renderizado
+    let attempts = 0;
+    const maxAttempts = 20;
+    const interval = setInterval(() => {
+      attempts++;
+      
+      // Verifica se existe algum scroller com scrollWidth > 1000
+      const allScrollers = Array.from(document.querySelectorAll('.fc-scroller')) as HTMLElement[];
+      const validScroller = allScrollers.find(s => s.scrollWidth > 1000);
+      
+      if (validScroller || attempts >= maxAttempts) {
+        clearInterval(interval);
+        setupFixedScrollbar();
+      }
+    }, 500);
+
+    return () => {
+      clearInterval(interval);
+      if (cleanupFn) cleanupFn();
+    };
+  }, [allEvents, filteredResources]); // Re-cria quando eventos ou recursos mudam
 
   const getCurrentDateInSaoPaulo = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   
@@ -458,17 +642,6 @@ const scrollToNowFallbackDOM = () => {
   }, [skillFilter, resources]);
 
   useEffect(() => {
-    // Cria uma chave única baseada nos filtros atuais
-    const filterKey = `${statusFilter}-${selectedConsultants.sort().join(',')}-${selectedProjects.sort().join(',')}-${isGrouped}`;
-    
-    // Se já carregou com esses filtros, pula
-    if (loadedAssignmentsKeys.current.has(filterKey)) {
-      return;
-    }
-
-    // Marca como carregado
-    loadedAssignmentsKeys.current.add(filterKey);
-
     const fetchAssignments = async () => {
       setIsLoading(true);
       setError(null);
@@ -828,7 +1001,7 @@ const handleDatesSet = () => {
             nowIndicatorClassNames="fc-now-indicator"
             datesSet={handleDatesSet}
             stickyHeaderDates={true}
-            stickyFooterScrollbar={true}
+            stickyFooterScrollbar={false}
             views={{
               resourceTimelineDay: {
                 type: 'resourceTimeline',
