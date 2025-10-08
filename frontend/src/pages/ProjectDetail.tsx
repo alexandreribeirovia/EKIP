@@ -2028,7 +2028,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
                   activeTab === 'tasks'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
                 }`}
               >
                 Tarefas do Projeto
@@ -2038,7 +2038,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
                   activeTab === 'risks'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
                 }`}
               >
                 Riscos
@@ -2048,7 +2048,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'status-report'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
                 }`}
               >
                 Status Report
@@ -2546,29 +2546,31 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
             ) : (
               <div className="p-6 pt-2">
                 {/* Linha de botões para Curva S */}
-                <div className="flex justify-end mb-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={async () => {
-                        // Calcular semanas do projeto
-                        const weeks = calculateProjectWeeks();
-                        setProjectWeeks(weeks);
-                        
-                        // Definir primeira semana como padrão se há semanas disponíveis
-                        const initialWeek = weeks.length > 0 ? 1 : 1;
-                        setSelectedWeek(initialWeek);
+                {!isFullScreen && (
+                  <div className="flex justify-end mb-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          // Calcular semanas do projeto
+                          const weeks = calculateProjectWeeks();
+                          setProjectWeeks(weeks);
+                          
+                          // Definir primeira semana como padrão se há semanas disponíveis
+                          const initialWeek = weeks.length > 0 ? 1 : 1;
+                          setSelectedWeek(initialWeek);
 
-                        // Abrir novo modal
-                        setIsProgressModalOpen(true);
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      title="Editar progresso das fases"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Editar Progresso
-                    </button>
+                          // Abrir novo modal
+                          setIsProgressModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        title="Editar progresso das fases"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Editar Progresso
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Card Curva S */}
                 <div className="card w-full p-6 mb-6 mt-2">
@@ -2831,10 +2833,10 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                                     className="text-center rounded-full w-24 h-24 flex flex-col items-center justify-center border-2 border-gray-300"
                                      style={{ backgroundColor: centerBackgroundColor }}
                                    >
-                                   <div className="text-2xl font-bold text-gray-800 dark:text-gray-200">
+                                   <div className="text-2xl font-bold text-gray-800 dark:text-gray-800">
                                      {phase.progress}%
                                    </div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  <div className="text-xs text-gray-700 dark:text-gray-800">
                                     Meta: {phase.expected_progress}% 
                                   </div>
                                 </div>

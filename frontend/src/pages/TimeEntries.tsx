@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
-import { ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Clock, CheckCircle, Zap, TrendingUp, TrendingDown, Plus, Minus, Scale, Percent } from 'lucide-react';
 import { TimeEntryData, DailyTimeEntry, TimesheetReportRow, ConsultantOption } from '../types';
 import '../styles/main.css';
 
@@ -591,44 +591,102 @@ const TimeEntries = () => {
         </div>
 
         {/* Resumo dos Totais */}
-        <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-2">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Hrs Esperadas</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.expected}h</p>
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">
+          {/* Hrs Esperadas */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-blue-600 dark:text-blue-400">Hrs Esperadas</div>
+              <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>
-            <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Hrs Lançadas</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.worked}h</p>
+            <div className="text-lg font-bold text-blue-700 dark:text-blue-300">{totals.expected}h</div>
+          </div>
+
+          {/* Hrs Lançadas */}
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-green-600 dark:text-green-400">Hrs Lançadas</div>
+              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
             </div>
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Extra Período</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.overtime}h</p>
+            <div className="text-lg font-bold text-green-700 dark:text-green-300">{totals.worked}h</div>
+          </div>
+
+          {/* Extra Período */}
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2 border border-purple-200 dark:border-purple-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-purple-600 dark:text-purple-400">Extra Período</div>
+              <Zap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             </div>
-            <div className="bg-teal-50 dark:bg-teal-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. + Período</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.positiveComp}h</p>
+            <div className="text-lg font-bold text-purple-700 dark:text-purple-300">{totals.overtime}h</div>
+          </div>
+
+          {/* Comp. + Período */}
+          <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-2 border border-teal-200 dark:border-teal-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-teal-600 dark:text-teal-400">Comp. + Período</div>
+              <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
             </div>
-            <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. - Período</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.negativeComp}h</p>
+            <div className="text-lg font-bold text-teal-700 dark:text-teal-300">{totals.positiveComp}h</div>
+          </div>
+
+          {/* Comp. - Período */}
+          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-2 border border-orange-200 dark:border-orange-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-orange-600 dark:text-orange-400">Comp. - Período</div>
+              <TrendingDown className="w-4 h-4 text-orange-600 dark:text-orange-400" />
             </div>
-            <div className="bg-cyan-50 dark:bg-cyan-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. + Total</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.positiveCompTotal}h</p>
+            <div className="text-lg font-bold text-orange-700 dark:text-orange-300">{totals.negativeComp}h</div>
+          </div>
+
+          {/* Comp. + Total */}
+          <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-2 border border-cyan-200 dark:border-cyan-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-cyan-600 dark:text-cyan-400">Comp. + Total</div>
+              <Plus className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
             </div>
-            <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Comp. - Total</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.negativeCompTotal}h</p>
+            <div className="text-lg font-bold text-cyan-700 dark:text-cyan-300">{totals.positiveCompTotal}h</div>
+          </div>
+
+          {/* Comp. - Total */}
+          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2 border border-red-200 dark:border-red-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-red-600 dark:text-red-400">Comp. - Total</div>
+              <Minus className="w-4 h-4 text-red-600 dark:text-red-400" />
             </div>
-            <div className={`p-2 rounded-lg ${parseFloat(totals.balance) >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">Saldo</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.balance}h</p>
+            <div className="text-lg font-bold text-red-700 dark:text-red-300">{totals.negativeCompTotal}h</div>
+          </div>
+
+          {/* Saldo */}
+          <div className={`rounded-lg p-2 border ${
+            parseFloat(totals.balance) >= 0 
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
+              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <div className={`text-xs ${
+                parseFloat(totals.balance) >= 0 
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-red-600 dark:text-red-400'
+              }`}>Saldo</div>
+              <Scale className={`w-4 h-4 ${
+                parseFloat(totals.balance) >= 0 
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-red-600 dark:text-red-400'
+              }`} />
             </div>
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-lg">
-              <p className="text-xs text-center text-gray-600 dark:text-gray-400">% Lançamento</p>
-              <p className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">{totals.utilization}%</p>
+            <div className={`text-lg font-bold ${
+              parseFloat(totals.balance) >= 0 
+                ? 'text-green-700 dark:text-green-300' 
+                : 'text-red-700 dark:text-red-300'
+            }`}>{totals.balance}h</div>
+          </div>
+
+          {/* % Lançamento */}
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-2 border border-yellow-200 dark:border-yellow-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-yellow-600 dark:text-yellow-400">% Lançamento</div>
+              <Percent className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
             </div>
+            <div className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{totals.utilization}%</div>
           </div>
         </div>
       </div>

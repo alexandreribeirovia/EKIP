@@ -7,6 +7,7 @@ import EmployeeDetail from '@/pages/EmployeeDetail'
 import Allocations from '@/pages/Allocations'
 import Projects from '@/pages/Projects'
 import TimeEntries from '@/pages/TimeEntries'
+import Feedbacks from '@/pages/Feedbacks'
 import Login from '@/pages/Login'
 import ProtectedRoute from '@/components/ProtectedRoute'
 
@@ -26,6 +27,7 @@ function App() {
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/employees/:id" element={<ProtectedRoute><EmployeeDetail /></ProtectedRoute>} />
         <Route path="/allocations" element={<ProtectedRoute><Allocations /></ProtectedRoute>} />
+        <Route path="/feedbacks" element={<ProtectedRoute><Feedbacks /></ProtectedRoute>} />
         <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       </Routes>
     </Layout>

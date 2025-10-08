@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef, RowClickedEvent } from 'ag-grid-community'
-import { Search, User } from 'lucide-react'
+import { Search, User, Users, UserCheck, UserX } from 'lucide-react'
 import { DbUser } from '../types'
 import { supabase } from '../lib/supabaseClient'; 
 import '../styles/main.css';
@@ -208,69 +208,91 @@ const Employees = () => {
 
    return (
     
-    <div className="h-full flex flex-col">
-      {/* Card unificado para filtros e tabela */}
-      <div className="card p-6 flex-1 flex flex-col overflow-hidden">
-        {/* Seção de Filtros */}
-        <div>
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-            {/* Busca por nome */}
-            <div className="flex-1 min-w-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Digite para buscar..."
-                  value={searchTerm}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Filtro por habilidade */}
-            <div className="w-full lg:w-64">
+    <div className="h-full flex flex-col space-y-2">
+      {/* Card de Filtros */}
+      <div className="card p-6 pt-3 pb-3">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+          {/* Busca por nome */}
+          <div className="flex-1 min-w-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Filtrar por habilidade..."
-                value={selectedSkill}
-                onChange={(e) => handleSkillFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+                placeholder="Digite para buscar..."
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
               />
-            </div>
-
-            {/* Filtro por status */}
-            <div className="w-full lg:w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
-              >
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-                <option value="all">Todos</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-              >
-                Limpar Filtros
-              </button>
             </div>
           </div>
 
-          {/* Estatísticas */}
-          <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{totalStats.total} funcionários</span></span>
-            <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Ativos: <span className="font-bold text-green-600 dark:text-green-400">{totalStats.active}</span></span>
-            <span>Inativos: <span className="font-bold text-red-600 dark:text-red-400">{totalStats.inactive}</span></span>
+          {/* Filtro por habilidade */}
+          <div className="w-full lg:w-64">
+            <input
+              type="text"
+              placeholder="Filtrar por habilidade..."
+              value={selectedSkill}
+              onChange={(e) => handleSkillFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Filtro por status */}
+          <div className="w-full lg:w-48">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+              <option value="all">Todos</option>
+            </select>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+            >
+              Limpar Filtros
+            </button>
           </div>
         </div>
 
-        {/* Tabela de funcionários */}
+        {/* Cards de Estatísticas */}
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {/* Total */}
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+              <Users className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            </div>
+            <div className="text-lg font-bold text-gray-800 dark:text-gray-200">{totalStats.total}</div>
+          </div>
+
+          {/* Ativos */}
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-green-600 dark:text-green-400">Ativos</div>
+              <UserCheck className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="text-lg font-bold text-green-700 dark:text-green-300">{totalStats.active}</div>
+          </div>
+
+          {/* Inativos */}
+          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2 border border-red-200 dark:border-red-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-red-600 dark:text-red-400">Inativos</div>
+              <UserX className="w-4 h-4 text-red-600 dark:text-red-400" />
+            </div>
+            <div className="text-lg font-bold text-red-700 dark:text-red-300">{totalStats.inactive}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Card com Tabela */}
+      <div className="card p-6 pt-3 flex-1 flex flex-col overflow-hidden">
         <div className="ag-theme-alpine w-full mt-2 flex-1">
           <AgGridReact
             columnDefs={columnDefs}
@@ -282,7 +304,6 @@ const Employees = () => {
               sortable: true,
               filter: true,
               resizable: true,
-              // flex: 1,
             }}
             rowSelection="single"
             animateRows={true}
@@ -293,8 +314,6 @@ const Employees = () => {
           />
         </div>
       </div>
-
-
     </div>
   )
 }

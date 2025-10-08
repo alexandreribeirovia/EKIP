@@ -1385,7 +1385,7 @@ ${project.name};Acompanhamento;0;0;5;2`;
                   </button>
                   <button 
                     onClick={handleSavePhases}
-                    className="px-6 py-2 text-sm text-white font-semibold bg-primary-500 rounded-lg hover:bg-primary-600 transition-colors"
+                    className="px-6 py-2 text-sm text-white font-semibold bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
                   >
                     Salvar
                   </button>

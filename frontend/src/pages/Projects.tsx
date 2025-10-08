@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, RowClickedEvent } from 'ag-grid-community'; 
-import { Search } from 'lucide-react';
+import { Search, FolderOpen, FolderCheck, Layers } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { DbProject } from '../types';
 import '../styles/main.css';
@@ -157,23 +157,15 @@ const Projects = () => {
   };
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="h-full flex flex-col space-y-2">
       {selectedProject ? (
         <ProjectDetail project={selectedProject} onBack={handleGoBackToList} />
       ) : (
         <>
-          {/* O JSX da lista de projetos agora fica aqui dentro */}
-          {/* <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              Projetos
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Gestão de projetos e cronogramas
-            </p>
-          </div> */}
-          
-          <div className="card p-6 flex-1 flex flex-col overflow-hidden">
-            <div className="flex flex-col lg:flex-row gap-4 mb-2">
+          {/* Card de Filtros */}
+          <div className="card p-6 pt-3 pb-3">
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+              {/* Busca */}
               <div className="flex-1 min-w-0">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -186,6 +178,8 @@ const Projects = () => {
                   />
                 </div>
               </div>
+
+              {/* Filtro de Status */}
               <div className="w-full lg:w-48">
                 <select
                   value={statusFilter}
@@ -199,13 +193,39 @@ const Projects = () => {
               </div>
             </div>
 
-            {/* Estatísticas */}
-            <div className="mb-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-              <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{totalStats.total} projetos</span></span>
-              <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Abertos: <span className="font-bold text-green-600 dark:text-green-400">{totalStats.open}</span></span>
-              <span>Fechados: <span className="font-bold text-blue-600 dark:text-blue-400">{totalStats.closed}</span></span>
-            </div>
+            {/* Cards de Estatísticas */}
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Total */}
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+                  <Layers className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                </div>
+                <div className="text-lg font-bold text-gray-800 dark:text-gray-200">{totalStats.total}</div>
+              </div>
 
+              {/* Abertos */}
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-green-600 dark:text-green-400">Abertos</div>
+                  <FolderOpen className="w-4 h-4 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="text-lg font-bold text-green-700 dark:text-green-300">{totalStats.open}</div>
+              </div>
+
+              {/* Fechados */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-blue-600 dark:text-blue-400">Fechados</div>
+                  <FolderCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="text-lg font-bold text-blue-700 dark:text-blue-300">{totalStats.closed}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card com Tabela */}
+          <div className="card p-6 pt-3 flex-1 flex flex-col overflow-hidden">
             <div className="ag-theme-alpine w-full flex-1">
               <AgGridReact
                 columnDefs={columnDefs}

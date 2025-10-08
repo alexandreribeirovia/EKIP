@@ -12,7 +12,8 @@ import {
   CalendarRange,
   ClipboardList,
   Clock,
-  ChevronDown
+  ChevronDown,
+  MessageSquare
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -23,6 +24,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [dashboardExpanded, setDashboardExpanded] = useState(false)
+  const [employeesExpanded, setEmployeesExpanded] = useState(false)
   const { user } = useAuthStore()
   const location = useLocation()
 
@@ -41,7 +43,15 @@ const Layout = ({ children }: LayoutProps) => {
         { name: 'Lançamento de Horas', href: '/time-entries', icon: Clock }
       ]
     },
-    { name: 'Funcionários', href: '/employees', icon: Users },
+    { 
+      name: 'Funcionários', 
+      href: '/employees', 
+      icon: Users,
+      hasSubmenu: true,
+      submenu: [
+        { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare }
+      ]
+    },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },
     { name: 'Alocações', href: '/allocations', icon: CalendarRange },
     { name: 'Configurações', href: '/settings', icon: Settings },
@@ -96,14 +106,25 @@ const Layout = ({ children }: LayoutProps) => {
                     </Link>
                     {!sidebarCollapsed && (
                       <button
-                        onClick={() => setDashboardExpanded(!dashboardExpanded)}
+                        onClick={() => {
+                          if (item.name === 'Dashboard') {
+                            setDashboardExpanded(!dashboardExpanded)
+                          } else if (item.name === 'Funcionários') {
+                            setEmployeesExpanded(!employeesExpanded)
+                          }
+                        }}
                         className={`px-3 py-3 text-sm transition-colors ${
                           isActive || isSubmenuActive
                             ? 'bg-primary-50 dark:bg-gray-700 text-primary-600 dark:text-primary-400'
                             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        <ChevronDown className={`w-4 h-4 transition-transform ${dashboardExpanded ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-4 h-4 transition-transform ${
+                          (item.name === 'Dashboard' && dashboardExpanded) || 
+                          (item.name === 'Funcionários' && employeesExpanded) 
+                            ? 'rotate-180' 
+                            : ''
+                        }`} />
                       </button>
                     )}
                   </div>
@@ -122,7 +143,9 @@ const Layout = ({ children }: LayoutProps) => {
                 )}
 
                 {/* Submenu */}
-                {item.hasSubmenu && item.submenu && !sidebarCollapsed && dashboardExpanded && (
+                {item.hasSubmenu && item.submenu && !sidebarCollapsed && 
+                  ((item.name === 'Dashboard' && dashboardExpanded) || 
+                   (item.name === 'Funcionários' && employeesExpanded)) && (
                   <div className="bg-gray-50 dark:bg-gray-900">
                     {item.submenu.map((subItem) => {
                       const isSubActive = location.pathname === subItem.href

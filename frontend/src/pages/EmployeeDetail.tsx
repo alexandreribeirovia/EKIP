@@ -6,6 +6,7 @@ import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, Exter
 import Select, { StylesConfig } from 'react-select'
 import { DbUser, DbTask } from '../types'
 import { supabase } from '../lib/supabaseClient'
+import FeedbackModal from '../components/FeedbackModal'
 import '../styles/main.css'
 
 const EmployeeDetail = () => {
@@ -15,7 +16,7 @@ const EmployeeDetail = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro'>('tarefas')
+  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks'>('tarefas')
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -25,6 +26,9 @@ const EmployeeDetail = () => {
   const [isLoadingHours, setIsLoadingHours] = useState(true)
   const [timeRecords, setTimeRecords] = useState<any[]>([])
   const [isLoadingRecords, setIsLoadingRecords] = useState(false)
+  const [feedbacks, setFeedbacks] = useState<any[]>([])
+  const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false)
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
   
   const [userSkills, setUserSkills] = useState<UserSkill[]>([])
   const [isLoadingSkills, setIsLoadingSkills] = useState(true)
@@ -530,6 +534,30 @@ const EmployeeDetail = () => {
     }
   };
 
+  // Função para carregar feedbacks do usuário
+  const loadFeedbacks = async (userId: string) => {
+    setIsLoadingFeedbacks(true);
+    try {
+      const { data, error } = await supabase
+        .from('feedbacks')
+        .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment')
+        .eq('feedback_user_id', userId)
+        .order('feedback_date', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar feedbacks:', error);
+        setFeedbacks([]);
+        return;
+      }
+      setFeedbacks(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar feedbacks:', error);
+      setFeedbacks([]);
+    } finally {
+      setIsLoadingFeedbacks(false);
+    }
+  };
+
   // Função para carregar habilidades do usuário
   const loadUserSkills = async (userId: string) => {
     setIsLoadingSkills(true);
@@ -839,6 +867,53 @@ const EmployeeDetail = () => {
       type: 'numericColumn',
       headerClass: 'ag-right-aligned-header',
       cellClass: 'ag-right-aligned-cell',
+    },
+  ];
+
+  // Configuração das colunas do AG-Grid para feedbacks
+  const feedbacksColumnDefs: ColDef[] = [
+    {
+      headerName: 'Data',
+      field: 'feedback_date',
+      flex: 1,
+      minWidth: 120,
+      cellRenderer: (params: any) => {
+        if (!params.value) return '-';
+        try {
+          const date = new Date(params.value);
+          if (isNaN(date.getTime())) {
+            const dateWithTime = new Date(params.value + 'T12:00:00');
+            if (isNaN(dateWithTime.getTime())) {
+              return params.value;
+            }
+            return dateWithTime.toLocaleDateString('pt-BR');
+          }
+          return date.toLocaleDateString('pt-BR');
+        } catch (error) {
+          return params.value;
+        }
+      },
+    },
+    {
+      headerName: 'Responsável',
+      field: 'owner_user_name',
+      flex: 1.5,
+      minWidth: 200,
+      cellRenderer: (params: any) => params.value || '-',
+    },
+    {
+      headerName: 'Tipo',
+      field: 'type',
+      flex: 1,
+      minWidth: 150,
+      cellRenderer: (params: any) => params.value || '-',
+    },
+    {
+      headerName: 'Comentário',
+      field: 'public_comment',
+      flex: 3,
+      minWidth: 300,
+      cellRenderer: (params: any) => params.value || '-',
     },
   ];
 
@@ -1234,6 +1309,14 @@ const EmployeeDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, employee?.user_id]);
 
+  // Carrega feedbacks quando a aba é selecionada
+  useEffect(() => {
+    if (employee?.user_id && activeTab === 'feedbacks' && feedbacks.length === 0) {
+      void loadFeedbacks(employee.user_id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, employee?.user_id]);
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -1509,13 +1592,23 @@ const EmployeeDetail = () => {
                   </button>
                   <button
                     onClick={() => setActiveTab('registro')}
-                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
                       activeTab === 'registro'
                         ? 'border-primary-500 text-primary-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     Registro de Tempo
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('feedbacks')}
+                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'feedbacks'
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Feedbacks
                   </button>
                 </nav>
               </div>
@@ -1680,9 +1773,62 @@ const EmployeeDetail = () => {
                   </div>
                 </div>
               )}
+
+              {activeTab === 'feedbacks' && (
+                <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
+                  {/* Botão Novo Feedback */}
+                  <div className="flex justify-end mb-4">
+                    <button
+                      onClick={() => setIsFeedbackModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Novo Feedback
+                    </button>
+                  </div>
+
+                  <div className="ag-theme-alpine w-full flex-1">
+                    {isLoadingFeedbacks ? (
+                      <div className="flex justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                      </div>
+                    ) : (
+                      <AgGridReact
+                        columnDefs={feedbacksColumnDefs}
+                        rowData={feedbacks}
+                        defaultColDef={{
+                          sortable: true,
+                          filter: true,
+                          resizable: true,
+                        }}
+                        animateRows={true}
+                        className="w-full"
+                        rowHeight={40}
+                        headerHeight={40}
+                        overlayNoRowsTemplate={
+                          '<span class="text-gray-500 dark:text-gray-400">Nenhum feedback encontrado para este consultor.</span>'
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
       </div>
+
+      {/* Modal de Novo Feedback */}
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+        onSuccess={() => {
+          // Recarrega a lista de feedbacks após sucesso
+          if (employee?.user_id) {
+            void loadFeedbacks(employee.user_id);
+          }
+        }}
+        preSelectedUser={employee?.user_id ? { user_id: employee.user_id as string, name: employee.name } : null}
+      />
     </div>
   );
 };
