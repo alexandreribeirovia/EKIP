@@ -46,7 +46,7 @@ const Employees = () => {
   useEffect(() => {
     if (!hasLoadedInitially.current) {
       hasLoadedInitially.current = true;
-      fetchEmployees();
+      void fetchEmployees();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

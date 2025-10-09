@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, ThumbsUp, MessageCircle, Trophy, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
+import { useAuthStore } from '../stores/authStore';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -33,10 +34,9 @@ const feedbackTypes: FeedbackType[] = [
 ];
 
 const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: FeedbackModalProps) => {
+  const { user } = useAuthStore();
   const [users, setUsers] = useState<UserOption[]>([]);
-  const [managers, setManagers] = useState<UserOption[]>([]);
   const [selectedFeedbackUser, setSelectedFeedbackUser] = useState<UserOption | null>(null);
-  const [selectedOwnerUser, setSelectedOwnerUser] = useState<UserOption | null>(null);
   const [feedbackDate, setFeedbackDate] = useState('');
   const [selectedType, setSelectedType] = useState<number | null>(null);
   const [publicComment, setPublicComment] = useState('');
@@ -74,7 +74,11 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
         .eq('is_active', true)
         .order('name');
 
-      if (usersError) throw usersError;
+      if (usersError) {
+        console.error('Erro ao buscar usuários:', usersError);
+        setError('Erro ao carregar lista de usuários');
+        return;
+      }
 
       const userOptions: UserOption[] = (allUsers || []).map((user) => ({
         value: user.user_id,
@@ -82,31 +86,14 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
       }));
 
       setUsers(userOptions);
-
-      // Busca apenas gestores para "Responsável"
-      const { data: managerUsers, error: managersError } = await supabase
-        .from('users')
-        .select('user_id, name, position')
-        .eq('is_active', true)
-        .ilike('position', '%Gestor%')
-        .order('name');
-
-      if (managersError) throw managersError;
-
-      const managerOptions: UserOption[] = (managerUsers || []).map((user) => ({
-        value: user.user_id,
-        label: user.name,
-      }));
-
-      setManagers(managerOptions);
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
+      setError('Erro ao carregar lista de usuários');
     }
   };
 
   const resetForm = () => {
     setSelectedFeedbackUser(null);
-    setSelectedOwnerUser(null);
     setFeedbackDate('');
     setSelectedType(null);
     setPublicComment('');
@@ -119,13 +106,13 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
     setError('');
 
     // Validações
-    if (!selectedFeedbackUser) {
-      setError('Selecione o consultor que receberá o feedback');
+    if (!user) {
+      setError('Usuário não autenticado');
       return;
     }
 
-    if (!selectedOwnerUser) {
-      setError('Selecione o responsável pelo feedback');
+    if (!selectedFeedbackUser) {
+      setError('Selecione o consultor que receberá o feedback');
       return;
     }
 
@@ -145,7 +132,6 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
     }
 
     setIsSubmitting(true);
-
     try {
       const feedbackTypeName = feedbackTypes.find(t => t.id === selectedType)?.name || '';
 
@@ -154,8 +140,8 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
         .insert({
           feedback_user_id: selectedFeedbackUser.value,
           feedback_user_name: selectedFeedbackUser.label,
-          owner_user_id: selectedOwnerUser.value,
-          owner_user_name: selectedOwnerUser.label,
+          owner_user_id: user.runrun_user_id,
+          owner_user_name: user.name,
           feedback_date: feedbackDate,
           type_id: selectedType,
           type: feedbackTypeName,
@@ -163,7 +149,10 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
           private_comment: privateComment.trim() || null,
         });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        setError(insertError.message || 'Erro ao salvar feedback. Tente novamente.');
+        return;
+      }
 
       // Sucesso
       onSuccess();
@@ -236,22 +225,6 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
             </div>
           </div>
 
-          {/* Responsável */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Responsável (Gestor): *
-            </label>
-            <Select
-              options={managers}
-              value={selectedOwnerUser}
-              onChange={(option) => setSelectedOwnerUser(option)}
-              placeholder="Selecionar gestor..."
-              className="react-select-container"
-              classNamePrefix="react-select"
-              isClearable
-            />
-          </div>
-
           {/* Tipo de Feedback */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -279,7 +252,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
           {/* Comentário Público */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Comentário (público): *
+              Comentário: *
             </label>
             <textarea
               value={publicComment}

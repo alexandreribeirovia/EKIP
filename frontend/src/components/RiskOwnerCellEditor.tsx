@@ -239,7 +239,7 @@ const RiskOwnerCellEditor = forwardRef<RiskOwnerCellEditorRef, RiskOwnerCellEdit
           onFocus={() => {
             console.log('Input focado, carregando usuários...');
             // Carregar usuários somente quando o input for focado
-            fetchActiveUsers();
+            void fetchActiveUsers();
             updateDropdownPosition();
             if (filteredUsers.length > 0) {
               setShowDropdown(true);

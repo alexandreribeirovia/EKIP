@@ -48,19 +48,19 @@ const getUtilizationStyle = (percentage: number) => {
 
   if (percentage === 100) {
     backgroundColor = '#b6d7a8'; // Verde
-    textColor = '';
+    textColor = '#000000';
   } else if (percentage >= 91) {
-    backgroundColor = '#d8ffcc'; // Verde Claro 
-    textColor = '';
+    backgroundColor = '#d8ffcc'; // Verde Claro
+    textColor = '#000000';
   } else if (percentage >= 81) {
     backgroundColor = '#f5f095'; // Amarelo Claro
-    textColor = '';
+    textColor = '#000000';
   } else if (percentage >= 51) {
     backgroundColor = '#faf264'; // Amarelo Escuro
-    textColor = '';
+    textColor = '#000000';
   } else if (percentage >= 21) {
     backgroundColor = '#f4cccc'; // Vermelho Claro
-    textColor = '';
+    textColor = '#000000';
   } else {
     backgroundColor = '#e06666'; // Vermelho Escuro
     textColor = '#ffffff';       // Texto branco para melhor contraste
@@ -322,10 +322,13 @@ const Dashboard = () => {
                   {upcomingVacations.map((vacation, index) => {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const startDate = new Date(vacation.desired_start_date);
-                    startDate.setHours(0, 0, 0, 0);
-                    const endDate = new Date(vacation.desired_date);
-                    endDate.setHours(0, 0, 0, 0);
+                    
+                    // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas com timezone
+                    const startDateStr = vacation.desired_start_date.split('T')[0];
+                    const endDateStr = vacation.desired_date.split('T')[0];
+                    
+                    const startDate = new Date(startDateStr + 'T00:00:00');
+                    const endDate = new Date(endDateStr + 'T00:00:00');
                     
                     // Verifica se está de férias agora
                     const isOnVacation = today >= startDate && today <= endDate;

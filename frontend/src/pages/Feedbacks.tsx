@@ -85,7 +85,10 @@ const Feedbacks = () => {
         .select('user_id, name')
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar consultores:', error);
+        return;
+      }
 
       const options: ConsultantOption[] = (data || []).map((user) => ({
         value: user.user_id,
@@ -122,7 +125,10 @@ const Feedbacks = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar feedbacks:', error);
+        return;
+      }
 
       setFeedbacks(data || []);
     } catch (err) {
@@ -167,7 +173,11 @@ const Feedbacks = () => {
         .delete()
         .eq('id', feedbackToDelete.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao deletar feedback:', error);
+        alert('Erro ao deletar feedback. Tente novamente.');
+        return;
+      }
 
       // Remove o feedback da lista local
       setFeedbacks(prev => prev.filter(f => f.id !== feedbackToDelete.id));

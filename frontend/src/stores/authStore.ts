@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 
 interface User {
   id: string
+  runrun_user_id: string
   name: string
   email: string
   role: string

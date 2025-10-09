@@ -68,7 +68,7 @@ const Projects = () => {
   useEffect(() => {
     if (!hasLoadedInitially.current) {
       hasLoadedInitially.current = true;
-      fetchProjects();
+      void fetchProjects();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

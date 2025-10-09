@@ -340,7 +340,8 @@ const EmployeeDetail = () => {
       .select('time, time_worked_date')
       .eq('user_id', userId)
       .gte('time_worked_date', startDate)
-      .lt('time_worked_date', endDate);
+      .lt('time_worked_date', endDate)
+      .order('time_worked_date', { ascending: true });
 
     if (error) {
       console.error("Erro ao buscar horas:", error);
@@ -508,8 +509,8 @@ const EmployeeDetail = () => {
     setIsLoadingRecords(true);
     try {
       const [month, year] = monthYear.split('/');
-      const startDate = `${year}-${month}-01`;
-      const endDate = `${year}-${Number(month) + 1}-01`;
+      const startDate = `${year}-${month.padStart(2, '0')}-01`;
+      const endDate = `${year}-${(Number(month) + 1).toString().padStart(2, '0')}-01`;
 
       const { data, error } = await supabase
         .from('time_worked')
@@ -518,14 +519,21 @@ const EmployeeDetail = () => {
         .gte('time_worked_date', startDate)
         .lt('time_worked_date', endDate)
         .gt('time', 0)
-        .order('time_worked_date', { ascending: false });
+        .order('time_worked_date', { ascending: true });
 
       if (error) {
         console.error('Erro ao carregar registros:', error);
         setTimeRecords([]);
         return;
       }
-      setTimeRecords(data || []);
+      
+      // Filtra novamente no frontend para garantir que apenas registros do mês correto sejam exibidos
+      const filteredData = (data || []).filter(record => {
+        const recordDate = record.time_worked_date.split('T')[0]; // Extrai apenas YYYY-MM-DD
+        return recordDate >= startDate && recordDate < endDate;
+      });
+      
+      setTimeRecords(filteredData);
     } catch (error) {
       console.error('Erro ao carregar registros:', error);
       setTimeRecords([]);
@@ -840,9 +848,13 @@ const EmployeeDetail = () => {
       field: 'time_worked_date',
       flex: 1,
       minWidth: 120,
-      cellRenderer: (params: any) => (
-        new Date(params.value).toLocaleDateString('pt-BR')
-      ),
+      cellRenderer: (params: any) => {
+        if (!params.value) return '-';
+        // Extrai apenas a data (YYYY-MM-DD) para evitar problemas com timezone
+        const dateStr = params.value.split('T')[0];
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+      },
     },
     {
       headerName: 'Projeto',
@@ -1598,7 +1610,7 @@ const EmployeeDetail = () => {
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    Registro de Tempo
+                    Registro de Horas
                   </button>
                   <button
                     onClick={() => setActiveTab('feedbacks')}
