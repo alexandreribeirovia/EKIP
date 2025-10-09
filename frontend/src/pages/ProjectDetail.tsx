@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
-import { ColDef, RowClickedEvent, CellValueChangedEvent } from 'ag-grid-community';
+import { ColDef, RowClickedEvent } from 'ag-grid-community';
 import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize } from 'lucide-react';
 import Select from 'react-select';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea } from 'recharts';
@@ -12,6 +12,7 @@ import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectP
 import AssigneeCellRenderer from '../components/AssigneeCellRenderer.tsx';
 import ProjectOwnerRenderer from '../components/ProjectOwnerRenderer.tsx';
 import ProjectProgressModal from '../components/ProjectProgressModal.tsx';
+import RiskModal from '../components/RiskModal.tsx';
 
 interface SelectOption {
   value: string;
@@ -174,19 +175,15 @@ const ProgressBarRenderer = (params: { value: number }) => {
 const RiskActionsRenderer = ({ 
   data, 
   onDelete, 
-  onEdit, 
-  onSave,
-  isEditing 
+  onEdit
 }: { 
   data: any, 
   onDelete: (riskId: number) => void,
-  onEdit: (riskId: number) => void,
-  onSave: (riskId: number) => void,
-  isEditing: boolean
+  onEdit: (riskId: number) => void
 }) => {
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (data.id && data.id > 0) {
+    if (data.id) {
       onDelete(data.id);
     }
   };
@@ -198,37 +195,15 @@ const RiskActionsRenderer = ({
     }
   };
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (data.id) {
-      onSave(data.id);
-    }
-  };
-
-  // Não mostrar botões para linhas novas (ID negativo)
-  if (data.id < 0) {
-    return null;
-  }
-
   return (
     <div className="flex items-center justify-center gap-1 h-full">
-      {isEditing ? (
-        <button
-          onClick={handleSave}
-          className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
-          title="Salvar alterações"
-        >
-          <CheckCircle className="w-4 h-4" />
-        </button>
-      ) : (
-        <button
-          onClick={handleEdit}
-          className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
-          title="Editar risco"
-        >
-          <Edit className="w-4 h-4" />
-        </button>
-      )}
+      <button
+        onClick={handleEdit}
+        className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
+        title="Editar risco"
+      >
+        <Edit className="w-4 h-4" />
+      </button>
       <button
         onClick={handleDelete}
         className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
@@ -315,12 +290,13 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [statusFilter, setStatusFilter] = useState<'Aberto' | 'Fechado' | 'Todos'>('Aberto');
   const [riskSearchTerm, setRiskSearchTerm] = useState('');
   const [selectedRiskStatuses, setSelectedRiskStatuses] = useState<SelectOption[]>([]);
-  const [gridApi, setGridApi] = useState<any>(null);
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
   const [successNotification, setSuccessNotification] = useState<string | null>(null);
-  const [editingRiskId, setEditingRiskId] = useState<number | null>(null);
-  const [originalRiskData, setOriginalRiskData] = useState<Map<number, any>>(new Map());
   const [timeWorkedData, setTimeWorkedData] = useState<ConsultorHours[]>([]);
+  
+  // Estados para o modal de risco
+  const [isRiskModalOpen, setIsRiskModalOpen] = useState(false);
+  const [selectedRisk, setSelectedRisk] = useState<DbRisk | null>(null);
   
   // Estados para filtros da aba acompanhamento
   const [trackingPeriodFilter, setTrackingPeriodFilter] = useState<'all' | 'current_week' | 'current_month' | 'last_3_months' | 'current_year'>('all');
@@ -798,23 +774,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     return statusDomains.map(domain => ({ value: domain.value, label: domain.value }));
   }, [domains]);
 
-  const riskTypeOptions = useMemo(() => {
-    if (!domains) return [];
-    const typeDomains = domains.filter(domain => domain.type === 'risk_type');
-    return typeDomains.map(domain => ({ value: domain.value, label: domain.value }));
-  }, [domains]);
-
-  const riskPriorityOptions = useMemo(() => {
-    if (!domains) return [];
-    const priorityDomains = domains.filter(domain => domain.type === 'risk_priority');
-    return priorityDomains.map(domain => ({ value: domain.value, label: domain.value }));
-  }, [domains]);
-
-  const getDomainId = useCallback((type: string, value: string): number | null => {
-    const domain = domains.find(d => d.type === type && d.value === value);
-    return domain ? domain.id : null;
-  }, [domains]);
-
   const showErrorNotification = useCallback((message: string) => {
     setErrorNotification(message);
   }, []);
@@ -823,205 +782,46 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     setSuccessNotification(message);
   }, []);
 
-  // Função para verificar se houve mudanças na linha
-  const hasRiskChanged = useCallback((riskId: number, currentData: any): boolean => {
-    const originalData = originalRiskData.get(riskId);
-    
-    // Se não há dados originais, considerar como mudado (linha nova)
-    if (!originalData) {
-      return true;
-    }
+  // Função para abrir modal de adição de risco
+  const openAddRiskModal = useCallback(() => {
+    setSelectedRisk(null);
+    setIsRiskModalOpen(true);
+  }, []);
 
-    // Comparar campos relevantes
-    const fieldsToCompare = [
-      'type', 'priority', 'description', 'action_plan', 'status',
-      'start_date', 'forecast_date', 'close_date', 'manual_owner'
-    ];
-
-    for (const field of fieldsToCompare) {
-      const original = originalData[field];
-      const current = currentData[field];
-      
-      // Normalizar valores null/undefined/empty string
-      const normalizedOriginal = original === undefined || original === null || original === '' ? null : original;
-      const normalizedCurrent = current === undefined || current === null || current === '' ? null : current;
-      
-      if (normalizedOriginal !== normalizedCurrent) {
-        return true;
-      }
-    }
-
-    return false;
-  }, [originalRiskData]);
-
-  const saveRisk = useCallback(async (riskData: Partial<DbRisk>) => {
-    try {
-      // Apenas pegar o texto do campo manual_owner
-      const manualOwner = riskData.manual_owner || null;
-      
-      if (riskData.id && riskData.id > 0) {
-        const updateData: any = {
-          type_id: getDomainId('risk_type', riskData.type || ''),
-          priority_id: getDomainId('risk_priority', riskData.priority || ''),
-          status_id: getDomainId('risks_status', riskData.status || ''),
-          description: riskData.description || '',
-          action_plan: riskData.action_plan || '',
-          start_date: riskData.start_date,
-          forecast_date: riskData.forecast_date,
-          close_date: riskData.close_date,
-          owner_id: null,
-          manual_owner: manualOwner,
-          owner_name: null
-        };
-        
-        const { error } = await supabase
-          .from('risks')
-          .update(updateData)
-          .eq('id', riskData.id);
-
-        if (error) {
-          console.error('Erro ao atualizar risco:', error);
-          showErrorNotification('Erro ao salvar risco. Verifique se todos os campos estão preenchidos corretamente e tente novamente.');
-          return;
-        }
-      } else {
-        const insertData: any = {
-          project_id: project.project_id,
-          type_id: getDomainId('risk_type', riskData.type || ''),
-          priority_id: getDomainId('risk_priority', riskData.priority || ''),
-          status_id: getDomainId('risks_status', riskData.status || ''),
-          description: riskData.description || '',
-          action_plan: riskData.action_plan || '',
-          start_date: riskData.start_date,
-          forecast_date: riskData.forecast_date,
-          close_date: riskData.close_date,
-          owner_id: null,
-          manual_owner: manualOwner,
-          owner_name: null
-        };
-
-        const { error } = await supabase
-          .from('risks')
-          .insert([insertData])
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Erro ao inserir risco:', error);
-          showErrorNotification('Erro ao salvar risco. Verifique se todos os campos estão preenchidos corretamente e tente novamente.');
-          return;
-        }
-      }
-
-      const { data, error: fetchError } = await supabase
-        .from('risks')
-        .select('*')
-        .eq('project_id', project.project_id);
-
-      if (!fetchError) {
-        
-        const risksWithOwner = (data || []).map(risk => {
-          // Buscar valores dos domínios baseado nos IDs
-          const typeValue = domains.find(d => d.id === risk.type_id)?.value || '';
-          const priorityValue = domains.find(d => d.id === risk.priority_id)?.value || '';
-          const statusValue = domains.find(d => d.id === risk.status_id)?.value || '';
-          
-          return {
-            ...risk,
-            type: typeValue,
-            priority: priorityValue,
-            status: statusValue,
-          };
-        });
-        setRisks(risksWithOwner as DbRisk[]);
-        
-        // Exibir mensagem de sucesso
-        showSuccessNotification('Risco salvo com sucesso!');
-      }
-    } catch (error) {
-      console.error('Erro ao salvar risco:', error);
-      showErrorNotification('Erro ao salvar risco. Verifique se todos os campos estão preenchidos corretamente e tente novamente.');
-      throw error;
-    }
-  }, [project.project_id, getDomainId, domains, showErrorNotification, showSuccessNotification]);
-
-  // Função para iniciar edição de um risco
-  const editRisk = useCallback((riskId: number) => {
-    if (!gridApi) return;
-    
-    // Salvar snapshot dos dados originais
+  // Função para abrir modal de edição de risco
+  const openEditRiskModal = useCallback((riskId: number) => {
     const risk = risks.find(r => r.id === riskId);
     if (risk) {
-      setOriginalRiskData(prev => {
-        const newMap = new Map(prev);
-        newMap.set(riskId, { ...risk });
-        return newMap;
-      });
+      setSelectedRisk(risk);
+      setIsRiskModalOpen(true);
     }
-    
-    // Encontrar o índice da linha no grid
-    let rowIndex = -1;
-    gridApi.forEachNode((node: any) => {
-      if (node.data && node.data.id === riskId) {
-        rowIndex = node.rowIndex!;
-      }
-    });
-    
-    if (rowIndex >= 0) {
-      setEditingRiskId(riskId);
-      // Aguardar o React processar o estado antes de iniciar edição
-      setTimeout(() => {
-        gridApi.startEditingCell({
-          rowIndex,
-          colKey: 'type'
-        });
-      }, 0);
-    }
-  }, [gridApi, risks]);
+  }, [risks]);
 
-  // Função para salvar edição de um risco
-  const saveRiskEdit = useCallback(async (riskId: number) => {
-    if (!gridApi) return;
-    
-    // Parar edição
-    gridApi.stopEditing();
-    
-    // Buscar dados atuais da linha
-    let currentRowData: any = null;
-    gridApi.forEachNode((node: any) => {
-      if (node.data && node.data.id === riskId) {
-        currentRowData = node.data;
-      }
-    });
-    
-    if (currentRowData) {
-      // Verificar se houve mudanças
-      const changed = hasRiskChanged(riskId, currentRowData);
-      
-      if (!changed) {
-        setEditingRiskId(null);
-        setOriginalRiskData(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(riskId);
-          return newMap;
-        });
-        return;
-      }
-      
-      try {
-        await saveRisk(currentRowData);
-        setEditingRiskId(null);
-        setOriginalRiskData(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(riskId);
-          return newMap;
-        });
-      } catch (error) {
-        console.error('Erro ao salvar:', error);
-        // Manter em edição se houver erro
-      }
+  // Função para recarregar riscos após salvamento
+  const reloadRisks = useCallback(async () => {
+    const { data, error: fetchError } = await supabase
+      .from('risks')
+      .select('*')
+      .eq('project_id', project.project_id);
+
+    if (!fetchError) {
+      const risksWithOwner = (data || []).map(risk => {
+        // Buscar valores dos domínios baseado nos IDs
+        const typeValue = domains.find(d => d.id === risk.type_id)?.value || '';
+        const priorityValue = domains.find(d => d.id === risk.priority_id)?.value || '';
+        const statusValue = domains.find(d => d.id === risk.status_id)?.value || '';
+        
+        return {
+          ...risk,
+          type: typeValue,
+          priority: priorityValue,
+          status: statusValue,
+        };
+      });
+      setRisks(risksWithOwner as DbRisk[]);
+      showSuccessNotification('Risco salvo com sucesso!');
     }
-  }, [gridApi, hasRiskChanged, saveRisk]);
+  }, [project.project_id, domains, showSuccessNotification]);
 
   // Função para abrir modal de confirmação de exclusão de risco
   const deleteRisk = useCallback((riskId: number) => {
@@ -1054,16 +854,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       // Atualizar o estado local removendo o risco deletado
       setRisks(prev => prev.filter(risk => risk.id !== riskToDelete.id));
       
-      // Limpar estados relacionados se o risco deletado estava sendo editado
-      if (editingRiskId === riskToDelete.id) {
-        setEditingRiskId(null);
-        setOriginalRiskData(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(riskToDelete.id);
-          return newMap;
-        });
-      }
-      
       showSuccessNotification('Risco excluído com sucesso!');
       
       // Fechar modal de confirmação
@@ -1076,105 +866,9 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       setIsDeleteRiskConfirmModalOpen(false);
       setRiskToDelete(null);
     }
-  }, [riskToDelete, editingRiskId, showErrorNotification, showSuccessNotification]);
+  }, [riskToDelete, showErrorNotification, showSuccessNotification]);
 
-  // Listener para ESC cancelar edição
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && editingRiskId !== null && gridApi) {
-        // Cancelar edição
-        gridApi.stopEditing(true);
-        setEditingRiskId(null);
-        // Limpar dados originais
-        setOriginalRiskData(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(editingRiskId);
-          return newMap;
-        });
-      }
-    };
 
-    document.addEventListener('keydown', handleKeyDown);
-    
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [editingRiskId, gridApi]);
-
-  const addNewRisk = useCallback(() => {
-    const newRiskId = -Date.now();
-    const newRisk: Partial<DbRisk> = {
-      id: newRiskId,
-      project_id: project.project_id,
-      type: '',
-      priority: '',
-      description: '',
-      action_plan: '',
-      status: '',
-      start_date: null,
-      forecast_date: null,
-      close_date: null,
-      owner_name: null,
-      manual_owner: null,
-      type_id: null,
-      priority_id: null,
-      status_id: null,
-      owner_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setRisks(prev => [newRisk as DbRisk, ...prev]);
-    
-    // Salvar snapshot e iniciar edição automaticamente
-    setTimeout(() => {
-      if (gridApi) {
-        setOriginalRiskData(prev => {
-          const newMap = new Map(prev);
-          newMap.set(newRiskId, { ...newRisk });
-          return newMap;
-        });
-        
-        setEditingRiskId(newRiskId);
-        
-        // Garantir que a linha está visível
-        gridApi.ensureIndexVisible(0);
-        
-        // Iniciar edição na primeira célula
-        setTimeout(() => {
-          gridApi.startEditingCell({
-            rowIndex: 0,
-            colKey: 'type'
-          });
-        }, 100);
-      }
-    }, 100);
-  }, [project.project_id, gridApi]);
-
-  const handleCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-    if (event.data) {
-      // Apenas atualizar os IDs dos domínios localmente, sem salvar ainda
-      const updatedRisk = { ...event.data };
-      
-      if (event.colDef?.field === 'type') {
-        updatedRisk.type_id = getDomainId('risk_type', event.newValue);
-      } else if (event.colDef?.field === 'priority') {
-        updatedRisk.priority_id = getDomainId('risk_priority', event.newValue);
-      } else if (event.colDef?.field === 'status') {
-        updatedRisk.status_id = getDomainId('risks_status', event.newValue);
-      }
-      
-      // Atualizar o estado local sem salvar
-      setRisks(prev => prev.map(risk => 
-        risk.id === updatedRisk.id ? updatedRisk : risk
-      ));
-    }
-  }, [getDomainId]);
-
-  const handleCellEditingStarted = useCallback(() => {
-    // Apenas para manter compatibilidade com o grid, mas não faz nada
-    // O snapshot é salvo quando clicar no ícone de editar
-  }, []);
 
   const filteredRisks = useMemo(() => {
     let filtered = [...risks];
@@ -1219,20 +913,12 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       field: 'type',
       flex: 1,
       minWidth: 120,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: riskTypeOptions.map(opt => opt.value),
-      },
     },
     {
       headerName: 'Prioridade',
       field: 'priority',
       flex: 1,
       minWidth: 120,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: riskPriorityOptions.map(opt => opt.value),
-      },
     },
     {
       headerName: 'Descrição',
@@ -1252,10 +938,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       flex: 1,
       minWidth: 120,
       valueFormatter: params => formatDate(params.value),
-      cellEditor: 'agDateStringCellEditor',
-      cellEditorParams: {
-        useFormatter: true,
-      },
     },
     {
       headerName: 'Previsão',
@@ -1263,10 +945,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       flex: 1,
       minWidth: 120,
       valueFormatter: params => formatDate(params.value),
-      cellEditor: 'agDateStringCellEditor',
-      cellEditorParams: {
-        useFormatter: true,
-      },
     },
     {
       headerName: 'Fim',
@@ -1274,28 +952,18 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       flex: 1,
       minWidth: 120,
       valueFormatter: params => formatDate(params.value),
-      cellEditor: 'agDateStringCellEditor',
-      cellEditorParams: {
-        useFormatter: true,
-      },
     },
     {
       headerName: 'Status',
       field: 'status',
       flex: 1,
       minWidth: 120,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: riskStatusOptions.map(opt => opt.value),
-      },
     },
     {
       headerName: 'Responsável',
       field: 'manual_owner',
       flex: 1,
       minWidth: 150,
-      editable: true,
-      cellEditor: 'agTextCellEditor',
     },
     {
       headerName: 'Ações',
@@ -1305,27 +973,20 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         <RiskActionsRenderer 
           data={params.data} 
           onDelete={deleteRisk}
-          onEdit={editRisk}
-          onSave={saveRiskEdit}
-          isEditing={editingRiskId === params.data?.id}
+          onEdit={openEditRiskModal}
         />
       ),
       sortable: false,
       filter: false,
-      editable: false,
       resizable: false,
     },
-  ], [riskTypeOptions, riskPriorityOptions, riskStatusOptions, deleteRisk, editRisk, saveRiskEdit, editingRiskId]);
+  ], [deleteRisk, openEditRiskModal]);
 
   const defaultRiskColDef = useMemo<ColDef>(() => ({
     sortable: true,
     filter: true,
     resizable: true,
-    editable: (params) => {
-      // Apenas permitir edição se a linha estiver no modo de edição
-      return params.data && params.data.id === editingRiskId;
-    },
-  }), [editingRiskId]);
+  }), []);
 
   const progressValue = useMemo(() => {
     if (!taskHoursSummary.planned || taskHoursSummary.planned === 0) {
@@ -2203,11 +1864,12 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Filtrados: <span className="font-bold text-blue-600 dark:text-blue-400">{filteredRisks.length}</span></span>
                     </div>
                     <button
-                      onClick={addNewRisk}
-                      className="flex items-center justify-center w-8 h-8 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+                      onClick={openAddRiskModal}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
                       title="Adicionar novo risco"
                     >
                       <Plus className="w-4 h-4" />
+                      Adicionar Risco
                     </button>
                   </div>
 
@@ -2216,31 +1878,10 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       columnDefs={riskColumnDefs}
                       rowData={filteredRisks}
                       defaultColDef={defaultRiskColDef}
-                      editType="fullRow"
                       rowSelection="single"
                       animateRows={true}
                       rowHeight={48}
                       headerHeight={48}
-                      onGridReady={(params) => setGridApi(params.api)}
-                      onCellValueChanged={handleCellValueChanged}
-                      onCellEditingStarted={handleCellEditingStarted}
-                      getRowStyle={(params) => {
-                        // Linha nova (ID negativo) deve ter fundo ligeiramente diferenciado
-                        if (params.data && params.data.id < 0) {
-                          return { 
-                            backgroundColor: '#f8fafc',
-                            border: '1px solid #cbd5e1'
-                          };
-                        }
-                        // Destacar linha em edição
-                        if (params.data && params.data.id === editingRiskId) {
-                          return {
-                            backgroundColor: '#e0f2fe',
-                            border: '1px solid #0ea5e9'
-                          };
-                        }
-                        return undefined;
-                      }}
                       overlayNoRowsTemplate={
                         '<span class="text-gray-500 dark:text-gray-400">Nenhum risco encontrado para esse projeto.</span>'
                       }
@@ -2875,6 +2516,18 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         onSuccess={showSuccessNotification}
         onError={showErrorNotification}
         onProjectPhasesUpdate={setProjectPhases}
+      />
+
+      {/* Modal de Risco */}
+      <RiskModal
+        isOpen={isRiskModalOpen}
+        onClose={() => {
+          setIsRiskModalOpen(false);
+          setSelectedRisk(null);
+        }}
+        onSuccess={reloadRisks}
+        projectId={project.project_id}
+        riskData={selectedRisk}
       />
 
       {/* Modal de Confirmação de Exclusão de Risco */}
