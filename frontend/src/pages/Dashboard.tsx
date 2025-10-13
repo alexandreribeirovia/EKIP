@@ -83,6 +83,7 @@ const Dashboard = () => {
   
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);
+  const hasLoadedVacations = useRef(false);
 
   useEffect(() => {
     if (!hasLoadedInitially.current) {
@@ -169,38 +170,44 @@ const Dashboard = () => {
 
   // Carregar férias próximas e em andamento
   useEffect(() => {
-    const fetchUpcomingVacations = async () => {
-      setIsLoadingVacations(true);
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // Buscar todas as férias e filtrar no frontend para garantir comparação correta
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('user_id, responsible_name, desired_start_date, desired_date')
-          .eq('type_name', 'Férias')
-          .order('desired_start_date', { ascending: true });
+    if (!hasLoadedVacations.current) {
+      hasLoadedVacations.current = true;
+      
+      const fetchUpcomingVacations = async () => {
+        setIsLoadingVacations(true);
+        try {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          // Buscar todas as férias e filtrar no frontend para garantir comparação correta
+          const { data, error } = await supabase
+            .from('tasks')
+            .select('user_id, responsible_name, desired_start_date, desired_date')
+            .eq('type_name', 'Férias')
+            .eq('is_closed', false)
+            .order('desired_start_date', { ascending: true });
 
-        if (error) {
-          console.error('Erro ao buscar férias:', error);
-        } else {
-          // Filtrar apenas férias que ainda não terminaram (data fim >= hoje)
-          const filteredVacations = (data || []).filter(vacation => {
-            const endDate = new Date(vacation.desired_date);
-            endDate.setHours(0, 0, 0, 0);
-            return endDate >= today;
-          });
-          setUpcomingVacations(filteredVacations);
+          if (error) {
+            console.error('Erro ao buscar férias:', error);
+          } else {
+            // Filtrar apenas férias que ainda não terminaram (data fim >= hoje)
+            const filteredVacations = (data || []).filter(vacation => {
+              const endDate = new Date(vacation.desired_date);
+              endDate.setHours(0, 0, 0, 0);
+              return endDate >= today;
+            });
+            setUpcomingVacations(filteredVacations);
+          }
+        } catch (err) {
+          console.error('Erro ao carregar férias:', err);
+        } finally {
+          setIsLoadingVacations(false);
         }
-      } catch (err) {
-        console.error('Erro ao carregar férias:', err);
-      } finally {
-        setIsLoadingVacations(false);
-      }
-    };
+      };
 
-    void fetchUpcomingVacations();
+      void fetchUpcomingVacations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // =====================================================================

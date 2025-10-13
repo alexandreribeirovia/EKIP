@@ -1808,6 +1808,13 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                             };
                           }
                         }
+                        // Verificar a tarefa está planejada
+                        if (!params.data.gantt_bar_end_date) {
+                            return { 
+                              backgroundColor: '#fefce8',
+                              '--ag-row-hover-color': '#fcf4b8'
+                            };
+                        }
                         return undefined;
                       }}
                       overlayNoRowsTemplate={
