@@ -5,7 +5,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, FileText, Edit } from 'lucide-react';
 import { EvaluationData } from '../types';
-import EvaluationModal from '../components/EvaluationModal';
+import EvaluationModelModal from '../components/EvaluationModelModal';
 import '../styles/main.css';
 
 const Evaluations = () => {
@@ -308,7 +308,7 @@ const Evaluations = () => {
       </div>
 
       {/* Modal de Nova Avaliação */}
-      <EvaluationModal
+      <EvaluationModelModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {

@@ -13,7 +13,8 @@ import {
   ClipboardList,
   Clock,
   ChevronDown,
-  MessageSquare
+  MessageSquare,
+  FileCheck
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -50,7 +51,8 @@ const Layout = ({ children }: LayoutProps) => {
       icon: Users,
       hasSubmenu: true,
       submenu: [
-        { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare }
+        { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare },
+        { name: 'Avaliação', href: '/employee-evaluations', icon: FileCheck }
       ]
     },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },

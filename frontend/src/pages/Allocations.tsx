@@ -147,6 +147,7 @@ const Allocations = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<DbUser | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGrouped, setIsGrouped] = useState(false);
+  const [isFeriasFilter, setIsFeriasFilter] = useState(false);
   const [skillFilter, setSkillFilter] = useState<string>('');
   const [filteredResourcesBySkills, setFilteredResourcesBySkills] = useState<FullCalendarResource[]>([]);
 
@@ -155,7 +156,7 @@ const Allocations = () => {
 
   // ... (useMemo e funções de manipulação de eventos inalteradas) ...
   const filteredResources = useMemo(() => {
-    const hasOtherFilters = selectedConsultants.length > 0 || selectedProjects.length > 0;
+    const hasOtherFilters = selectedConsultants.length > 0 || selectedProjects.length > 0 || isFeriasFilter;
     
     // Começa com os recursos filtrados por skills
     let baseResources = skillFilter.length > 0 ? filteredResourcesBySkills : resources;
@@ -167,7 +168,7 @@ const Allocations = () => {
     // Aplica filtros adicionais baseados em eventos visíveis
     const visibleConsultantIds = new Set(allEvents.map(event => event.resourceId));
     return baseResources.filter(resource => visibleConsultantIds.has(resource.id));
-  }, [resources, filteredResourcesBySkills, allEvents, selectedConsultants, selectedProjects, skillFilter]);
+  }, [resources, filteredResourcesBySkills, allEvents, selectedConsultants, selectedProjects, skillFilter, isFeriasFilter]);
 
 
   const handleResourceClick = async (userId: string) => {
@@ -666,13 +667,22 @@ const scrollToNowFallbackDOM = () => {
           return;
         }
 
+        // Filter for vacation tasks if Férias filter is enabled
+        let filteredAssignments = assignmentsData || [];
+        if (isFeriasFilter) {
+          filteredAssignments = filteredAssignments.filter((assignment: any) => {
+            const task = assignment.tasks;
+            return task && task.type_name === 'Férias' && !assignment.is_closed;
+          });
+        }
+
         let finalEvents: EventInput[] = [];
 
         if (isGrouped) {
           const groupedAssignments: { [key: string]: any } = {};
           const individualEvents: EventInput[] = [];
 
-          for (const assignment of (assignmentsData || [])) {
+          for (const assignment of filteredAssignments) {
             const task = assignment.tasks;
             if (!task) continue;
             
@@ -803,7 +813,7 @@ const scrollToNowFallbackDOM = () => {
           finalEvents = [...groupedEvents, ...individualEvents];
         
         } else {
-          for (const assignment of (assignmentsData || [])) {
+          for (const assignment of filteredAssignments) {
             const task = assignment.tasks;
             if (!task) continue;
             let start: string | null = null, end: string | null = null;
@@ -850,7 +860,7 @@ const scrollToNowFallbackDOM = () => {
       }
     };
     void fetchAssignments();
-  }, [statusFilter, selectedConsultants, selectedProjects, isGrouped]);
+  }, [statusFilter, selectedConsultants, selectedProjects, isGrouped, isFeriasFilter]);
 
   
 
@@ -954,21 +964,46 @@ const handleDatesSet = () => {
               </select>
             </div>
 
-            <div className="flex items-center gap-2 pl-2">
-              <input 
-                type="checkbox"
-                id="groupingCheckbox"
-                checked={isGrouped}
-                onChange={(e) => setIsGrouped(e.target.checked)}
+            {/* Coluna vertical para Férias e Agrupado */}
+            <div className="flex flex-col gap-2   border-gray-300 dark:border-gray-600">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox"
+                  id="feriasCheckbox"
+                  checked={isFeriasFilter}
+                  onChange={(e) => {
+                    setIsFeriasFilter(e.target.checked);
+                    if (e.target.checked) {
+                      setStatusFilter('Aberto');
+                      setIsGrouped(false);
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                />
+                <label 
+                  htmlFor="feriasCheckbox" 
+                  className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                >
+                  Férias
+                </label>
+              </div>
 
-                className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-              />
-              <label 
-                htmlFor="groupingCheckbox" 
-                className="text-sm text-gray-700 dark:text-gray-300"
-              >
-                Agrupado
-              </label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox"
+                  id="groupingCheckbox"
+                  checked={isGrouped}
+                  onChange={(e) => setIsGrouped(e.target.checked)}
+                  disabled={isFeriasFilter}
+                  className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <label 
+                  htmlFor="groupingCheckbox" 
+                  className={`text-sm whitespace-nowrap ${isFeriasFilter ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-300'}`}
+                >
+                  Agrupado
+                </label>
+              </div>
             </div>
           </div>
 

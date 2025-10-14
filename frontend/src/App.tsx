@@ -8,8 +8,10 @@ import Allocations from '@/pages/Allocations'
 import Projects from '@/pages/Projects'
 import TimeEntries from '@/pages/TimeEntries'
 import Feedbacks from '@/pages/Feedbacks'
-import Evaluations from '@/pages/EvaluationModel'
+import EvaluationModels from '@/pages/EvaluationModel'
 import EvaluationDetail from '@/pages/EvaluationDetailModel'
+import EmployeeEvaluations from '@/pages/Evaluations'
+import EvaluationResponse from '@/pages/EvaluationResponse'
 import Login from '@/pages/Login'
 import ProtectedRoute from '@/components/ProtectedRoute'
 
@@ -30,7 +32,9 @@ function App() {
         <Route path="/employees/:id" element={<ProtectedRoute><EmployeeDetail /></ProtectedRoute>} />
         <Route path="/allocations" element={<ProtectedRoute><Allocations /></ProtectedRoute>} />
         <Route path="/feedbacks" element={<ProtectedRoute><Feedbacks /></ProtectedRoute>} />
-        <Route path="/evaluations" element={<ProtectedRoute><Evaluations /></ProtectedRoute>} />
+        <Route path="/employee-evaluations" element={<ProtectedRoute><EmployeeEvaluations /></ProtectedRoute>} />
+        <Route path="/employee-evaluations/:id" element={<ProtectedRoute><EvaluationResponse /></ProtectedRoute>} />
+        <Route path="/evaluations" element={<ProtectedRoute><EvaluationModels /></ProtectedRoute>} />
         <Route path="/evaluations/:id" element={<ProtectedRoute><EvaluationDetail /></ProtectedRoute>} />
         <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
       </Routes>

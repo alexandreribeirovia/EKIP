@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { X, FileText } from 'lucide-react';
 
-interface EvaluationModalProps {
+interface EvaluationModelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const EvaluationModal = ({ isOpen, onClose, onSuccess }: EvaluationModalProps) => {
+const EvaluationModelModal = ({ isOpen, onClose, onSuccess }: EvaluationModelModalProps) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -161,4 +161,4 @@ const EvaluationModal = ({ isOpen, onClose, onSuccess }: EvaluationModalProps) =
   );
 };
 
-export default EvaluationModal;
+export default EvaluationModelModal;

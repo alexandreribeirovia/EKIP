@@ -321,7 +321,6 @@ const EvaluationDetail = () => {
 
   // Adicionar uma nova categoria à avaliação (com subcategoria opcional)
   const handleAddCategory = async (categoryId: number, subcategoryId: number | null = null) => {
-    console.log('🔵 handleAddCategory chamado com categoryId:', categoryId, 'subcategoryId:', subcategoryId);
     setShowCategoryModal(false);
     setSelectedCategoryForModal(null);
     setSelectedSubcategoryForModal(null);
@@ -329,10 +328,8 @@ const EvaluationDetail = () => {
     
     // Buscar a categoria selecionada
     const selectedCategory = availableCategories.find(c => c.id === categoryId);
-    console.log('🔵 Categoria selecionada:', selectedCategory);
     
     if (!selectedCategory) {
-      console.error('❌ Categoria não encontrada');
       return;
     }
     
@@ -351,9 +348,7 @@ const EvaluationDetail = () => {
     
     // Adicionar a categoria e suas subcategorias temporariamente ao array de categorias
     setCategories(prev => {
-      console.log('🔵 Adicionando categoria ao state. Antes:', prev.length);
       const updated = [...prev, selectedCategory, ...(subcats || [])];
-      console.log('🔵 Depois:', updated.length, 'subcategorias:', subcats?.length || 0);
       return updated;
     });
     
@@ -361,7 +356,6 @@ const EvaluationDetail = () => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
       newSet.add(categoryId);
-      console.log('🔵 Categorias expandidas:', Array.from(newSet));
       return newSet;
     });
     
@@ -375,7 +369,6 @@ const EvaluationDetail = () => {
     }
     
     // Abre automaticamente o formulário de adicionar pergunta para esta categoria/subcategoria
-    console.log('🔵 Chamando handleAddQuestion com:', categoryId, subcategoryId);
     handleAddQuestion(categoryId, subcategoryId);
   };
 
@@ -443,9 +436,6 @@ const EvaluationDetail = () => {
     
     if (tempCategory) {
       displayCategories.push({ ...tempCategory, order: mainCategories.length });
-      console.log('Adicionando categoria temporária:', tempCategory);
-    } else {
-      console.warn('Categoria temporária não encontrada:', newQuestionCategoryId);
     }
   }
 
@@ -533,16 +523,7 @@ const EvaluationDetail = () => {
   const handleUnifiedDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    console.log('═══════════════════════════════════════════════');
-    console.log('🔷 DRAG END GLOBAL:', { 
-      activeId: active.id, 
-      overId: over?.id,
-      activeType: typeof active.id,
-      overType: typeof over?.id
-    });
-
     if (!over || active.id === over.id) {
-      console.log('⛔ Drag cancelado: sem destino ou mesmo item');
       return;
     }
 
@@ -551,17 +532,7 @@ const EvaluationDetail = () => {
     const isDraggingSubcategory = categories.some(cat => cat.parent_id !== null && cat.id === active.id);
     const isDraggingQuestion = questions.some(q => q.id === active.id);
     
-    console.log('🔷 Tipo de drag:', { 
-      isDraggingCategory, 
-      isDraggingSubcategory,
-      isDraggingQuestion,
-      totalCategories: mainCategories.length,
-      totalSubcategories: categories.filter(c => c.parent_id !== null).length,
-      totalQuestions: questions.length
-    });
-    
     if (isDraggingCategory) {
-      console.log('📁 Movendo categoria');
       // Handler para categorias
       const oldIndex = mainCategories.findIndex(cat => cat.id === active.id);
       const newIndex = mainCategories.findIndex(cat => cat.id === over.id);
@@ -578,15 +549,11 @@ const EvaluationDetail = () => {
       // Recarregar perguntas para atualizar a ordem
       await fetchQuestions();
     } else if (isDraggingSubcategory) {
-      console.log('📂 Movendo subcategoria');
       // Handler para subcategorias
       await handleSubcategoryDragEnd(event);
     } else if (isDraggingQuestion) {
-      console.log('❓ Movendo pergunta');
       // Handler para perguntas
       await handleQuestionDragEnd(event);
-    } else {
-      console.warn('⚠️ Item não reconhecido:', active.id);
     }
   };
 
@@ -594,122 +561,60 @@ const EvaluationDetail = () => {
   const handleQuestionDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    console.log('❓ handleQuestionDragEnd chamado:', { 
-      activeId: active.id, 
-      overId: over?.id 
-    });
-
     if (!over) {
-      console.log('⚠️ Sem destino (over)');
       return;
     }
 
     const activeQuestion = questions.find(q => q.id === active.id);
     if (!activeQuestion) {
-      console.log('⚠️ Pergunta ativa não encontrada:', active.id);
-      console.log('📋 Perguntas disponíveis:', questions.map(q => ({ id: q.id, question: q.question })));
       return;
     }
-
-    console.log('✅ Pergunta ativa encontrada:', {
-      id: activeQuestion.id,
-      question: activeQuestion.question,
-      category_id: activeQuestion.category_id,
-      subcategory_id: activeQuestion.subcategory_id,
-      question_order: activeQuestion.question_order
-    });
 
     // Verificar se soltou sobre outra pergunta
     const overQuestion = questions.find(q => q.id === over.id);
     
     if (!overQuestion) {
-      console.log('⚠️ Pergunta destino não encontrada:', over.id);
       return;
     }
 
     if (active.id === over.id) {
-      console.log('⚠️ Mesma pergunta (active === over)');
       return;
     }
-
-    console.log('✅ Pergunta destino encontrada:', {
-      id: overQuestion.id,
-      question: overQuestion.question,
-      category_id: overQuestion.category_id,
-      subcategory_id: overQuestion.subcategory_id,
-      question_order: overQuestion.question_order
-    });
 
     const oldCategoryId = activeQuestion.category_id;
     const oldSubcategoryId = activeQuestion.subcategory_id;
     const newCategoryId = overQuestion.category_id;
     const newSubcategoryId = overQuestion.subcategory_id;
 
-    console.log('🔍 Comparando containers:', {
-      origem: { categoryId: oldCategoryId, subcategoryId: oldSubcategoryId },
-      destino: { categoryId: newCategoryId, subcategoryId: newSubcategoryId }
-    });
-
     // Verificar se é movimento dentro da mesma categoria/subcategoria ou entre diferentes
     const isSameContainer = 
       oldCategoryId === newCategoryId && 
       oldSubcategoryId === newSubcategoryId;
 
-    console.log(`🔄 Tipo de movimento: ${isSameContainer ? 'DENTRO DO MESMO CONTAINER' : 'ENTRE CONTAINERS DIFERENTES'}`);
-
     try {
       if (isSameContainer) {
-        console.log('📦 Processando reordenação dentro do mesmo container...');
         // Movimento dentro do mesmo container - apenas reordenar
         const containerQuestions = questions.filter(
           q => q.category_id === newCategoryId && q.subcategory_id === newSubcategoryId
         ).sort((a, b) => a.question_order - b.question_order);
 
-        console.log('📋 Perguntas no container:', containerQuestions.map(q => ({
-          id: q.id,
-          order: q.question_order,
-          question: q.question
-        })));
-
         const oldIndex = containerQuestions.findIndex(q => q.id === active.id);
         const newIndex = containerQuestions.findIndex(q => q.id === over.id);
 
-        console.log('🔢 Índices:', { oldIndex, newIndex });
-
         const reorderedQuestions = arrayMove(containerQuestions, oldIndex, newIndex);
-
-        console.log('✨ Nova ordem das perguntas:', reorderedQuestions.map((q, i) => ({
-          position: i,
-          id: q.id,
-          question: q.question,
-          evaluation_question_id: q.evaluation_question_id
-        })));
 
         // Atualizar ordem das perguntas
         for (let i = 0; i < reorderedQuestions.length; i++) {
           if (reorderedQuestions[i].evaluation_question_id) {
-            console.log(`💾 Atualizando pergunta ${reorderedQuestions[i].id} para ordem ${i}`);
             await updateQuestionOrder(reorderedQuestions[i].evaluation_question_id!, i);
-          } else {
-            console.warn(`⚠️ Pergunta ${reorderedQuestions[i].id} sem evaluation_question_id`);
           }
         }
       } else {
-        console.log('🚀 Processando movimento entre containers diferentes...');
         // Movimento entre diferentes categorias/subcategorias
-        console.log('🔄 Movendo pergunta entre containers:', {
-          from: { categoryId: oldCategoryId, subcategoryId: oldSubcategoryId },
-          to: { categoryId: newCategoryId, subcategoryId: newSubcategoryId }
-        });
 
         // 1. Atualizar a tabela questions_model com nova categoria/subcategoria
         const newCategory = categories.find(c => c.id === newCategoryId);
         const newSubcategory = categories.find(c => c.id === newSubcategoryId);
-
-        console.log('📁 Categorias encontradas:', {
-          newCategory: newCategory?.value,
-          newSubcategory: newSubcategory?.value
-        });
         
         const { error: questionUpdateError } = await supabase
           .from('questions_model')
@@ -775,15 +680,10 @@ const EvaluationDetail = () => {
       }
 
       // Recarregar dados
-      console.log('🔄 Recarregando dados...');
       await fetchQuestions();
       await fetchCategories();
-      
-      console.log('✅ Pergunta movida com sucesso!');
-      console.log('═══════════════════════════════════════════════');
     } catch (error) {
-      console.error('❌ Erro ao mover pergunta:', error);
-      console.log('═══════════════════════════════════════════════');
+      console.error('Erro ao mover pergunta:', error);
     }
   };
 
@@ -791,21 +691,17 @@ const EvaluationDetail = () => {
   const handleSubcategoryDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    console.log('📂 handleSubcategoryDragEnd:', { activeId: active.id, overId: over?.id });
-
     if (!over || active.id === over.id) return;
 
     const activeSubcategory = categories.find(c => c.id === active.id);
     const overSubcategory = categories.find(c => c.id === over.id);
 
     if (!activeSubcategory || !overSubcategory) {
-      console.warn('⚠️ Subcategoria não encontrada');
       return;
     }
 
     const categoryId = activeSubcategory.parent_id;
     if (!categoryId) {
-      console.warn('⚠️ Subcategoria sem parent_id');
       return;
     }
 
@@ -818,15 +714,12 @@ const EvaluationDetail = () => {
     const oldIndex = subcategoriesWithQuestions.findIndex(sub => sub.id === active.id);
     const newIndex = subcategoriesWithQuestions.findIndex(sub => sub.id === over.id);
 
-    console.log('📂 Índices:', { oldIndex, newIndex });
-
     // Reordenar localmente
     const reorderedSubcategories = arrayMove(subcategoriesWithQuestions, oldIndex, newIndex);
 
     // Atualizar no banco de dados
     for (let i = 0; i < reorderedSubcategories.length; i++) {
       const subcategory = reorderedSubcategories[i];
-      console.log(`💾 Atualizando subcategoria ${subcategory.value} para ordem ${i}`);
       await updateSubcategoryOrder(categoryId, subcategory.id, i);
     }
 
@@ -870,10 +763,8 @@ const EvaluationDetail = () => {
 
   // Adicionar nova pergunta (agora recebe subcategoryId também)
   const handleAddQuestion = (categoryId: number, subcategoryId: number | null = null) => {
-    console.log('🟢 handleAddQuestion chamado com categoryId:', categoryId, 'subcategoryId:', subcategoryId);
     setNewQuestionCategoryId(categoryId);
     setSelectedSubcategoryForModal(subcategoryId);
-    console.log('🟢 newQuestionCategoryId setado para:', categoryId, 'subcategoryId:', subcategoryId);
     setQuestionForm({
       question: '',
       description: '',
@@ -1663,15 +1554,6 @@ const EvaluationDetail = () => {
       opacity: isDragging ? 0.3 : 1,
     };
 
-    if (isDragging) {
-      console.log('🔷 ARRASTANDO PERGUNTA:', {
-        id: question.id,
-        question: question.question,
-        category_id: question.category_id,
-        subcategory_id: question.subcategory_id
-      });
-    }
-
     const isEditing = editingQuestionId === question.id;
     const selectedReplyType = replyTypes.find(t => t.id === (isEditing ? editQuestionForm.reply_type_id : question.reply_type_id));
     const isTextType = selectedReplyType?.value?.toLowerCase() === 'texto';
@@ -2003,7 +1885,6 @@ const EvaluationDetail = () => {
             sensors={sensors}
             collisionDetection={customCollisionDetection}
             onDragStart={(event) => {
-              console.log('🟢 DRAG START:', event.active.id);
               const id = event.active.id as number;
               setActiveId(id);
               
@@ -2022,7 +1903,6 @@ const EvaluationDetail = () => {
               setActiveType(null);
             }}
             onDragCancel={() => {
-              console.log('🔴 DRAG CANCEL');
               setActiveId(null);
               setActiveType(null);
             }}
@@ -2036,26 +1916,11 @@ const EvaluationDetail = () => {
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-3">
-                {(() => {
-                  console.log('🔴 Renderizando categorias:', {
-                    displayCategoriesLength: displayCategories.length,
-                    displayCategories: displayCategories.map(c => ({ id: c.id, value: c.value })),
-                    newQuestionCategoryId,
-                    expandedCategories: Array.from(expandedCategories)
-                  });
-                  return null;
-                })()}
                 {displayCategories.map((category) => {
                 const isExpanded = expandedCategories.has(category.id);
                 const subcategories = getSubcategories(category.id);
                 const categoryQuestions = getQuestionsByCategory(category.id);
                 const isAddingQuestion = newQuestionCategoryId === category.id;
-
-                console.log(`🔴 Categoria ${category.value}:`, {
-                  isExpanded,
-                  questionsLength: categoryQuestions.length,
-                  isAddingQuestion
-                });
 
                 return (
                   <SortableCategoryItem
@@ -2103,12 +1968,13 @@ const EvaluationDetail = () => {
 
         {/* Modal de Adicionar Categoria */}
         {showCategoryModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="p-5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+                <h2 className="text-xl font-bold">
                   Adicionar Categoria
-                </h3>
+                </h2>
                 <button
                   onClick={() => {
                     setShowCategoryModal(false);
@@ -2116,101 +1982,105 @@ const EvaluationDetail = () => {
                     setSelectedSubcategoryForModal(null);
                     setSubcategoriesForModal([]);
                   }}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
-              {availableCategories.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">
-                    Todas as categorias disponíveis já estão sendo usadas nesta avaliação.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Categoria Select */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Categoria: <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={selectedCategoryForModal || ''}
-                      onChange={(e) => {
-                        const categoryId = e.target.value ? parseInt(e.target.value) : null;
-                        if (categoryId) {
-                          handleCategorySelection(categoryId);
-                        } else {
-                          setSelectedCategoryForModal(null);
-                          setSubcategoriesForModal([]);
-                          setSelectedSubcategoryForModal(null);
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    >
-                      <option value="">Selecione uma categoria...</option>
-                      {availableCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.value}
-                        </option>
-                      ))}
-                    </select>
+              {/* Content */}
+              <div className="p-6">
+                {availableCategories.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      Todas as categorias disponíveis já estão sendo usadas nesta avaliação.
+                    </p>
                   </div>
-
-                  {/* Subcategoria Select - só aparece se categoria estiver selecionada */}
-                  {selectedCategoryForModal && (
+                ) : (
+                  <div className="space-y-4">
+                    {/* Categoria Select */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Subcategoria: <span className="text-gray-400 text-xs">(opcional)</span>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Categoria: *
                       </label>
-                      {subcategoriesForModal.length === 0 ? (
-                        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900/20 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400">
-                          Sem subcategorias disponíveis para esta categoria
-                        </div>
-                      ) : (
-                        <select
-                          value={selectedSubcategoryForModal || ''}
-                          onChange={(e) => {
-                            const subcategoryId = e.target.value ? parseInt(e.target.value) : null;
-                            setSelectedSubcategoryForModal(subcategoryId);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Sem subcategoria</option>
-                          {subcategoriesForModal.map((subcategory) => (
-                            <option key={subcategory.id} value={subcategory.id}>
-                              {subcategory.value}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                      <select
+                        value={selectedCategoryForModal || ''}
+                        onChange={(e) => {
+                          const categoryId = e.target.value ? parseInt(e.target.value) : null;
+                          if (categoryId) {
+                            handleCategorySelection(categoryId);
+                          } else {
+                            setSelectedCategoryForModal(null);
+                            setSubcategoriesForModal([]);
+                            setSelectedSubcategoryForModal(null);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+                      >
+                        <option value="">Selecione uma categoria...</option>
+                        {availableCategories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.value}
+                          </option>
+                        ))}
+                      </select>
                     </div>
+
+                    {/* Subcategoria Select - só aparece se categoria estiver selecionada */}
+                    {selectedCategoryForModal && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Subcategoria: <span className="text-gray-400 text-xs">(opcional)</span>
+                        </label>
+                        {subcategoriesForModal.length === 0 ? (
+                          <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900/20 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400">
+                            Sem subcategorias disponíveis para esta categoria
+                          </div>
+                        ) : (
+                          <select
+                            value={selectedSubcategoryForModal || ''}
+                            onChange={(e) => {
+                              const subcategoryId = e.target.value ? parseInt(e.target.value) : null;
+                              setSelectedSubcategoryForModal(subcategoryId);
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+                          >
+                            <option value="">Sem subcategoria</option>
+                            {subcategoriesForModal.map((subcategory) => (
+                              <option key={subcategory.id} value={subcategory.id}>
+                                {subcategory.value}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Footer Buttons */}
+                <div className="flex justify-end gap-3 pt-6">
+                  <button
+                    onClick={() => {
+                      setShowCategoryModal(false);
+                      setSelectedCategoryForModal(null);
+                      setSelectedSubcategoryForModal(null);
+                      setSubcategoriesForModal([]);
+                    }}
+                    className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  {selectedCategoryForModal && (
+                    <button
+                      onClick={() => handleAddCategory(selectedCategoryForModal, selectedSubcategoryForModal)}
+                      className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Adicionar
+                    </button>
                   )}
                 </div>
-              )}
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setShowCategoryModal(false);
-                    setSelectedCategoryForModal(null);
-                    setSelectedSubcategoryForModal(null);
-                    setSubcategoriesForModal([]);
-                  }}
-                  className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-medium bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Cancelar
-                </button>
-                {selectedCategoryForModal && (
-                  <button
-                    onClick={() => handleAddCategory(selectedCategoryForModal, selectedSubcategoryForModal)}
-                    className="px-4 py-2 text-sm text-white font-medium bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Adicionar
-                  </button>
-                )}
               </div>
             </div>
           </div>

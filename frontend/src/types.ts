@@ -285,3 +285,66 @@ export interface ReplyTypeOption {
   id: number;
   value: string;
 }
+
+// Employee Evaluation types (instances of evaluation applied to employees)
+export interface EmployeeEvaluationData {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  evaluation_model_id: number;
+  name: string;
+  user_id: string;
+  user_name: string;
+  owner_id: string;
+  owner_name: string;
+  period_start: string;
+  period_end: string;
+  status_id: number | null;
+  is_done: boolean;
+  evaluations_projects?: Array<{
+    project_id: number;
+  }>;
+}
+
+export interface EvaluationProjectOption {
+  value: number;
+  label: string;
+}
+
+// Evaluation Response types (for filling out evaluations)
+export interface EvaluationInfo {
+  id: number;
+  name: string;
+  evaluation_model_id: number;
+  user_id: string;
+  user_name: string;
+  owner_id: string;
+  owner_name: string;
+  period_start: string;
+  period_end: string;
+  status_id: number | null;
+  is_done: boolean;
+}
+
+export interface EvaluationQuestionData {
+  id: number;
+  question: string;
+  description: string | null;
+  category_id: number;
+  subcategory_id: number | null;
+  reply_type_id: number;
+  reply_type: string;
+  weight: number;
+  required: boolean;
+  category_order: number;
+  question_order: number;
+  subcategory_order: number;
+  question_id: number; // ID da tabela questions_model
+}
+
+export interface QuestionResponse {
+  question_id: number;
+  score: number | null;
+  reply: string | null;
+  yes_no: boolean | null;
+}

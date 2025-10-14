@@ -121,9 +121,227 @@ The `ProjectDetail.tsx` component is tab-based:
 - **Dark mode**: Native dark mode support (`dark:` prefix)
 - **Colors**: Primary orange/yellow palette (see STATUS_REPORT.md for hex values)
 
+### Modal Pattern
+All modals in the application should follow this standardized pattern (see `RiskModal.tsx` for reference):
+
+```tsx
+{showModal && (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      {/* Header */}
+      <div className="p-5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+        <h2 className="text-xl font-bold">
+          Modal Title
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Error display */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Form fields with consistent styling */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Field Label: *
+          </label>
+          <input
+            type="text"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* Footer Buttons */}
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+          >
+            Salvar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+```
+
+**Modal Design Rules:**
+- **Backdrop**: `bg-black/60` (semi-transparent dark overlay)
+- **Container**: `rounded-2xl shadow-2xl` with responsive max-width
+- **Header**: Gradient `from-orange-500 to-red-500` with white text, sticky on scroll
+- **Close button**: White with `hover:bg-white/20` effect, rounded full
+- **Content padding**: `p-6` for form content, `p-5` for header
+- **Input focus**: `focus:ring-1 focus:ring-orange-500` (consistent orange theme)
+- **Primary action button**: Green (`bg-green-500`) for save/submit actions
+- **Secondary action button**: Gray (`bg-gray-100 dark:bg-gray-700`) for cancel
+- **Button padding**: `px-6 py-2` with `text-sm font-medium`
+- **Max height**: `max-h-[90vh] overflow-y-auto` for scrollable content
+- **Labels**: `text-sm font-medium` with `mb-1` spacing
+
+### Notification Toast Pattern
+All success/error notifications should use the standardized `NotificationToast` component (see `ProjectDetail.tsx` for reference):
+
+```tsx
+// Import required dependencies
+import { useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { CheckCircle, XCircle, X } from 'lucide-react';
+
+// Component definition
+const NotificationToast = ({ type, message, onClose }: { 
+  type: 'success' | 'error', 
+  message: string, 
+  onClose: () => void 
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [progress, setProgress] = useState(100);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Função para limpar todos os timers
+  const clearTimers = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
+
+  // Função para iniciar os timers
+  const startTimers = useCallback(() => {
+    clearTimers();
+    const currentProgress = progress;
+    const remainingTime = (currentProgress / 100) * 10000;
+    
+    timeoutRef.current = setTimeout(() => {
+      onClose();
+    }, remainingTime);
+    
+    progressIntervalRef.current = setInterval(() => {
+      setProgress(prev => {
+        const newProgress = prev - 1;
+        if (newProgress <= 0) return 0;
+        return newProgress;
+      });
+    }, 100);
+  }, [progress, onClose, clearTimers]);
+
+  // Effect para controlar os timers baseado no hover
+  useEffect(() => {
+    if (!isHovered) {
+      startTimers();
+    } else {
+      clearTimers();
+    }
+    return () => clearTimers();
+  }, [isHovered, startTimers, clearTimers]);
+
+  // Effect inicial para começar os timers
+  useEffect(() => {
+    startTimers();
+    return () => clearTimers();
+  }, []);
+
+  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
+  const handleMouseLeave = useCallback(() => setIsHovered(false), []);
+
+  const toastContent = (
+    <div 
+      className={`fixed top-4 right-4 z-[9999] rounded-xl shadow-2xl animate-slide-in-from-top border ${
+        type === 'success' 
+          ? 'bg-gradient-to-r from-green-50 to-green-100 border-green-200 text-green-800' 
+          : 'bg-gradient-to-r from-red-50 to-red-100 border-red-200 text-red-800'
+      } transform transition-all duration-300 ease-out max-w-md cursor-pointer overflow-hidden`}
+      style={{ position: 'fixed', top: '4rem', right: '1rem', zIndex: 9999, pointerEvents: 'auto' }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Barra de progresso */}
+      <div className={`h-1 transition-all duration-100 ease-linear ${
+        type === 'success' ? 'bg-green-500' : 'bg-red-500'
+      }`} style={{ width: `${progress}%` }} />
+      
+      {/* Conteúdo do toast */}
+      <div className="flex items-center gap-3 px-5 py-4">
+        <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+          type === 'success' ? 'bg-green-500' : 'bg-red-500'
+        }`}>
+          {type === 'success' ? (
+            <CheckCircle className="w-5 h-5 text-white" />
+          ) : (
+            <XCircle className="w-5 h-5 text-white" />
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold">{type === 'success' ? 'Sucesso!' : 'Erro!'}</p>
+          <p className="text-xs opacity-90 whitespace-pre-line">{message}</p>
+        </div>
+        <button 
+          onClick={onClose}
+          className={`ml-2 p-1 rounded-full transition-colors ${
+            type === 'success' 
+              ? 'text-green-400 hover:text-green-600 hover:bg-green-200' 
+              : 'text-red-400 hover:text-red-600 hover:bg-red-200'
+          }`}
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+
+  return createPortal(toastContent, document.body);
+};
+
+// Usage in component
+const [successNotification, setSuccessNotification] = useState<string | null>(null);
+
+{successNotification && (
+  <NotificationToast
+    type="success"
+    message={successNotification}
+    onClose={() => setSuccessNotification(null)}
+  />
+)}
+```
+
+**Notification Toast Rules:**
+- **Auto-close**: Toast closes automatically after 10 seconds
+- **Progress bar**: Visual indicator showing remaining time (decrements 1% per 100ms)
+- **Hover pause**: Mouse over toast pauses the timer; mouse out resumes from current position
+- **Manual close**: X button closes immediately
+- **Portal rendering**: Use `createPortal(content, document.body)` to render outside component hierarchy
+- **Z-index**: Always use `z-[9999]` to ensure toast appears above all content
+- **Animation**: Use `animate-slide-in-from-top` CSS class (defined in `index.css`)
+- **Success style**: Green gradient (`from-green-50 to-green-100`), green border, CheckCircle icon
+- **Error style**: Red gradient (`from-red-50 to-red-100`), red border, XCircle icon
+- **Position**: Fixed at `top-4 right-4` (4rem from top, 1rem from right)
+- **Never use alert()**: Always use NotificationToast for user feedback
+
 ### Error Handling
 - Backend: Centralized middleware in `errorHandler.ts` and `notFound.ts`
-- Frontend: Try-catch blocks with console.error and user notifications (toast pattern assumed)
+- Frontend: Try-catch blocks with console.error and NotificationToast for user feedback
 
 ### Documentation
 - API docs: Auto-generated Swagger at `http://localhost:5000/api-docs`
