@@ -61,7 +61,7 @@ const Layout = ({ children }: LayoutProps) => {
       icon: Settings,
       hasSubmenu: true,
       submenu: [
-        { name: 'Avaliações', href: '/evaluations', icon: ClipboardList }
+        { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList }
       ]
     },
   ]

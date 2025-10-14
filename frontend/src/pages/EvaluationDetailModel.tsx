@@ -1818,12 +1818,12 @@ const EvaluationDetail = () => {
               {/* Tags de informações da pergunta */}
               <div className="flex flex-wrap gap-2 mt-2 ml-5">
                 {/* Subcategoria */}
-                {question.subcategory && (
+                {/* {question.subcategory && (
                   <span className="inline-flex items-center px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded">
                     <span className="font-medium">Subcategoria:</span>
                     <span className="ml-1">{question.subcategory}</span>
                   </span>
-                )}
+                )} */}
                 
                 {/* Tipo de Resposta */}
                 {(() => {

@@ -172,21 +172,21 @@ const Evaluations = () => {
         );
       },
     },
-    {
-      headerName: 'Criado em',
-      field: 'created_at',
-      flex: 1,
-      minWidth: 150,
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        try {
-          const date = new Date(params.value);
-          return date.toLocaleDateString('pt-BR');
-        } catch (error) {
-          return params.value;
-        }
-      },
-    },
+    // {
+    //   headerName: 'Criado em',
+    //   field: 'created_at',
+    //   flex: 1,
+    //   minWidth: 150,
+    //   cellRenderer: (params: any) => {
+    //     if (!params.value) return '-';
+    //     try {
+    //       const date = new Date(params.value);
+    //       return date.toLocaleDateString('pt-BR');
+    //     } catch (error) {
+    //       return params.value;
+    //     }
+    //   },
+    // },
     {
       headerName: 'Ações',
       field: 'id',
@@ -196,7 +196,7 @@ const Evaluations = () => {
           <div className="flex items-center justify-center h-full gap-2">
             <button
               onClick={() => handleViewEvaluation(params.value)}
-              className="text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
               title="Ver detalhes"
             >
               <Edit className="w-4 h-4" />
