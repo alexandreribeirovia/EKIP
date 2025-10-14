@@ -30,8 +30,10 @@ This project uses **both Prisma/PostgreSQL AND Supabase** concurrently:
 
 ### TypeScript Types
 - **Shared types**: `shared/types/index.ts` defines interfaces matching Prisma models
+- **Frontend types**: `frontend/src/types.ts` defines frontend-specific interfaces and types
+- **Type organization**: ALWAYS define reusable interfaces in `types.ts`, NOT inline in component files
 - **Enum naming**: Use UPPERCASE (e.g., `ProjectStatus.IN_PROGRESS`, `Priority.HIGH`)
-- **Supabase types**: Define inline interfaces with `Db` prefix (e.g., `DbProjectPhase`) in component files
+- **Component-specific types**: Only define inline interfaces for very specific, non-reusable component props
 
 ### AG-Grid Tables
 - Import: `import { AgGridReact } from 'ag-grid-react'` and `import { ColDef } from 'ag-grid-community'`

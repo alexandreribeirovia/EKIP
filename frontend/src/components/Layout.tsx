@@ -25,6 +25,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [darkMode, setDarkMode] = useState(false)
   const [dashboardExpanded, setDashboardExpanded] = useState(false)
   const [employeesExpanded, setEmployeesExpanded] = useState(false)
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const { user } = useAuthStore()
   const location = useLocation()
 
@@ -54,7 +55,15 @@ const Layout = ({ children }: LayoutProps) => {
     },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },
     { name: 'Alocações', href: '/allocations', icon: CalendarRange },
-    { name: 'Configurações', href: '/settings', icon: Settings },
+    { 
+      name: 'Configurações', 
+      href: '/settings', 
+      icon: Settings,
+      hasSubmenu: true,
+      submenu: [
+        { name: 'Avaliações', href: '/evaluations', icon: ClipboardList }
+      ]
+    },
   ]
 
   return (
@@ -111,6 +120,8 @@ const Layout = ({ children }: LayoutProps) => {
                             setDashboardExpanded(!dashboardExpanded)
                           } else if (item.name === 'Funcionários') {
                             setEmployeesExpanded(!employeesExpanded)
+                          } else if (item.name === 'Configurações') {
+                            setSettingsExpanded(!settingsExpanded)
                           }
                         }}
                         className={`px-3 py-3 text-sm transition-colors ${
@@ -121,7 +132,8 @@ const Layout = ({ children }: LayoutProps) => {
                       >
                         <ChevronDown className={`w-4 h-4 transition-transform ${
                           (item.name === 'Dashboard' && dashboardExpanded) || 
-                          (item.name === 'Funcionários' && employeesExpanded) 
+                          (item.name === 'Funcionários' && employeesExpanded) ||
+                          (item.name === 'Configurações' && settingsExpanded)
                             ? 'rotate-180' 
                             : ''
                         }`} />
@@ -145,10 +157,11 @@ const Layout = ({ children }: LayoutProps) => {
                 {/* Submenu */}
                 {item.hasSubmenu && item.submenu && !sidebarCollapsed && 
                   ((item.name === 'Dashboard' && dashboardExpanded) || 
-                   (item.name === 'Funcionários' && employeesExpanded)) && (
+                   (item.name === 'Funcionários' && employeesExpanded) ||
+                   (item.name === 'Configurações' && settingsExpanded)) && (
                   <div className="bg-gray-50 dark:bg-gray-900">
                     {item.submenu.map((subItem) => {
-                      const isSubActive = location.pathname === subItem.href
+                      const isSubActive = location.pathname === subItem.href || location.pathname.startsWith(subItem.href + '/')
                       return (
                         <Link
                           key={subItem.name}

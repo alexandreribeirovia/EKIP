@@ -246,3 +246,42 @@ export interface ConsultantOption {
   value: string;
   label: string;
 }
+
+// Evaluation types
+export interface EvaluationData {
+  id: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CategoryData {
+  id: number;
+  type: string;
+  value: string;
+  is_active: boolean;
+  parent_id: number | null;
+}
+
+export interface QuestionData {
+  id: number;
+  question: string;
+  description?: string | null; // Descrição da pergunta
+  category: string;
+  subcategory: string;
+  category_id: number;
+  subcategory_id: number | null;
+  weight: number;
+  required: boolean;
+  reply_type_id: number;
+  category_order: number;
+  question_order: number;
+  subcategory_order: number; // Ordem da subcategoria dentro da categoria
+  evaluation_question_id?: number; // ID da linha na tabela evaluations_questions_model
+}
+
+export interface ReplyTypeOption {
+  id: number;
+  value: string;
+}
