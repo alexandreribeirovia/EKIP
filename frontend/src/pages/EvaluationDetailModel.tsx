@@ -1859,8 +1859,8 @@ const EvaluationDetail = () => {
             Categorias e Perguntas
           </h2>
           <button
-            onClick={() => {
-              fetchAvailableCategories();
+            onClick={async () => {
+              await fetchAvailableCategories();
               setShowCategoryModal(true);
             }}
             className="px-4 py-2 text-sm text-white font-medium bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
@@ -2005,10 +2005,10 @@ const EvaluationDetail = () => {
                       </label>
                       <select
                         value={selectedCategoryForModal || ''}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const categoryId = e.target.value ? parseInt(e.target.value) : null;
                           if (categoryId) {
-                            handleCategorySelection(categoryId);
+                            await handleCategorySelection(categoryId);
                           } else {
                             setSelectedCategoryForModal(null);
                             setSubcategoriesForModal([]);

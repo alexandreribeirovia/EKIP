@@ -570,7 +570,7 @@ const EvaluationResponse = () => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges && hasResponseChanges()) {
         e.preventDefault();
-        e.returnValue = 'Você tem alterações não salvas. Se sair da tela, perderá o que foi preenchido.';
+        // Modern browsers show a generic message, returnValue is deprecated
       }
     };
 
