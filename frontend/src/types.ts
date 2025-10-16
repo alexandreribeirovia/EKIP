@@ -348,3 +348,15 @@ export interface QuestionResponse {
   reply: string | null;
   yes_no: boolean | null;
 }
+
+// Evaluation tracking types (for radar chart)
+export interface SubcategoryEvaluationData {
+  subcategory: string;
+  [key: string]: string | number; // Para permitir propriedades dinâmicas como "Avaliação 1", "Avaliação 2", etc.
+}
+
+export interface EvaluationMetadata {
+  id: number;
+  name: string;
+  updated_at: string;
+}

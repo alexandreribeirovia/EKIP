@@ -1792,6 +1792,14 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       headerHeight={48}
                       onRowClicked={handleTaskRowClick}
                       getRowStyle={(params) => {
+                        // Verificar se a tarefa está entregue (is_closed = true)
+                        if (params.data && params.data.is_closed) {
+                          return { 
+                            backgroundColor: '#dcf5e8',
+                            '--ag-row-hover-color': '#c5edd8'
+                          };
+                        }
+                        
                         // Verificar se a data atual é maior que o fim planejado
                         if (params.data && params.data.gantt_bar_end_date) {
                           const endDate = new Date(params.data.gantt_bar_end_date);

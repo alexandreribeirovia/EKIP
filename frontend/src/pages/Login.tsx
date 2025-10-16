@@ -47,7 +47,7 @@ const Login = () => {
               Bem-vindo ao EKIP
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Faça login para acessar sua conta
+              Faça login para acessar a plataforma!
             </p>
           </div>
 

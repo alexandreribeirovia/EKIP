@@ -165,7 +165,57 @@ const Evaluations = () => {
         return;
       }
 
-      setEvaluations(data || []);
+      // Buscar todos os status da tabela domains
+      const { data: statusData, error: statusError } = await supabase
+        .from('domains')
+        .select('id, value')
+        .eq('type', 'evaluation_status');
+
+      if (statusError) {
+        console.error('Erro ao buscar status:', statusError);
+      }
+
+      // Buscar todos os projetos para fazer o join com os nomes
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('project_id, name');
+
+      if (projectsError) {
+        console.error('Erro ao buscar projetos:', projectsError);
+      }
+
+      // Criar um mapa de status para facilitar o join
+      const statusMap = new Map();
+      if (statusData) {
+        statusData.forEach((status) => {
+          statusMap.set(status.id, status);
+        });
+      }
+
+      // Criar um mapa de projetos para facilitar o join
+      const projectsMap = new Map();
+      if (projectsData) {
+        projectsData.forEach((project) => {
+          projectsMap.set(project.project_id, project);
+        });
+      }
+
+      // Fazer o join manual entre evaluations, domains e projects
+      const evaluationsWithStatus = (data || []).map((evaluation) => {
+        // Enriquecer os projetos com os nomes
+        const projectsWithNames = (evaluation.evaluations_projects || []).map((ep: any) => ({
+          ...ep,
+          project_name: projectsMap.get(ep.project_id)?.name || 'Projeto não encontrado',
+        }));
+
+        return {
+          ...evaluation,
+          status: evaluation.status_id ? statusMap.get(evaluation.status_id) : null,
+          evaluations_projects: projectsWithNames,
+        };
+      });
+
+      setEvaluations(evaluationsWithStatus);
     } catch (err) {
       console.error('Erro ao buscar avaliações:', err);
     } finally {
@@ -204,7 +254,19 @@ const Evaluations = () => {
     if (!evaluationToDelete) return;
 
     try {
-      // Primeiro, deletar os vínculos na tabela evaluations_projects
+      // 1. Deletar as respostas na tabela evaluations_questions_reply
+      const { error: replyError } = await supabase
+        .from('evaluations_questions_reply')
+        .delete()
+        .eq('evaluation_id', evaluationToDelete.id);
+
+      if (replyError) {
+        console.error('Erro ao deletar respostas da avaliação:', replyError);
+        alert('Erro ao deletar respostas da avaliação. Tente novamente.');
+        return;
+      }
+
+      // 2. Deletar os vínculos na tabela evaluations_projects
       const { error: linkError } = await supabase
         .from('evaluations_projects')
         .delete()
@@ -212,11 +274,11 @@ const Evaluations = () => {
 
       if (linkError) {
         console.error('Erro ao deletar vínculos da avaliação:', linkError);
-        alert('Erro ao deletar avaliação. Tente novamente.');
+        alert('Erro ao deletar vínculos da avaliação. Tente novamente.');
         return;
       }
 
-      // Depois, deletar a avaliação principal
+      // 3. Deletar a avaliação principal
       const { error } = await supabase
         .from('evaluations')
         .delete()
@@ -278,20 +340,44 @@ const Evaluations = () => {
       cellRenderer: (params: any) => {
         const projects = params.value;
         if (!projects || projects.length === 0) return '-';
-        return `${projects.length} projeto(s)`;
+        
+        // Se houver apenas 1 projeto, exibir o nome completo
+        if (projects.length === 1) {
+          return projects[0].project_name;
+        }
+        
+        // Se houver múltiplos projetos, exibir os nomes separados por vírgula
+        const projectNames = projects.map((p: any) => p.project_name).join(' | ');
+        return projectNames;
       },
     },
     {
       headerName: 'Status',
-      field: 'status_id',
+      field: 'status',
       flex: 1,
       minWidth: 130,
       cellRenderer: (params: any) => {
-        const statusId = params.value;
-        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
-        let statusText = statusId ? `Status ${statusId}` : 'Não definido';
+        const status = params.value;
+        const statusValue = status?.value;
         
-        // TODO: Buscar o nome real do status da tabela domains
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        let statusText = 'Não definido';
+        
+        if (statusValue) {
+          statusText = statusValue;
+          
+          // Definir cores baseadas no status
+          const statusLower = statusValue.toLowerCase();
+          if (statusLower.includes('aberto') || statusLower.includes('pendente')) {
+            colorClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+          } else if (statusLower.includes('em andamento') || statusLower.includes('progresso')) {
+            colorClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+          } else if (statusLower.includes('concluído') || statusLower.includes('finalizado')) {
+            colorClass = 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+          } else if (statusLower.includes('cancelado') || statusLower.includes('rejeitado')) {
+            colorClass = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+          }
+        }
         
         return (
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>

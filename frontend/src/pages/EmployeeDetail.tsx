@@ -4,7 +4,8 @@ import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
 import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
-import { DbUser, DbTask } from '../types'
+import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer } from 'recharts'
+import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata } from '../types'
 import { supabase } from '../lib/supabaseClient'
 import FeedbackModal from '../components/FeedbackModal'
 import '../styles/main.css'
@@ -16,7 +17,7 @@ const EmployeeDetail = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks'>('tarefas')
+  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'acompanhamento'>('tarefas')
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -29,6 +30,10 @@ const EmployeeDetail = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([])
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false)
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
+  
+  const [evaluationData, setEvaluationData] = useState<SubcategoryEvaluationData[]>([])
+  const [evaluationMetadata, setEvaluationMetadata] = useState<EvaluationMetadata[]>([])
+  const [isLoadingEvaluations, setIsLoadingEvaluations] = useState(false)
   
   const [userSkills, setUserSkills] = useState<UserSkill[]>([])
   const [isLoadingSkills, setIsLoadingSkills] = useState(true)
@@ -563,6 +568,157 @@ const EmployeeDetail = () => {
       setFeedbacks([]);
     } finally {
       setIsLoadingFeedbacks(false);
+    }
+  };
+
+  // Função para carregar dados das avaliações do usuário
+  const loadEvaluationData = async (userId: string) => {
+    setIsLoadingEvaluations(true);
+    try {
+      // Busca dados das respostas do usuário com join na tabela evaluations
+      const { data, error } = await supabase
+        .from('evaluations_questions_reply')
+        .select(`
+          evaluation_id,
+          subcategory,
+          score,
+          weight,
+          evaluations!inner (
+            id,
+            name,
+            updated_at
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('reply_type', 'Escala (1-5)')
+        .order('evaluations(updated_at)', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao carregar dados das avaliações:', error);
+        setEvaluationData([]);
+        setEvaluationMetadata([]);
+        return;
+      }
+
+      // Busca dados de TODOS os usuários para calcular média do time
+      const { data: teamData, error: teamError } = await supabase
+        .from('evaluations_questions_reply')
+        .select('subcategory, score, weight')
+        .eq('reply_type', 'Escala (1-5)');
+
+      if (teamError) {
+        console.error('Erro ao carregar dados do time:', teamError);
+      }
+
+      if (!data || data.length === 0) {
+        setEvaluationData([]);
+        setEvaluationMetadata([]);
+        return;
+      }
+
+      // Agrupa por evaluation_id e subcategoria
+      const evaluationMap = new Map<number, Map<string, { totalScore: number; totalWeight: number }>>();
+      const evaluationsInfo = new Map<number, { name: string; updated_at: string }>();
+
+      (data || []).forEach((item: any) => {
+        if (!item.subcategory || item.score === null || item.weight === null || !item.evaluation_id) return;
+
+        const evalId = item.evaluation_id;
+        
+        // Armazena informações da avaliação
+        if (item.evaluations && !evaluationsInfo.has(evalId)) {
+          evaluationsInfo.set(evalId, {
+            name: item.evaluations.name,
+            updated_at: item.evaluations.updated_at
+          });
+        }
+
+        // Agrupa scores por avaliação e subcategoria
+        if (!evaluationMap.has(evalId)) {
+          evaluationMap.set(evalId, new Map());
+        }
+
+        const subcategoryMap = evaluationMap.get(evalId)!;
+        const existing = subcategoryMap.get(item.subcategory) || { totalScore: 0, totalWeight: 0 };
+        subcategoryMap.set(item.subcategory, {
+          totalScore: existing.totalScore + (item.score * item.weight),
+          totalWeight: existing.totalWeight + item.weight
+        });
+      });
+
+      // Cria metadata das avaliações ordenadas por data
+      const metadata: EvaluationMetadata[] = Array.from(evaluationsInfo.entries())
+        .map(([id, info]) => ({
+          id,
+          name: info.name,
+          updated_at: info.updated_at
+        }))
+        .sort((a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+
+      // Calcula média do time por subcategoria
+      const teamAverageMap = new Map<string, { totalScore: number; totalWeight: number }>();
+      
+      if (teamData && teamData.length > 0) {
+        teamData.forEach((item: any) => {
+          if (!item.subcategory || item.score === null || item.weight === null) return;
+
+          const existing = teamAverageMap.get(item.subcategory) || { totalScore: 0, totalWeight: 0 };
+          teamAverageMap.set(item.subcategory, {
+            totalScore: existing.totalScore + (item.score * item.weight),
+            totalWeight: existing.totalWeight + item.weight
+          });
+        });
+      }
+
+      // Coleta todas as subcategorias únicas
+      const allSubcategories = new Set<string>();
+      evaluationMap.forEach(subcategoryMap => {
+        subcategoryMap.forEach((_, subcategory) => {
+          allSubcategories.add(subcategory);
+        });
+      });
+      // Adiciona subcategorias da média do time
+      teamAverageMap.forEach((_, subcategory) => {
+        allSubcategories.add(subcategory);
+      });
+
+      // Cria dados para o gráfico
+      const chartData: SubcategoryEvaluationData[] = Array.from(allSubcategories).map(subcategory => {
+        const dataPoint: SubcategoryEvaluationData = { subcategory };
+
+        // Para cada avaliação, calcula a média ponderada para essa subcategoria
+        metadata.forEach((evalMeta, index) => {
+          const subcategoryMap = evaluationMap.get(evalMeta.id);
+          if (subcategoryMap && subcategoryMap.has(subcategory)) {
+            const values = subcategoryMap.get(subcategory)!;
+            const avgScore = values.totalWeight > 0 ? values.totalScore / values.totalWeight : 0;
+            
+            // Formata a data para exibição
+            const date = new Date(evalMeta.updated_at);
+            const formattedDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            
+            dataPoint[`Avaliação ${index + 1} (${formattedDate})`] = Number(avgScore.toFixed(2));
+          }
+        });
+
+        // Adiciona média do time
+        if (teamAverageMap.has(subcategory)) {
+          const teamValues = teamAverageMap.get(subcategory)!;
+          const teamAvgScore = teamValues.totalWeight > 0 ? teamValues.totalScore / teamValues.totalWeight : 0;
+          dataPoint['Média do Time'] = Number(teamAvgScore.toFixed(2));
+        }
+
+        return dataPoint;
+      });
+
+      setEvaluationData(chartData);
+      setEvaluationMetadata(metadata);
+    } catch (error) {
+      console.error('Erro ao carregar dados das avaliações:', error);
+      setEvaluationData([]);
+      setEvaluationMetadata([]);
+    } finally {
+      setIsLoadingEvaluations(false);
     }
   };
 
@@ -1329,6 +1485,14 @@ const EmployeeDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, employee?.user_id]);
 
+  // Carrega dados de avaliações quando a aba é selecionada
+  useEffect(() => {
+    if (employee?.user_id && activeTab === 'acompanhamento' && evaluationData.length === 0) {
+      void loadEvaluationData(employee.user_id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, employee?.user_id]);
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -1614,13 +1778,23 @@ const EmployeeDetail = () => {
                   </button>
                   <button
                     onClick={() => setActiveTab('feedbacks')}
-                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
                       activeTab === 'feedbacks'
                         ? 'border-primary-500 text-primary-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     Feedbacks
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('acompanhamento')}
+                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'acompanhamento'
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Acompanhamento
                   </button>
                 </nav>
               </div>
@@ -1822,6 +1996,175 @@ const EmployeeDetail = () => {
                         }
                       />
                     )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'acompanhamento' && (
+                <div className="flex-1 overflow-auto p-6 pt-2">
+                  {/* Grid de Cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Card 1: Gráfico Radar - Evolução por Subcategoria */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
+                      <div className="mb-1">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-orange-500" />
+                          Avaliação do Desempenho
+                        </h3>
+                      
+                        {evaluationMetadata.length > 0 && (
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {evaluationMetadata.length} {evaluationMetadata.length === 1 ? 'avaliação encontrada' : 'avaliações encontradas'}
+                            {' • Linha tracejada preta = média do time'}
+                          </p>
+                        )}
+                      </div>
+
+                      {isLoadingEvaluations ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center">
+                            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
+                            <p className="text-gray-600 dark:text-gray-400">Carregando dados das avaliações...</p>
+                          </div>
+                        </div>
+                      ) : evaluationData.length === 0 ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center text-gray-500 dark:text-gray-400">
+                            <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <p>Nenhuma avaliação encontrada para este consultor</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-96">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart data={evaluationData}>
+                              <PolarGrid stroke="#d1d5db" />
+                              <PolarAngleAxis 
+                                dataKey="subcategory" 
+                                tick={{ fill: '#6b7280', fontSize: 11 }}
+                                tickLine={{ stroke: '#9ca3af' }}
+                              />
+                              <PolarRadiusAxis 
+                                angle={90} 
+                                domain={[0, 5]} 
+                                tick={{ fill: '#6b7280', fontSize: 11 }}
+                                tickCount={6}
+                              />
+                              {/* Renderiza uma linha Radar para cada avaliação */}
+                              {evaluationMetadata.map((evalMeta, index) => {
+                                const date = new Date(evalMeta.updated_at);
+                                const formattedDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                const dataKey = `Avaliação ${index + 1} (${formattedDate})`;
+                                
+                                // Cores diferentes para cada avaliação
+                                const colors = [
+                                  { stroke: '#f97316', fill: '' }, // Laranja
+                                  { stroke: '#3b82f6', fill: '' }, // Azul
+                                  { stroke: '#10b981', fill: '' }, // Verde
+                                  { stroke: '#8b5cf6', fill: '' }, // Roxo
+                                  { stroke: '#ef4444', fill: '' }, // Vermelho
+                                  { stroke: '#f59e0b', fill: '' }, // Amarelo
+                                  { stroke: '#06b6d4', fill: '' }, // Cyan
+                                  { stroke: '#ec4899', fill: '' }, // Rosa
+                                ];
+                                
+                                const color = colors[index % colors.length];
+                                
+                                return (
+                                  <Radar
+                                    key={evalMeta.id}
+                                    name={dataKey}
+                                    dataKey={dataKey}
+                                    stroke={color.stroke}
+                                    fill={color.fill}
+                                    fillOpacity={0}
+                                    strokeWidth={3}
+                                    
+                                  />
+                                );
+                              })}
+                              
+                              {/* Linha da Média do Time - destacada com estilo diferente */}
+                              <Radar
+                                name="Média do Time"
+                                dataKey="Média do Time"
+                                stroke="#2b2b2b"
+                                fill="#000000"
+                                fillOpacity={0}
+                                strokeWidth={3}
+                                strokeDasharray="5 5"
+                                dot={{ fill: '#2b2b2b', r: 1 }}
+                              />
+                              
+                              <Legend 
+                                wrapperStyle={{ paddingTop: '5px' }}
+                                iconType="circle"
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card 2: Placeholder para próximo gráfico */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-blue-500" />
+                          Próximo Gráfico
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Espaço reservado para análise adicional
+                        </p>
+                      </div>
+                      <div className="flex justify-center items-center h-96">
+                        <div className="text-center text-gray-400 dark:text-gray-500">
+                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                          <p className="text-sm">Em breve: mais visualizações</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Segunda linha de cards (opcional) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                    {/* Card 3: Placeholder */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-green-500" />
+                          Análise Complementar
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Espaço para métricas adicionais
+                        </p>
+                      </div>
+                      <div className="flex justify-center items-center h-80">
+                        <div className="text-center text-gray-400 dark:text-gray-500">
+                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                          <p className="text-sm">Aguardando implementação</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card 4: Placeholder */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-purple-500" />
+                          Indicadores
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          KPIs e métricas de desempenho
+                        </p>
+                      </div>
+                      <div className="flex justify-center items-center h-80">
+                        <div className="text-center text-gray-400 dark:text-gray-500">
+                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                          <p className="text-sm">Aguardando implementação</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

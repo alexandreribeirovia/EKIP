@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
-import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle } from 'lucide-react';
 import { EvaluationInfo, CategoryData, EvaluationQuestionData, QuestionResponse } from '../types';
 
 const NotificationToast = ({ type, message, onClose }: { 
@@ -144,6 +144,7 @@ const EvaluationResponse = () => {
   const [evaluation, setEvaluation] = useState<EvaluationInfo | null>(null);
   const [evaluationModelName, setEvaluationModelName] = useState<string>('');
   const [projectNames, setProjectNames] = useState<string[]>([]);
+  const [statusName, setStatusName] = useState<string>('');
   const [categories, setCategories] = useState<CategoryData[]>([]);
   const [questions, setQuestions] = useState<EvaluationQuestionData[]>([]);
   const [responses, setResponses] = useState<Map<number, QuestionResponse>>(new Map());
@@ -156,12 +157,15 @@ const EvaluationResponse = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<number>>(new Set());
 
-  // Calcular progresso de preenchimento
+  // Calcular progresso de preenchimento (somente perguntas obrigatórias)
   const calculateProgress = () => {
-    if (questions.length === 0) return 0;
+    // Filtrar apenas perguntas obrigatórias
+    const requiredQuestions = questions.filter(q => q.required);
+    
+    if (requiredQuestions.length === 0) return 0;
 
     let answeredCount = 0;
-    questions.forEach((question) => {
+    requiredQuestions.forEach((question) => {
       const response = responses.get(question.question_id);
       if (response) {
         const replyType = question.reply_type.toLowerCase();
@@ -176,7 +180,7 @@ const EvaluationResponse = () => {
       }
     });
 
-    return Math.round((answeredCount / questions.length) * 100);
+    return Math.round((answeredCount / requiredQuestions.length) * 100);
   };
 
   // Buscar dados da avaliação
@@ -208,6 +212,20 @@ const EvaluationResponse = () => {
 
         if (!modelError && modelData) {
           setEvaluationModelName(modelData.name);
+        }
+      }
+
+      // Buscar status da avaliação
+      if (data.status_id) {
+        const { data: statusData, error: statusError } = await supabase
+          .from('domains')
+          .select('value')
+          .eq('id', data.status_id)
+          .eq('type', 'evaluation_status')
+          .single();
+
+        if (!statusError && statusData) {
+          setStatusName(statusData.value);
         }
       }
 
@@ -349,13 +367,8 @@ const EvaluationResponse = () => {
       );
       setExpandedCategories(allCategoryIds);
 
-      // Expandir todas as subcategorias por padrão
-      const allSubcategoryIds = new Set(
-        processedQuestions
-          .map((q) => q.subcategory_id)
-          .filter((id) => id !== null) as number[]
-      );
-      setExpandedSubcategories(allSubcategoryIds);
+      // Subcategorias começam FECHADAS por padrão
+      setExpandedSubcategories(new Set());
     } catch (err) {
       console.error('Erro ao buscar perguntas:', err);
     }
@@ -501,6 +514,8 @@ const EvaluationResponse = () => {
             yes_no: response.yes_no,
             weight: question?.weight || 0,
             reply_type: question?.reply_type || '',
+            user_id: evaluation?.user_id || null,
+            owner_id: evaluation?.owner_id || null,
           };
         });
 
@@ -533,6 +548,35 @@ const EvaluationResponse = () => {
         setError('Erro ao salvar respostas');
         setIsSaving(false);
         return;
+      }
+
+      // Atualizar status da avaliação para "Em andamento" se houver respostas
+      if (responsesToSave.length > 0) {
+        // Buscar o ID do status "Em andamento"
+        const { data: statusData, error: statusError } = await supabase
+          .from('domains')
+          .select('id')
+          .eq('type', 'evaluation_status')
+          .ilike('value', 'em andamento')
+          .single();
+
+        if (!statusError && statusData) {
+          // Atualizar o status da avaliação
+          const { error: updateError } = await supabase
+            .from('evaluations')
+            .update({ status_id: statusData.id })
+            .eq('id', parseInt(id));
+
+          if (updateError) {
+            console.error('Erro ao atualizar status da avaliação:', updateError);
+          } else {
+            // Atualizar o estado local
+            setStatusName('Em andamento');
+            if (evaluation) {
+              setEvaluation({ ...evaluation, status_id: statusData.id });
+            }
+          }
+        }
       }
 
       setHasUnsavedChanges(false);
@@ -620,6 +664,31 @@ const EvaluationResponse = () => {
       .sort((a, b) => a.question_order - b.question_order);
   };
 
+  // Contar perguntas respondidas em uma subcategoria (somente obrigatórias)
+  const countAnsweredQuestions = (subQuestions: EvaluationQuestionData[]) => {
+    // Filtrar apenas perguntas obrigatórias
+    const requiredQuestions = subQuestions.filter(q => q.required);
+    let answeredCount = 0;
+    
+    requiredQuestions.forEach((question) => {
+      const response = responses.get(question.question_id);
+      if (response) {
+        const replyType = question.reply_type.toLowerCase();
+        
+        // Considera respondida se tiver algum valor válido (incluindo 0 para N/A)
+        if (replyType.includes('escala') && response.score !== null && response.score !== undefined) {
+          answeredCount++;
+        } else if (replyType.includes('texto') && response.reply?.trim()) {
+          answeredCount++;
+        } else if (replyType.includes('sim') && response.yes_no !== null) {
+          answeredCount++;
+        }
+      }
+    });
+
+    return answeredCount;
+  };
+
   // Renderizar campo de resposta baseado no tipo
   const renderResponseField = (question: EvaluationQuestionData) => {
     const response = responses.get(question.question_id);
@@ -628,7 +697,28 @@ const EvaluationResponse = () => {
     // Escala (1-5)
     if (replyType.includes('escala')) {
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Botão N/A */}
+          <button
+            type="button"
+            onClick={() => updateResponse(question.question_id, 'score', 0)}
+            className="focus:outline-none transition-all hover:scale-110 flex flex-col items-center gap-1"
+            title="Não se aplica"
+          >
+            <MinusCircle
+              className={`w-8 h-8 ${
+                response?.score === 0
+                  ? 'fill-gray-400 text-gray-600 dark:fill-gray-500 dark:text-gray-400'
+                  : 'text-gray-300 dark:text-gray-600'
+              }`}
+            />
+            
+          </button>
+
+          {/* Separador */}
+          <div className="h-10 w-px bg-gray-300 dark:bg-gray-600"></div>
+
+          {/* Estrelas 1-5 */}
           {[1, 2, 3, 4, 5].map((rating) => (
             <button
               key={rating}
@@ -638,16 +728,18 @@ const EvaluationResponse = () => {
             >
               <Star
                 className={`w-8 h-8 ${
-                  response?.score && response.score >= rating
+                  response?.score && response.score > 0 && response.score >= rating
                     ? 'fill-yellow-400 text-yellow-400'
                     : 'text-gray-300 dark:text-gray-600'
                 }`}
               />
             </button>
           ))}
-          {response?.score && (
+          
+          {/* Indicador de pontuação */}
+          {response?.score !== null && response?.score !== undefined && (
             <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              {response.score}/5
+              {response.score === 0 ? 'N/A' : `${response.score}/5`}
             </span>
           )}
         </div>
@@ -795,13 +887,23 @@ const EvaluationResponse = () => {
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Status</p>
             <p className="text-md font-medium text-gray-900 dark:text-gray-100">
-              {evaluation.is_done ? (
-                <span className="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full text-xs">
-                  Concluída
+              {statusName ? (
+                <span className={`px-2 py-1 rounded-full text-xs ${
+                  statusName.toLowerCase().includes('aberto') || statusName.toLowerCase().includes('pendente')
+                    ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                    : statusName.toLowerCase().includes('em andamento') || statusName.toLowerCase().includes('progresso')
+                    ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400'
+                    : statusName.toLowerCase().includes('concluído') || statusName.toLowerCase().includes('finalizado')
+                    ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                    : statusName.toLowerCase().includes('cancelado') || statusName.toLowerCase().includes('rejeitado')
+                    ? 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                    : 'bg-gray-100 dark:bg-gray-700/20 text-gray-700 dark:text-gray-400'
+                }`}>
+                  {statusName}
                 </span>
               ) : (
-                <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-full text-xs">
-                  Pendente
+                <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/20 text-gray-700 dark:text-gray-400 rounded-full text-xs">
+                  Sem status
                 </span>
               )}
             </p>
@@ -810,7 +912,7 @@ const EvaluationResponse = () => {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Progresso -
                 <span className="text-xs text-gray-600 dark:text-gray-400">
                     {questions.length > 0
-                    ? ` ${Math.round((calculateProgress() / 100) * questions.length)}/${questions.length}`
+                    ? ` ${Math.round((calculateProgress() / 100) * questions.filter(q => q.required).length)}/${questions.filter(q => q.required).length}`
                     : ' Carregando...'}
                 </span>
             </p>
@@ -892,6 +994,9 @@ const EvaluationResponse = () => {
                   {subcategories.map((subcategory) => {
                     const isSubExpanded = expandedSubcategories.has(subcategory.id);
                     const subQuestions = getQuestions(category.id, subcategory.id);
+                    const answeredCount = countAnsweredQuestions(subQuestions);
+                    // Conta apenas perguntas obrigatórias
+                    const totalCount = subQuestions.filter(q => q.required).length;
 
                     return (
                       <div
@@ -904,9 +1009,20 @@ const EvaluationResponse = () => {
                           onClick={() => toggleSubcategory(subcategory.id)}
                           className="w-full flex items-center justify-between p-3 pt-2 pb-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                         >
-                          <span className="font-semibold text-gray-900 dark:text-gray-100">
-                            {subcategory.value}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold text-gray-900 dark:text-gray-100">
+                              {subcategory.value}
+                            </span>
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                              answeredCount === totalCount
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                : answeredCount > 0
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {answeredCount}/{totalCount}
+                            </span>
+                          </div>
                           {isSubExpanded ? (
                             <ChevronUp className="w-4 h-4" />
                           ) : (

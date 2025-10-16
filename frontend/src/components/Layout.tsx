@@ -96,8 +96,8 @@ const Layout = ({ children }: LayoutProps) => {
 
         <nav className="mt-4">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href
-            const isSubmenuActive = item.submenu?.some(sub => location.pathname === sub.href) || false
+            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/')
+            const isSubmenuActive = item.submenu?.some(sub => location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')) || false
             
             return (
               <div key={item.name}>

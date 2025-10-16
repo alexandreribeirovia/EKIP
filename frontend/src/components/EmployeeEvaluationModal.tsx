@@ -39,6 +39,30 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluat
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [statusAbertoId, setStatusAbertoId] = useState<number | null>(null);
+
+  // Buscar o ID do status "Aberto" da tabela domains
+  const fetchStatusAberto = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('domains')
+        .select('id')
+        .eq('type', 'evaluation_status')
+        .ilike('value', 'aberto')
+        .single();
+
+      if (error) {
+        console.error('Erro ao buscar status Aberto:', error);
+        return;
+      }
+
+      if (data) {
+        setStatusAbertoId(data.id);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar status Aberto:', err);
+    }
+  };
 
   // Buscar modelos de avaliação ativos
   const fetchEvaluationModels = async () => {
@@ -148,6 +172,7 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluat
 
   useEffect(() => {
     if (isOpen) {
+      void fetchStatusAberto();
       void fetchEvaluationModels();
       void fetchConsultants();
       void fetchManagers();
@@ -202,7 +227,7 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluat
             owner_name: selectedManager.label,
             period_start: periodStart,
             period_end: periodEnd,
-            status_id: null,
+            status_id: statusAbertoId, // Define status padrão como "Aberto"
           }])
           .select();
 
