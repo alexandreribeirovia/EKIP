@@ -19,6 +19,7 @@ const Evaluations = () => {
   const [evaluations, setEvaluations] = useState<EmployeeEvaluationData[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
   const [managers, setManagers] = useState<ConsultantOption[]>([]);
+  const [statusOptions, setStatusOptions] = useState<ConsultantOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
@@ -30,6 +31,7 @@ const Evaluations = () => {
   const [endDate, setEndDate] = useState('');
   const [selectedConsultants, setSelectedConsultants] = useState<ConsultantOption[]>([]);
   const [selectedManagers, setSelectedManagers] = useState<ConsultantOption[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<ConsultantOption[]>([]);
 
   // Função para calcular o intervalo de datas baseado no tipo de período
   const getDateRange = () => {
@@ -125,6 +127,32 @@ const Evaluations = () => {
     }
   };
 
+  // Buscar status disponíveis
+  const fetchStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('domains')
+        .select('id, value')
+        .eq('type', 'evaluation_status')
+        .eq('is_active', true)
+        .order('value');
+
+      if (error) {
+        console.error('Erro ao buscar status:', error);
+        return;
+      }
+
+      const options: ConsultantOption[] = (data || []).map((status) => ({
+        value: status.id.toString(),
+        label: status.value,
+      }));
+
+      setStatusOptions(options);
+    } catch (err) {
+      console.error('Erro ao buscar status:', err);
+    }
+  };
+
   // Buscar avaliações
   const fetchEvaluations = async () => {
     if (isLoading) return;
@@ -156,6 +184,12 @@ const Evaluations = () => {
       if (selectedManagers.length > 0) {
         const selectedIds = selectedManagers.map(m => m.value);
         query = query.in('owner_id', selectedIds);
+      }
+
+      // Filtrar por status selecionados
+      if (selectedStatus.length > 0) {
+        const selectedIds = selectedStatus.map(s => parseInt(s.value));
+        query = query.in('status_id', selectedIds);
       }
 
       const { data, error } = await query;
@@ -223,10 +257,11 @@ const Evaluations = () => {
     }
   };
 
-  // Carregar consultores e gestores ao montar o componente
+  // Carregar consultores, gestores e status ao montar o componente
   useEffect(() => {
     void fetchConsultants();
     void fetchManagers();
+    void fetchStatus();
   }, []);
 
   // Recarregar dados quando os filtros mudarem
@@ -238,7 +273,7 @@ const Evaluations = () => {
     
     void fetchEvaluations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodType, startDate, endDate, selectedConsultants, selectedManagers]);
+  }, [periodType, startDate, endDate, selectedConsultants, selectedManagers, selectedStatus]);
 
   // Função para abrir modal de confirmação de exclusão
   const handleDeleteEvaluation = (evaluationId: number) => {
@@ -391,22 +426,28 @@ const Evaluations = () => {
       field: 'id',
       width: 120,
       cellRenderer: (params: any) => {
+        const isClosed = params.data.is_closed;
+        
         return (
           <div className="flex items-center justify-center h-full gap-2">
             <button
               onClick={() => navigate(`/employee-evaluations/${params.value}`)}
               className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Responder avaliação"
+              title={isClosed ? "Visualizar avaliação" : "Responder avaliação"}
             >
               <Edit className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => handleDeleteEvaluation(params.value)}
-              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              title="Deletar avaliação"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            
+            {/* Botão deletar só aparece se a avaliação não estiver encerrada */}
+            {!isClosed && (
+              <button
+                onClick={() => handleDeleteEvaluation(params.value)}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Deletar avaliação"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         );
       },
@@ -484,6 +525,19 @@ const Evaluations = () => {
             />
           </div>
 
+          {/* Filtro de Status */}
+          <div className="w-full lg:w-64">
+            <Select
+              isMulti
+              value={selectedStatus}
+              onChange={(selected) => setSelectedStatus(selected as ConsultantOption[])}
+              options={statusOptions}
+              placeholder="Filtrar status"
+              className="react-select-container"
+              classNamePrefix="react-select"
+            />
+          </div>
+
           {/* Botão Nova Avaliação */}
           <div className="flex items-end">
             <button
@@ -497,46 +551,69 @@ const Evaluations = () => {
         </div>
 
         {/* Cards de Estatísticas por Status */}
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
           {/* Total */}
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs text-gray-500 dark:text-gray-400">Total de Avaliações</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
               <ListTodo className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </div>
             <div className="text-xl font-bold text-gray-800 dark:text-gray-200">{evaluations.length}</div>
           </div>
 
-          {/* Não Concluídos */}
+          {/* Aberto/Pendente */}
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs text-blue-600 dark:text-blue-400">Não Concluídos</div>
+              <div className="text-xs text-blue-600 dark:text-blue-400">Aberto</div>
               <ClipboardCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
-              {evaluations.filter(e => !e.is_done).length}
+              {evaluations.filter(e => {
+                const statusValue = e.status?.value?.toLowerCase() || '';
+                return statusValue.includes('aberto') || statusValue.includes('pendente');
+              }).length}
             </div>
           </div>
 
-          {/* Concluídos */}
+          {/* Em Andamento */}
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-2 border border-yellow-200 dark:border-yellow-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-yellow-600 dark:text-yellow-400">Em Andamento</div>
+              <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <div className="text-xl font-bold text-yellow-700 dark:text-yellow-300">
+              {evaluations.filter(e => {
+                const statusValue = e.status?.value?.toLowerCase() || '';
+                return statusValue.includes('em andamento') || statusValue.includes('progresso');
+              }).length}
+            </div>
+          </div>
+
+          {/* Concluído */}
           <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs text-green-600 dark:text-green-400">Concluídos</div>
+              <div className="text-xs text-green-600 dark:text-green-400">Concluído</div>
               <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
             <div className="text-xl font-bold text-green-700 dark:text-green-300">
-              {evaluations.filter(e => e.is_done).length}
+              {evaluations.filter(e => {
+                const statusValue = e.status?.value?.toLowerCase() || '';
+                return statusValue.includes('concluído') || statusValue.includes('finalizado');
+              }).length}
             </div>
           </div>
 
-          {/* Sem Status */}
+          {/* Fechado */}
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs text-gray-600 dark:text-gray-400">Sem Status</div>
-              <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <div className="text-xs text-gray-600 dark:text-gray-400">Fechado</div>
+              <CheckCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </div>
             <div className="text-xl font-bold text-gray-700 dark:text-gray-300">
-              {evaluations.filter(e => !e.status_id).length}
+              {evaluations.filter(e => {
+                const statusValue = e.status?.value?.toLowerCase() || '';
+                return statusValue.includes('fechado');
+              }).length}
             </div>
           </div>
         </div>

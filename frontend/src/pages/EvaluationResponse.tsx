@@ -153,6 +153,8 @@ const EvaluationResponse = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<number>>(new Set());
@@ -181,6 +183,43 @@ const EvaluationResponse = () => {
     });
 
     return Math.round((answeredCount / requiredQuestions.length) * 100);
+  };
+
+  // Verificar se todas as perguntas obrigatórias estão respondidas E SALVAS
+  const isAllRequiredAnsweredAndSaved = () => {
+    // Filtrar apenas perguntas obrigatórias
+    const requiredQuestions = questions.filter(q => q.required);
+    
+    if (requiredQuestions.length === 0) return false;
+
+    // Verificar se todas as perguntas obrigatórias têm respostas SALVAS
+    let allAnswered = true;
+    
+    requiredQuestions.forEach((question) => {
+      const response = responses.get(question.question_id);
+      if (!response) {
+        allAnswered = false;
+        return;
+      }
+
+      const replyType = question.reply_type.toLowerCase();
+      
+      // Verificar se tem resposta válida
+      if (replyType.includes('escala') && response.score === null) {
+        allAnswered = false;
+      } else if (replyType.includes('texto') && !response.reply?.trim()) {
+        allAnswered = false;
+      } else if (replyType.includes('sim') && response.yes_no === null) {
+        allAnswered = false;
+      }
+    });
+
+    // Se tem mudanças não salvas, não pode encerrar
+    if (hasUnsavedChanges) {
+      allAnswered = false;
+    }
+
+    return allAnswered;
   };
 
   // Buscar dados da avaliação
@@ -454,6 +493,12 @@ const EvaluationResponse = () => {
 
   // Atualizar resposta
   const updateResponse = (questionId: number, field: 'score' | 'reply' | 'yes_no', value: any) => {
+    // Bloquear edição se a avaliação estiver fechada
+    if (evaluation?.is_closed) {
+      setError('Esta avaliação foi encerrada e não pode mais ser alterada.');
+      return;
+    }
+
     setHasUnsavedChanges(true);
     setResponses((prev) => {
       const newMap = new Map(prev);
@@ -477,6 +522,12 @@ const EvaluationResponse = () => {
   const handleSave = async () => {
     if (!id || !evaluation) {
       setError('Dados da avaliação não encontrados');
+      return;
+    }
+
+    // Bloquear salvamento se a avaliação estiver fechada
+    if (evaluation.is_closed) {
+      setError('Esta avaliação foi encerrada e não pode mais ser alterada.');
       return;
     }
 
@@ -550,14 +601,18 @@ const EvaluationResponse = () => {
         return;
       }
 
-      // Atualizar status da avaliação para "Em andamento" se houver respostas
+      // Atualizar status da avaliação baseado no progresso
       if (responsesToSave.length > 0) {
-        // Buscar o ID do status "Em andamento"
+        // Verificar se todas as perguntas obrigatórias foram respondidas
+        const allAnswered = calculateProgress() === 100;
+        
+        // Buscar o ID do status apropriado
+        const statusValue = allAnswered ? 'concluído' : 'em andamento';
         const { data: statusData, error: statusError } = await supabase
           .from('domains')
-          .select('id')
+          .select('id, value')
           .eq('type', 'evaluation_status')
-          .ilike('value', 'em andamento')
+          .ilike('value', statusValue)
           .single();
 
         if (!statusError && statusData) {
@@ -571,7 +626,7 @@ const EvaluationResponse = () => {
             console.error('Erro ao atualizar status da avaliação:', updateError);
           } else {
             // Atualizar o estado local
-            setStatusName('Em andamento');
+            setStatusName(statusData.value);
             if (evaluation) {
               setEvaluation({ ...evaluation, status_id: statusData.id });
             }
@@ -607,6 +662,65 @@ const EvaluationResponse = () => {
       }
     }
     return false;
+  };
+
+  // Encerrar avaliação
+  const handleCloseEvaluation = async () => {
+    if (!id || !evaluation) return;
+
+    setIsClosing(true);
+    setError(null);
+
+    try {
+      // Buscar o ID do status "Fechado"
+      const { data: statusData, error: statusError } = await supabase
+        .from('domains')
+        .select('id, value')
+        .eq('type', 'evaluation_status')
+        .ilike('value', 'fechado')
+        .single();
+
+      if (statusError || !statusData) {
+        console.error('Erro ao buscar status Fechado:', statusError);
+        setError('Erro ao buscar status. Verifique se o status "Fechado" existe nos domínios.');
+        setIsClosing(false);
+        return;
+      }
+
+      // Atualizar avaliação para Fechado e is_closed = true
+      const { error: updateError } = await supabase
+        .from('evaluations')
+        .update({ 
+          status_id: statusData.id,
+          is_closed: true 
+        })
+        .eq('id', parseInt(id));
+
+      if (updateError) {
+        console.error('Erro ao encerrar avaliação:', updateError);
+        setError('Erro ao encerrar avaliação');
+        setIsClosing(false);
+        return;
+      }
+
+      // Atualizar estado local
+      setStatusName(statusData.value);
+      if (evaluation) {
+        setEvaluation({ 
+          ...evaluation, 
+          status_id: statusData.id,
+          is_closed: true 
+        });
+      }
+
+      setShowCloseModal(false);
+      setSuccessMessage('Avaliação encerrada com sucesso! Agora ela está somente em modo de visualização.');
+    } catch (err) {
+      console.error('Erro ao encerrar avaliação:', err);
+      setError('Erro ao encerrar avaliação');
+    } finally {
+      setIsClosing(false);
+    }
   };
 
   // Prevenir navegação com dados não salvos
@@ -819,6 +933,63 @@ const EvaluationResponse = () => {
         />
       )}
 
+      {/* Modal de Confirmação de Encerramento */}
+      {showCloseModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-t-2xl flex items-center justify-between">
+              <h2 className="text-xl font-bold">Encerrar Avaliação</h2>
+              <button
+                onClick={() => setShowCloseModal(false)}
+                className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-6 h-6 text-orange-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-gray-900 dark:text-gray-100 font-medium mb-2">
+                    Atenção!
+                  </p>
+                  <p className="text-gray-700 dark:text-gray-300 text-sm">
+                    Se a avaliação for encerrada, ela não poderá mais ser alterada. 
+                    Apenas será possível visualizá-la.
+                  </p>
+                  <p className="text-gray-700 dark:text-gray-300 text-sm mt-2">
+                    Deseja continuar?
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCloseModal(false)}
+                  disabled={isClosing}
+                  className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseEvaluation}
+                  disabled={isClosing}
+                  className="px-6 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isClosing ? 'Encerrando...' : 'Sim, Encerrar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botão Voltar */}
       <button
         onClick={() => {
@@ -930,6 +1101,14 @@ const EvaluationResponse = () => {
           </div>
         </div>
       </div>
+
+      {/* Mensagem de Avaliação Encerrada */}
+      {evaluation?.is_closed && (
+        <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          <span>Esta avaliação foi encerrada e está disponível apenas para visualização. Não é possível fazer alterações.</span>
+        </div>
+      )}
 
       {/* Mensagem de Erro */}
       {error && (
@@ -1071,18 +1250,28 @@ const EvaluationResponse = () => {
       {/* Botão Salvar */}
       <div className="flex justify-between items-center gap-3 p-1 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          {hasUnsavedChanges && (
+          {evaluation?.is_closed ? (
+            <span className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+              <AlertCircle className="w-4 h-4" />
+              Avaliação encerrada - Somente visualização
+            </span>
+          ) : hasUnsavedChanges ? (
             <span className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
               <AlertCircle className="w-4 h-4" />
               Você tem alterações não salvas
             </span>
-          )}
+          ) : calculateProgress() === 100 ? (
+            <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
+              <CheckCircle className="w-4 h-4" />
+              Todas as respostas obrigatórias foram preenchidas e salvas
+            </span>
+          ) : null}
         </div>
         <div className="flex gap-3">
           <button
             type="button"
             onClick={() => {
-              if (hasUnsavedChanges && hasResponseChanges()) {
+              if (hasUnsavedChanges && hasResponseChanges() && !evaluation?.is_closed) {
                 if (
                   window.confirm(
                     'Você tem alterações não salvas. Se sair da tela sem salvar, perderá o que foi preenchido. Deseja continuar?'
@@ -1098,15 +1287,31 @@ const EvaluationResponse = () => {
           >
             Voltar
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving || !hasUnsavedChanges}
-            className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            {isSaving ? 'Salvando...' : 'Salvar Progresso'}
-          </button>
+          
+          {/* Botão Encerrar Avaliação - só aparece se estiver concluída, salva e não fechada */}
+          {isAllRequiredAnsweredAndSaved() && !evaluation?.is_closed && (
+            <button
+              type="button"
+              onClick={() => setShowCloseModal(true)}
+              className="px-6 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+            >
+              <XCircle className="w-4 h-4" />
+              Encerrar Avaliação
+            </button>
+          )}
+
+          {/* Botão Salvar - só aparece se não estiver fechada */}
+          {!evaluation?.is_closed && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || !hasUnsavedChanges}
+              className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              {isSaving ? 'Salvando...' : 'Salvar Progresso'}
+            </button>
+          )}
         </div>
       </div>
     </div>

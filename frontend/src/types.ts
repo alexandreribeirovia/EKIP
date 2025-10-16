@@ -301,6 +301,10 @@ export interface EmployeeEvaluationData {
   period_end: string;
   status_id: number | null;
   is_done: boolean;
+  status?: {
+    id: number;
+    value: string;
+  } | null;
   evaluations_projects?: Array<{
     project_id: number;
   }>;
@@ -324,6 +328,7 @@ export interface EvaluationInfo {
   period_end: string;
   status_id: number | null;
   is_done: boolean;
+  is_closed?: boolean;
 }
 
 export interface EvaluationQuestionData {
