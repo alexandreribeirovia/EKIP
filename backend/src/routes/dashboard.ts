@@ -2,7 +2,7 @@ import { Router } from 'express'
 
 const router = Router()
 
-router.get('/stats', (req, res) => {
+router.get('/stats', (_req, res) => {
   res.json({
     success: true,
     data: {

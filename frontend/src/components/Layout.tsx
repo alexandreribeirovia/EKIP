@@ -14,7 +14,8 @@ import {
   Clock,
   ChevronDown,
   MessageSquare,
-  FileCheck
+  FileCheck,
+  LogOut
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -27,7 +28,8 @@ const Layout = ({ children }: LayoutProps) => {
   const [dashboardExpanded, setDashboardExpanded] = useState(false)
   const [employeesExpanded, setEmployeesExpanded] = useState(false)
   const [settingsExpanded, setSettingsExpanded] = useState(false)
-  const { user } = useAuthStore()
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
+  const { user, logout } = useAuthStore()
   const location = useLocation()
 
   const toggleDarkMode = () => {
@@ -63,7 +65,8 @@ const Layout = ({ children }: LayoutProps) => {
       icon: Settings,
       hasSubmenu: true,
       submenu: [
-        { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList }
+        { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList },
+        { name: 'Usuários', href: '/users', icon: Users }
       ]
     },
   ]
@@ -213,15 +216,35 @@ const Layout = ({ children }: LayoutProps) => {
               
               <div className="border-l border-gray-200 dark:border-gray-700 h-8"></div>
               
-              <div className="flex items-center">
-                <span className="mr-3 text-sm text-gray-700 dark:text-gray-300">
-                  {user?.name}
-                </span>
-                <img
-                  src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}`}
-                  alt="User"
-                  className="w-8 h-8 rounded-full"
-                />
+              <div className="relative">
+                <button
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center focus:outline-none"
+                >
+                  <span className="mr-3 text-sm text-gray-700 dark:text-gray-300">
+                    {user?.name}
+                  </span>
+                  <img
+                    src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}`}
+                    alt="User"
+                    className="w-8 h-8 rounded-full"
+                  />
+                </button>
+                
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50">
+                    <button
+                      onClick={() => {
+                        logout()
+                        setProfileDropdownOpen(false)
+                      }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Sair
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

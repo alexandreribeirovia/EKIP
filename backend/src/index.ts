@@ -1,3 +1,8 @@
+import dotenv from 'dotenv'
+
+// Carregar variáveis de ambiente ANTES de tudo
+dotenv.config()
+
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -7,7 +12,6 @@ import rateLimit from 'express-rate-limit'
 import slowDown from 'express-slow-down'
 import swaggerJsdoc from 'swagger-jsdoc'
 import swaggerUi from 'swagger-ui-express'
-import dotenv from 'dotenv'
 
 import { errorHandler } from './middleware/errorHandler'
 import { notFound } from './middleware/notFound'
@@ -17,8 +21,6 @@ import projectRoutes from './routes/projects'
 import allocationRoutes from './routes/allocations'
 import employeeRoutes from './routes/employees'
 import dashboardRoutes from './routes/dashboard'
-
-dotenv.config()
 
 const app = express()
 const PORT = process.env['PORT'] || 5000

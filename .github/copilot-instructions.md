@@ -6,7 +6,7 @@
 - **Frontend**: React 18 + Vite + Tailwind CSS + AG-Grid + Recharts
 - **Backend**: Node.js + Express + Prisma ORM
 - **Database**: PostgreSQL (via Prisma schema) + Supabase (for specific features)
-- **Auth**: JWT tokens with Zustand persist store
+- **Auth**: **Supabase Auth** with JWT tokens + Zustand persist store (see `docs/SUPABASE_AUTH.md`)
 
 ## Architecture & Data Flow
 
@@ -18,9 +18,13 @@ This project uses **both Prisma/PostgreSQL AND Supabase** concurrently:
 - Backend API handles Prisma operations at `/api/*` routes
 
 ### State Management
-- **Authentication**: Zustand persist store (`frontend/src/stores/authStore.ts`) - stores user, token, isAuthenticated
+- **Authentication**: Supabase Auth with Zustand persist store (`frontend/src/stores/authStore.ts`)
+  - Session managed by Supabase (auto-refresh, multi-tab sync)
+  - Store: `{ user, session, isAuthenticated, loading, login(), logout(), initializeAuth() }`
+  - Initialize auth in App.tsx: `useEffect(() => initializeAuth(), [])`
 - **No React Query**: Direct async/await with useState/useEffect patterns
 - **Direct Supabase Calls**: Import from `frontend/src/lib/supabaseClient.ts` in pages
+  - Client automatically uses authenticated session (RLS applied)
 
 ### Routing
 - React Router v6 with `<ProtectedRoute>` wrapper checking `useAuthStore().isAuthenticated`
