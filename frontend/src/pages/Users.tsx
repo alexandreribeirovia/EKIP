@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/stores/authStore'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
 import { Plus, Edit, Users as UsersIcon, UserCheck, UserX, Shield } from 'lucide-react'
 import UserModal from '@/components/UserModal'
+import { useAuthStore } from '@/stores/authStore'
 
 interface UserData {
   id: string
@@ -22,12 +22,12 @@ const Users = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>(undefined)
-  const { session } = useAuthStore()
 
   // Filtros
   const [searchText, setSearchText] = useState('')
   const [filterRole, setFilterRole] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const { session } = useAuthStore()
 
   // Buscar usuários
   const fetchUsers = async () => {
@@ -36,7 +36,6 @@ const Users = () => {
     setIsLoading(true)
 
     try {
-      // Buscar usuários via API backend
       const token = session?.access_token
       
       if (!token) {
@@ -105,8 +104,10 @@ const Users = () => {
 
   // Carregar usuários ao montar
   useEffect(() => {
-    void fetchUsers()
-  }, [])
+    if (session) {
+      void fetchUsers()
+    }
+  }, [session])
 
   // Reaplica filtros quando mudam
   useEffect(() => {
