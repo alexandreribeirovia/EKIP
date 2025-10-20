@@ -36,7 +36,8 @@ const Users = () => {
     setIsLoading(true)
 
     try {
-      const token = session?.access_token
+      // Get latest token from store to prevent using a stale one from component state
+      const token = useAuthStore.getState().session?.access_token
       
       if (!token) {
         console.error('Usuário não autenticado')

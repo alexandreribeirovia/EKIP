@@ -4,6 +4,19 @@ import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { useAuthStore } from '../stores/authStore';
 
+interface FeedbackData {
+  id: number;
+  feedback_user_id: string;
+  feedback_user_name: string;
+  owner_user_id: string;
+  owner_user_name: string;
+  feedback_date: string;
+  type: string;
+  public_comment: string;
+  private_comment?: string | null;
+  type_id?: number | null;
+}
+
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +25,7 @@ interface FeedbackModalProps {
     user_id: string;
     name: string;
   } | null;
+  feedbackToEdit?: FeedbackData | null;
 }
 
 interface UserOption {
@@ -33,7 +47,7 @@ const feedbackTypes: FeedbackType[] = [
   { id: 4, name: 'Melhoria', icon: <TrendingUp className="w-6 h-6" />, color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50' },
 ];
 
-const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: FeedbackModalProps) => {
+const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, feedbackToEdit = null }: FeedbackModalProps) => {
   const { user } = useAuthStore();
   const [users, setUsers] = useState<UserOption[]>([]);
   const [selectedFeedbackUser, setSelectedFeedbackUser] = useState<UserOption | null>(null);
@@ -44,26 +58,36 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Carrega usuários ao abrir o modal
+  // Carrega usuários e preenche o formulário
   useEffect(() => {
     if (isOpen) {
       void fetchUsers();
-      // Define data atual como padrão
-      const today = new Date().toISOString().split('T')[0];
-      setFeedbackDate(today);
       
-      // Se há usuário pré-selecionado, define ele
-      if (preSelectedUser) {
-        setSelectedFeedbackUser({
-          value: preSelectedUser.user_id,
-          label: preSelectedUser.name,
-        });
+      if (feedbackToEdit) {
+        // Modo de edição
+        setSelectedFeedbackUser({ value: feedbackToEdit.feedback_user_id, label: feedbackToEdit.feedback_user_name });
+        setFeedbackDate(feedbackToEdit.feedback_date.split('T')[0]);
+        const type = feedbackTypes.find(t => t.name === feedbackToEdit.type);
+        setSelectedType(type ? type.id : null);
+        setPublicComment(feedbackToEdit.public_comment || '');
+        setPrivateComment(feedbackToEdit.private_comment || '');
+      } else {
+        // Modo de criação
+        const today = new Date().toISOString().split('T')[0];
+        setFeedbackDate(today);
+        
+        if (preSelectedUser) {
+          setSelectedFeedbackUser({
+            value: preSelectedUser.user_id,
+            label: preSelectedUser.name,
+          });
+        }
       }
     } else {
       // Reset form when closing
       resetForm();
     }
-  }, [isOpen, preSelectedUser]);
+  }, [isOpen, preSelectedUser, feedbackToEdit]);
 
   const fetchUsers = async () => {
     try {
@@ -135,29 +159,44 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
     try {
       const feedbackTypeName = feedbackTypes.find(t => t.id === selectedType)?.name || '';
 
-      const { error: insertError } = await supabase
-        .from('feedbacks')
-        .insert({
-          feedback_user_id: selectedFeedbackUser.value,
-          feedback_user_name: selectedFeedbackUser.label,
-          owner_user_id: user.runrun_user_id,
-          owner_user_name: user.name,
-          feedback_date: feedbackDate,
-          type_id: selectedType,
-          type: feedbackTypeName,
-          public_comment: publicComment.trim(),
-          private_comment: privateComment.trim() || null,
-        });
+      const feedbackDataPayload = {
+        feedback_user_id: selectedFeedbackUser.value,
+        feedback_user_name: selectedFeedbackUser.label,
+        owner_user_id: user.runrun_user_id,
+        owner_user_name: user.name,
+        feedback_date: feedbackDate,
+        type_id: selectedType,
+        type: feedbackTypeName,
+        public_comment: publicComment.trim(),
+        private_comment: privateComment.trim() || null,
+      };
 
-      if (insertError) {
-        setError(insertError.message || 'Erro ao salvar feedback. Tente novamente.');
+      let rpcError;
+
+      if (feedbackToEdit) {
+        // Update
+        const { error } = await supabase
+          .from('feedbacks')
+          .update(feedbackDataPayload)
+          .eq('id', feedbackToEdit.id);
+        rpcError = error;
+      } else {
+        // Insert
+        const { error } = await supabase
+          .from('feedbacks')
+          .insert(feedbackDataPayload);
+        rpcError = error;
+      }
+
+
+      if (rpcError) {
+        setError(rpcError.message || 'Erro ao salvar feedback. Tente novamente.');
         return;
       }
 
       // Sucesso
       onSuccess();
       onClose();
-      resetForm();
     } catch (err: any) {
       console.error('Erro ao salvar feedback:', err);
       setError(err.message || 'Erro ao salvar feedback. Tente novamente.');
@@ -173,7 +212,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full">
         {/* Header */}
         <div className="p-5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-t-2xl flex items-center justify-between">
-          <h2 className="text-xl font-bold">Novo Feedback</h2>
+          <h2 className="text-xl font-bold">{feedbackToEdit ? 'Editar Feedback' : 'Novo Feedback'}</h2>
           <button
             onClick={onClose}
             className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
@@ -298,7 +337,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null }: F
                   Salvando...
                 </>
               ) : (
-                'Salvar Feedback'
+                feedbackToEdit ? 'Salvar Alterações' : 'Salvar Feedback'
               )}
             </button>
           </div>

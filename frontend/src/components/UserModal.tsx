@@ -35,7 +35,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
   // Buscar dados do usuário se for edição
   useEffect(() => {
     if (isEditMode && userId) {
-      fetchUserData()
+      void fetchUserData()
     } else {
       // Reset para modo criação
       setFormData({
@@ -67,7 +67,9 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
       })
 
       if (!response.ok) {
-        throw new Error('Erro ao buscar usuário')
+        console.error('Erro ao buscar usuário')
+        setError('Erro ao carregar dados do usuário')
+        return
       }
 
       const result = await response.json()
@@ -129,7 +131,10 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
 
         if (!response.ok) {
           const errorData = await response.json()
-          throw new Error(errorData.error?.message || 'Erro ao atualizar usuário')
+          const message = errorData.error?.message || 'Erro ao atualizar usuário';
+          console.error('Erro ao salvar usuário:', new Error(message));
+          setError(message);
+          return;
         }
 
         setNotification({ type: 'success', message: 'Usuário atualizado com sucesso!' })
@@ -150,7 +155,10 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
 
         if (!response.ok) {
           const errorData = await response.json()
-          throw new Error(errorData.error?.message || 'Erro ao criar usuário')
+          const message = errorData.error?.message || 'Erro ao criar usuário';
+          console.error('Erro ao salvar usuário:', new Error(message));
+          setError(message);
+          return;
         }
 
         setNotification({ type: 'success', message: 'Usuário criado com sucesso!' })
@@ -198,7 +206,10 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Erro ao enviar e-mail de redefinição')
+        const message = errorData.error?.message || 'Erro ao enviar e-mail de redefinição';
+        console.error('Erro ao redefinir senha:', new Error(message));
+        setError(message);
+        return;
       }
 
       setNotification({ type: 'success', message: 'E-mail de redefinição de senha enviado com sucesso!' })
@@ -245,7 +256,10 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Erro ao alterar status')
+        const message = errorData.error?.message || 'Erro ao alterar status';
+        console.error('Erro ao alterar status:', new Error(message));
+        setError(message);
+        return;
       }
 
       setFormData({ ...formData, status: newStatus })

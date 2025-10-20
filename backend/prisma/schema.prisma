@@ -16,6 +16,7 @@ model User {
   name      String
   role      Role     @default(EMPLOYEE)
   avatar    String?
+  runrun_user_id String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

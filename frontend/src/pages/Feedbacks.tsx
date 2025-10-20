@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
-import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Edit } from 'lucide-react';
 import FeedbackModal from '../components/FeedbackModal';
 import '../styles/main.css';
 
@@ -30,6 +30,7 @@ const Feedbacks = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
   const [feedbackToDelete, setFeedbackToDelete] = useState<FeedbackData | null>(null);
+  const [feedbackToEdit, setFeedbackToEdit] = useState<FeedbackData | null>(null);
   
   // Filtros
   const [periodType, setPeriodType] = useState<'current_month' | 'previous_month' | 'current_year' | 'custom'>('current_month');
@@ -154,6 +155,11 @@ const Feedbacks = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodType, startDate, endDate, selectedConsultants]);
 
+  const handleOpenEditModal = (feedback: FeedbackData) => {
+    setFeedbackToEdit(feedback);
+    setIsModalOpen(true);
+  };
+
   // Função para abrir modal de confirmação de exclusão
   const handleDeleteFeedback = (feedbackId: number) => {
     const feedback = feedbacks.find(f => f.id === feedbackId);
@@ -251,7 +257,14 @@ const Feedbacks = () => {
       width: 100,
       cellRenderer: (params: any) => {
         return (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full gap-2">
+            <button
+              onClick={() => handleOpenEditModal(params.data)}
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Editar feedback"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
             <button
               onClick={() => handleDeleteFeedback(params.value)}
               className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -425,11 +438,15 @@ const Feedbacks = () => {
       {/* Modal de Novo Feedback */}
       <FeedbackModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setFeedbackToEdit(null);
+        }}
         onSuccess={() => {
           // Recarrega a lista de feedbacks após sucesso
           void fetchFeedbacks();
         }}
+        feedbackToEdit={feedbackToEdit}
       />
 
       {/* Modal de Confirmação de Exclusão */}

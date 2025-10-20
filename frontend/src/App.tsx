@@ -15,6 +15,7 @@ import EmployeeEvaluations from '@/pages/Evaluations'
 import EvaluationResponse from '@/pages/EvaluationResponse'
 import Users from '@/pages/Users'
 import Login from '@/pages/Login'
+import ForgotPassword from '@/pages/ForgotPassword'
 import ResetPassword from '@/pages/ResetPassword'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { supabase } from './lib/supabaseClient'
@@ -25,7 +26,7 @@ function App() {
   const location = useLocation()
 
   useEffect(() => {
-    initializeAuth()
+    void initializeAuth()
   }, [initializeAuth])
 
   useEffect(() => {
@@ -68,13 +69,20 @@ function App() {
     )
   }
 
-  if (!isAuthenticated && location.pathname !== '/reset-password') {
-    return <Login />
+  if (!isAuthenticated && !['/reset-password', '/forgot-password'].includes(location.pathname)) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="*" element={<Login />} />
+      </Routes>
+    );
   }
 
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/*" element={
         <Layout>

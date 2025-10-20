@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
-import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer } from 'recharts'
+import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata } from '../types'
 import { supabase } from '../lib/supabaseClient'
 import FeedbackModal from '../components/FeedbackModal'
@@ -30,6 +30,7 @@ const EmployeeDetail = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([])
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false)
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false);
   
   const [evaluationData, setEvaluationData] = useState<SubcategoryEvaluationData[]>([])
   const [evaluationMetadata, setEvaluationMetadata] = useState<EvaluationMetadata[]>([])
@@ -42,6 +43,7 @@ const EmployeeDetail = () => {
   const [showSkillSelector, setShowSkillSelector] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const rightPanelRef = useRef<HTMLDivElement>(null);
   
   // Refs para prevenir chamadas duplicadas
   const hasLoadedEmployee = useRef(false)
@@ -509,6 +511,18 @@ const EmployeeDetail = () => {
 
     return { total, active, delivered };
   }, [tasks]);
+
+  const feedbackByTypeData = useMemo(() => {
+    if (!feedbacks || feedbacks.length === 0) return [];
+    
+    const counts = feedbacks.reduce((acc, feedback) => {
+      const type = feedback.type || 'Não categorizado';
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return Object.entries(counts).map(([name, count]) => ({ name, count }));
+  }, [feedbacks]);
 
   const loadTimeRecords = async (userId: string, monthYear: string) => {
     setIsLoadingRecords(true);
@@ -1389,6 +1403,36 @@ const EmployeeDetail = () => {
     menuPortal: base => ({ ...base, zIndex: 10000 }),
   };
 
+  // Listener para mudanças no estado de full screen
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    };
+  }, []);
+
+  const toggleFullScreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (rightPanelRef.current) {
+          await rightPanelRef.current.requestFullscreen();
+          setIsFullScreen(true);
+        }
+      } else {
+        await document.exitFullscreen();
+        setIsFullScreen(false);
+      }
+    } catch (error) {
+      console.error('Erro ao alternar full screen:', error);
+      setIsFullScreen(!isFullScreen);
+    }
+  };
+
   // Efeito para resetar refs quando o ID muda (navegação entre funcionários)
   const previousIdRef = useRef<string | undefined>(undefined);
   
@@ -1485,10 +1529,15 @@ const EmployeeDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, employee?.user_id]);
 
-  // Carrega dados de avaliações quando a aba é selecionada
+  // Carrega dados de avaliações e feedbacks quando a aba de acompanhamento é selecionada
   useEffect(() => {
-    if (employee?.user_id && activeTab === 'acompanhamento' && evaluationData.length === 0) {
-      void loadEvaluationData(employee.user_id);
+    if (employee?.user_id && activeTab === 'acompanhamento') {
+      if (evaluationData.length === 0) {
+        void loadEvaluationData(employee.user_id);
+      }
+      if (feedbacks.length === 0) {
+        void loadFeedbacks(employee.user_id);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, employee?.user_id]);
@@ -1522,279 +1571,300 @@ const EmployeeDetail = () => {
 
   return (
     <div ref={containerRef} className="h-full flex flex-col overflow-hidden">
-      {/* Header com botão voltar - fora do card */}
-      <div className="flex items-center gap-4 mb-2 mt-0">
-        <button
-          onClick={() => navigate('/employees')}
-          className="flex items-center gap-2 px-4 py-0 text-gray-600 dark:text-gray-300 hover:text-orange-500 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Voltar
-        </button>
-        {/* <div className="h-6 border-l border-gray-300 dark:border-gray-600"></div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Detalhes do Funcionário
-        </h1> */}
-      </div>
-
-      {/* Card com informações básicas do funcionário */}
-      <div className="card p-2 pl-6 mb-4">
-        {/* Informações básicas do funcionário */}
-        <div className="flex  items-start gap-6">
-          <div className="flex-shrink-0">
-            {employee.avatar_large_url ? (
-              <img
-                src={employee.avatar_large_url}
-                alt={employee.name}
-                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-                {getInitials(employee.name)}
-              </div>
-            )}
+      {!isFullScreen && (
+        <>
+          {/* Header com botão voltar - fora do card */}
+          <div className="flex items-center gap-4 mb-2 mt-0">
+            <button
+              onClick={() => navigate('/employees')}
+              className="flex items-center gap-2 px-4 py-0 text-gray-600 dark:text-gray-300 hover:text-orange-500 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Voltar
+            </button>
+            {/* <div className="h-6 border-l border-gray-300 dark:border-gray-600"></div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              Detalhes do Funcionário
+            </h1> */}
           </div>
-          
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {employee.name}
-              </h2>
-              <div className="flex items-center gap-3">
-                {/* Indicador de status */}
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  employee.is_active 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' 
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                }`}>
-                  {employee.is_active ? 'Ativo' : 'Inativo'}
-                </span>
+
+          {/* Card com informações básicas do funcionário */}
+          <div className="card p-2 pl-6 mb-4">
+            {/* Informações básicas do funcionário */}
+            <div className="flex  items-start gap-6">
+              <div className="flex-shrink-0">
+                {employee.avatar_large_url ? (
+                  <img
+                    src={employee.avatar_large_url}
+                    alt={employee.name}
+                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                    {getInitials(employee.name)}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {employee.name}
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    {/* Indicador de status */}
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      employee.is_active 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' 
+                        : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                    }`}>
+                      {employee.is_active ? 'Ativo' : 'Inativo'}
+                    </span>
+                    
+                    {/* Botão toggle Status */}
+                    <button
+                      onClick={toggleEmployeeStatus}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
+                        employee.is_active 
+                          ? 'bg-green-500 hover:bg-green-600' 
+                          : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
+                      }`}
+                      title={employee.is_active ? 'Desativar funcionário' : 'Ativar funcionário'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          employee.is_active ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-lg text-gray-600 dark:text-gray-300">
+                    {employee.position || 'Cargo não informado'}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {/* Indicador de Log Hours */}
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      employee.log_hours 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' 
+                        : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                    }`}>
+                      {employee.log_hours ? 'Lança Horas' : 'Não Lança Horas'}
+                    </span>
+
+                    {/* Botão toggle Log Hours */}
+                    <button
+                      onClick={toggleEmployeeLogHours}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
+                        employee.log_hours 
+                          ? 'bg-green-500 hover:bg-green-600' 
+                          : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
+                      }`}
+                      title={employee.log_hours ? 'Desativar Horas' : 'Ativar Horas'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          employee.log_hours ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
                 
-                {/* Botão toggle Status */}
-                <button
-                  onClick={toggleEmployeeStatus}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
-                    employee.is_active 
-                      ? 'bg-green-500 hover:bg-green-600' 
-                      : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
-                  }`}
-                  title={employee.is_active ? 'Desativar funcionário' : 'Ativar funcionário'}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      employee.is_active ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <p className="text-lg text-gray-600 dark:text-gray-300">
-                {employee.position || 'Cargo não informado'}
-              </p>
-              <div className="flex items-center gap-3">
-                {/* Indicador de Log Hours */}
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  employee.log_hours 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' 
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                }`}>
-                  {employee.log_hours ? 'Lança Horas' : 'Não Lança Horas'}
-                </span>
-
-                {/* Botão toggle Log Hours */}
-                <button
-                  onClick={toggleEmployeeLogHours}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
-                    employee.log_hours 
-                      ? 'bg-green-500 hover:bg-green-600' 
-                      : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
-                  }`}
-                  title={employee.log_hours ? 'Desativar Horas' : 'Ativar Horas'}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      employee.log_hours ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
-              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                <Mail className="w-4 h-4" />
-                <span>{employee.email}</span>
-              </div>
-              {employee.phone && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                  <Calendar className="w-4 h-4" />
-                  <span>
-                    {employee.birthday ? new Date(employee.birthday).toLocaleDateString('pt-BR') : '–'} 
-                    {calculateAge(employee.birthday)}
-                  </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <Mail className="w-4 h-4" />
+                    <span>{employee.email}</span>
+                  </div>
+                  {employee.phone && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <Calendar className="w-4 h-4" />
+                      <span>
+                        {employee.birthday ? new Date(employee.birthday).toLocaleDateString('pt-BR') : '–'} 
+                        {calculateAge(employee.birthday)}
+                      </span>
+                    </div>
+                  )}
+                  {employee.birthday && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <Phone className="w-4 h-4" />
+                      <span>{formatPhoneNumber(employee.phone)}</span>
+                    </div>
+                                      
+                  )}
+                  {employee.in_company_since && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <Clock className="w-4 h-4" />
+                      <span>
+                        Desde {new Date(employee.in_company_since).toLocaleDateString('pt-BR')} 
+                        {calculateTenure(employee.in_company_since)}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {employee.birthday && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                  <Phone className="w-4 h-4" />
-                  <span>{formatPhoneNumber(employee.phone)}</span>
-                </div>
-                                  
-              )}
-              {employee.in_company_since && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                  <Clock className="w-4 h-4" />
-                  <span>
-                    Desde {new Date(employee.in_company_since).toLocaleDateString('pt-BR')} 
-                    {calculateTenure(employee.in_company_since)}
-                  </span>
-                </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Conteúdo principal */}
       <div className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-6">
-          {/* Lado esquerdo - Habilidades e Horas */}
-          <div className="w-full lg:w-80 space-y-6">
-            {/* Card de Habilidades */}
-            <div className="card p-6">
-              <CardHeader icon={<Award className="w-5 h-5" />} title="Habilidades">
-                <button
-                  onClick={() => setShowSkillSelector(!showSkillSelector)}
-                  className="text-orange-500 hover:text-orange-600 transition-colors"
-                  title="Adicionar habilidade"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </CardHeader>
+          {!isFullScreen && (
+            <div className="w-full lg:w-80 space-y-6">
+              {/* Card de Habilidades */}
+              <div className="card p-6">
+                <CardHeader icon={<Award className="w-5 h-5" />} title="Habilidades">
+                  <button
+                    onClick={() => setShowSkillSelector(!showSkillSelector)}
+                    className="text-orange-500 hover:text-orange-600 transition-colors"
+                    title="Adicionar habilidade"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </CardHeader>
 
-              {showSkillSelector && (
-                <div className="mb-4">
-                  <SkillSelect />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {isLoadingSkills ? (
-                  <div className="flex justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                {showSkillSelector && (
+                  <div className="mb-4">
+                    <SkillSelect />
                   </div>
-                ) : userSkills.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                    Nenhuma habilidade cadastrada
-                  </p>
-                ) : (
-                  userSkills.map((userSkill) => (
-                    <div
-                      key={userSkill.id}
-                      className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg"
-                    >
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {formatSkillName(userSkill.skill)}
-                      </span>
-                      <button
-                        onClick={() => removeSkillFromUser(userSkill.id)}
-                        className="text-red-500 hover:text-red-600 transition-colors ml-2"
-                        title="Remover habilidade"
+                )}
+
+                <div className="space-y-2">
+                  {isLoadingSkills ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                    </div>
+                  ) : userSkills.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                      Nenhuma habilidade cadastrada
+                    </p>
+                  ) : (
+                    userSkills.map((userSkill) => (
+                      <div
+                        key={userSkill.id}
+                        className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg"
                       >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))
-                )}
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {formatSkillName(userSkill.skill)}
+                        </span>
+                        <button
+                          onClick={() => removeSkillFromUser(userSkill.id)}
+                          className="text-red-500 hover:text-red-600 transition-colors ml-2"
+                          title="Remover habilidade"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Horas lançadas */}
-            <div className="card p-6">
-              <CardHeader icon={<Clock className="w-5 h-5 text-purple-500" />} title="Horas lançadas" />
-              <div className="space-y-3">
-                {isLoadingHours ? (
-                  <div className="flex justify-center items-center h-24">
-                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-                  </div>
-                ) : monthlyHours.length === 0 ? (
-                  <p className="text-sm text-gray-500">Nenhum registro de horas encontrado.</p>
-                ) : (
-                  monthlyHours.map(h => (
-                    <div key={h.mes}>
-                      <div className="flex justify-between items-center text-xs mb-1">
-                        <span className="font-bold text-gray-700 dark:text-gray-200">{h.mes}</span>
-                        {h.alerta && (
-                          <span className={`font-bold ${h.cor === 'bg-blue-500' ? 'text-blue-500' : 'text-red-500'}`}>
-                            {h.alerta}
-                          </span>
-                        )}
-                        <span className="text-gray-500">{h.lancadas}h / {h.total}h</span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden flex">
-                        {/* Horas lançadas (verde) */}
-                        {h.lancadas > 0 && (
-                          <div className="bg-green-500 h-2" style={{ width: `${(h.lancadas / h.total) * 100}%` }} />
-                        )}
-                        {/* Horas que faltam até d-1 (vermelho) */}
-                        {h.alerta && (
-                          <div className="bg-red-500 h-2" style={{ width: `${((h.esperadas - h.lancadas) / h.total) * 100}%` }} />
-                        )}
-                        {/* Horas futuras do mês (cinza claro) */}
-                        <div className="bg-gray-200 dark:bg-gray-700 h-2" style={{ width: `${((h.total - h.esperadas) / h.total) * 100}%` }} />
-                      </div>
+              {/* Horas lançadas */}
+              <div className="card p-6">
+                <CardHeader icon={<Clock className="w-5 h-5 text-purple-500" />} title="Horas lançadas" />
+                <div className="space-y-3">
+                  {isLoadingHours ? (
+                    <div className="flex justify-center items-center h-24">
+                      <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
                     </div>
-                  ))
-                )}
+                  ) : monthlyHours.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nenhum registro de horas encontrado.</p>
+                  ) : (
+                    monthlyHours.map(h => (
+                      <div key={h.mes}>
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="font-bold text-gray-700 dark:text-gray-200">{h.mes}</span>
+                          {h.alerta && (
+                            <span className={`font-bold ${h.cor === 'bg-blue-500' ? 'text-blue-500' : 'text-red-500'}`}>
+                              {h.alerta}
+                            </span>
+                          )}
+                          <span className="text-gray-500">{h.lancadas}h / {h.total}h</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden flex">
+                          {/* Horas lançadas (verde) */}
+                          {h.lancadas > 0 && (
+                            <div className="bg-green-500 h-2" style={{ width: `${(h.lancadas / h.total) * 100}%` }} />
+                          )}
+                          {/* Horas que faltam até d-1 (vermelho) */}
+                          {h.alerta && (
+                            <div className="bg-red-500 h-2" style={{ width: `${((h.esperadas - h.lancadas) / h.total) * 100}%` }} />
+                          )}
+                          {/* Horas futuras do mês (cinza claro) */}
+                          <div className="bg-gray-200 dark:bg-gray-700 h-2" style={{ width: `${((h.total - h.esperadas) / h.total) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Lado direito - Card com Abas Internas */}
           <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="card flex-1 flex flex-col overflow-hidden">
+            <div ref={rightPanelRef} className={`card flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'h-full' : ''}`}>
+              {isFullScreen && (
+                <div className="flex items-center justify-center p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                  <h1 className="text-xl font-bold text-gray-800 dark:text-gray-200 text-center">
+                    {employee.name}
+                  </h1>
+                </div>
+              )}
               {/* Abas internas seguindo o padrão do ProjectDetail */}
               <div className="border-b border-gray-200 dark:border-gray-700">
-                <nav className="flex -mb-px px-6">
+                <nav className="flex justify-between items-center -mb-px px-6">
+                  <div className="flex">
+                    <button
+                      onClick={() => setActiveTab('tarefas')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+                        activeTab === 'tarefas'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Tarefas Atribuídas
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('registro')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+                        activeTab === 'registro'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Registro de Horas
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('feedbacks')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+                        activeTab === 'feedbacks'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Feedbacks
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('acompanhamento')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'acompanhamento'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Acompanhamento
+                    </button>
+                  </div>
                   <button
-                    onClick={() => setActiveTab('tarefas')}
-                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                      activeTab === 'tarefas'
-                        ? 'border-primary-500 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                    onClick={toggleFullScreen}
+                    className="flex items-center gap-2 px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    title={isFullScreen ? "Sair do modo tela cheia" : "Modo tela cheia"}
                   >
-                    Tarefas Atribuídas
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('registro')}
-                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                      activeTab === 'registro'
-                        ? 'border-primary-500 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Registro de Horas
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('feedbacks')}
-                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                      activeTab === 'feedbacks'
-                        ? 'border-primary-500 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Feedbacks
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('acompanhamento')}
-                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'acompanhamento'
-                        ? 'border-primary-500 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    Acompanhamento
+                    <Maximize className="w-4 h-4" />
                   </button>
                 </nav>
               </div>
@@ -2106,23 +2176,49 @@ const EmployeeDetail = () => {
                       )}
                     </div>
 
-                    {/* Card 2: Placeholder para próximo gráfico */}
+                                        {/* Card 2: Gráfico de Feedbacks por Tipo */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
                       <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
-                          <Award className="w-5 h-5 text-blue-500" />
-                          Próximo Gráfico
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+                          <MessageSquare className="w-5 h-5 text-blue-500" />
+                          Feedbacks por Tipo
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Espaço reservado para análise adicional
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          Distribuição dos feedbacks recebidos.
                         </p>
                       </div>
-                      <div className="flex justify-center items-center h-96">
-                        <div className="text-center text-gray-400 dark:text-gray-500">
-                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">Em breve: mais visualizações</p>
+                      {isLoadingFeedbacks ? (
+                        <div className="flex justify-center items-center h-96">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                         </div>
-                      </div>
+                      ) : feedbackByTypeData.length === 0 ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center text-gray-400 dark:text-gray-500">
+                            <MessageSquare className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                            <p className="text-sm">Nenhum feedback para exibir</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-96">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={feedbackByTypeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+                              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
+                              <Tooltip
+                                cursor={{ fill: 'rgba(249, 115, 22, 0.1)' }}
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '0.5rem',
+                                  fontSize: '12px'
+                                }}
+                              />
+                              <Bar dataKey="count" name="Quantidade" fill="#3b82f6" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
                     </div>
                   </div>
 

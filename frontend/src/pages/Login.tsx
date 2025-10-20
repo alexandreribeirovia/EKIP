@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
 import logo from '../../img/logo.png'
+import { Link } from 'react-router-dom'
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -28,7 +29,8 @@ const Login = () => {
       const result = await response.json()
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error?.message || 'Erro ao fazer login')
+        setError(result.error?.message || 'Erro ao fazer login');
+        return;
       }
       
       // Armazenar usuário e token no Zustand
@@ -117,6 +119,12 @@ const Login = () => {
                 </button>
               </div>
               
+            </div>
+            <div className="text-right">
+              <Link to="/forgot-password" 
+              className="text-sm font-medium text-orange-600 hover:text-orange-500 dark:text-orange-400 dark:hover:text-orange-300">
+                Problema de acesso?
+              </Link>
             </div>
             {/* Mensagem de erro */}
             {error && (

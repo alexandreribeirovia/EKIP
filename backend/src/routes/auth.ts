@@ -496,15 +496,42 @@ router.patch('/users/:id', supabaseAuth, async (req, res) => {
     const updateData: {
       user_metadata?: Record<string, any> // Alterado para 'any' para aceitar null
       password?: string
+      email?: string
     } = {}
+
+    // Obter dados atuais do usuário para pegar o email
+    const { data: currentUserData, error: getUserError } = await supabase.auth.admin.getUserById(id)
+    if (getUserError) {
+      return res.status(404).json({ success: false, error: { message: 'Usuário não encontrado' } })
+    }
+    const currentUser = currentUserData.user
+    const currentEmail = currentUser.email
+
+    // Se houver um email, buscar dados do RunRun
+    if (currentEmail) {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('avatar_large_url, user_id')
+        .eq('email', currentEmail)
+        .single()
+
+      if (userError && userError.code !== 'PGRST116') {
+        console.error('Error fetching user data from public.users:', userError)
+      }
+
+      // Adicionar dados do RunRun aos metadados a serem atualizados
+      updateData.user_metadata = {
+        ...currentUser?.user_metadata,
+        avatar: userData?.avatar_large_url || currentUser?.user_metadata?.['avatar'],
+        runrun_user_id: userData?.user_id || currentUser?.user_metadata?.['runrun_user_id'],
+      }
+    }
+
 
     // Atualizar metadados se fornecidos
     if (name || role || status) {
-      const { data: currentUserData } = await supabase.auth.admin.getUserById(id)
-      const currentUser = currentUserData.user
-      
       updateData.user_metadata = {
-        ...currentUser?.user_metadata,
+        ...updateData.user_metadata, // Manter dados do RunRun
         ...(name && { name }),
         ...(role && { role }),
         ...(status && { status }),
