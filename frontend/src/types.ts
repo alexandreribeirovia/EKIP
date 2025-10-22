@@ -315,6 +315,23 @@ export interface EvaluationProjectOption {
   label: string;
 }
 
+export interface PdiData {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  user_name: string;
+  owner_id: string;
+  owner_name: string;
+  status_id: number;
+  status: { id: number; value: string } | null;
+  start_date: string;
+  end_date: string;
+  review_date: string;
+  comments: string;
+  is_closed?: boolean;
+}
+
 // Evaluation Response types (for filling out evaluations)
 export interface EvaluationInfo {
   id: number;

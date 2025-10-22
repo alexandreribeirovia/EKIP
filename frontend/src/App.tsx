@@ -12,6 +12,7 @@ import Feedbacks from '@/pages/Feedbacks'
 import EvaluationModels from '@/pages/EvaluationModel'
 import EvaluationDetail from '@/pages/EvaluationDetailModel'
 import EmployeeEvaluations from '@/pages/Evaluations'
+import PDI from '@/pages/PDI'
 import EvaluationResponse from '@/pages/EvaluationResponse'
 import Users from '@/pages/Users'
 import Login from '@/pages/Login'
@@ -98,6 +99,7 @@ function App() {
             <Route path="/employee-evaluations/:id" element={<ProtectedRoute><EvaluationResponse /></ProtectedRoute>} />
             <Route path="/evaluations" element={<ProtectedRoute><EvaluationModels /></ProtectedRoute>} />
             <Route path="/evaluations/:id" element={<ProtectedRoute><EvaluationDetail /></ProtectedRoute>} />
+            <Route path="/pdi" element={<ProtectedRoute><PDI /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           </Routes>

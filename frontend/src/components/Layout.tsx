@@ -54,7 +54,8 @@ const Layout = ({ children }: LayoutProps) => {
       hasSubmenu: true,
       submenu: [
         { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare },
-        { name: 'Avaliação', href: '/employee-evaluations', icon: FileCheck }
+        { name: 'Avaliação', href: '/employee-evaluations', icon: FileCheck },
+        { name: 'PDI', href: '/pdi', icon: FileCheck }
       ]
     },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },
