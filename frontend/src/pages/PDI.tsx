@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit } from 'lucide-react';
 import { PdiData } from '@/types';
+import PDIModal from '@/components/PDIModal';
+import NotificationToast from '@/components/NotificationToast';
 import '@/styles/main.css';
 
 interface ConsultantOption {
@@ -14,7 +15,6 @@ interface ConsultantOption {
 }
 
 const PDI = () => {
-  const navigate = useNavigate();
   const [pdis, setPdis] = useState<PdiData[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
   const [managers, setManagers] = useState<ConsultantOption[]>([]);
@@ -22,6 +22,18 @@ const PDI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
   const [pdiToDelete, setPdiToDelete] = useState<PdiData | null>(null);
+  const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
+  const [editingPdiId, setEditingPdiId] = useState<number | null>(null);
+  const [errorNotification, setErrorNotification] = useState<string | null>(null);
+  const [successNotification, setSuccessNotification] = useState<string | null>(null);
+
+  const showErrorNotification = useCallback((message: string) => {
+    setErrorNotification(message);
+  }, []);
+
+  const showSuccessNotification = useCallback((message: string) => {
+    setSuccessNotification(message);
+  }, []);
   
   // Filtros
   const [periodType, setPeriodType] = useState<'current_month' | 'previous_month' | 'current_year' | 'custom'>('current_month');
@@ -244,6 +256,24 @@ const PDI = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodType, startDate, endDate, selectedConsultants, selectedManagers, selectedStatus]);
 
+  // Função para abrir modal de edição
+  const handleEditPdi = (pdiId: number) => {
+    setEditingPdiId(pdiId);
+    setIsPDIModalOpen(true);
+  };
+
+  // Função para abrir modal de criação
+  const handleCreatePdi = () => {
+    setEditingPdiId(null);
+    setIsPDIModalOpen(true);
+  };
+
+  // Função para fechar modal e limpar estado de edição
+  const handleClosePDIModal = () => {
+    setIsPDIModalOpen(false);
+    setEditingPdiId(null);
+  };
+
   // Função para abrir modal de confirmação de exclusão
   const handleDeletePdi = (pdiId: number) => {
     const pdi = pdis.find(e => e.id === pdiId);
@@ -369,7 +399,7 @@ const PDI = () => {
         return (
           <div className="flex items-center justify-center h-full gap-2">
             <button
-              onClick={() => navigate(`/pdi/${params.value}`)}
+              onClick={() => handleEditPdi(params.value)}
               className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
               title={isClosed ? "Visualizar PDI" : "Editar PDI"}
             >
@@ -395,7 +425,23 @@ const PDI = () => {
   ];
 
   return (
-    <div className="h-full flex flex-col space-y-2">
+    <>
+      {errorNotification && (
+        <NotificationToast 
+          type="error" 
+          message={errorNotification} 
+          onClose={() => setErrorNotification(null)} 
+        />
+      )}
+      {successNotification && (
+        <NotificationToast 
+          type="success" 
+          message={successNotification} 
+          onClose={() => setSuccessNotification(null)} 
+        />
+      )}
+      
+      <div className="h-full flex flex-col space-y-2">
       {/* Card de Filtros */}
       <div className="card p-6 pt-3 pb-3">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
@@ -479,7 +525,7 @@ const PDI = () => {
           {/* Botão Novo PDI */}
           <div className="flex items-end">
             <button
-              onClick={() => alert('Modal de novo PDI a ser implementado')}
+              onClick={handleCreatePdi}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
@@ -587,6 +633,18 @@ const PDI = () => {
         )}
       </div>
 
+      {/* Modal de PDI (Criar/Editar) */}
+      <PDIModal
+        isOpen={isPDIModalOpen}
+        onClose={handleClosePDIModal}
+        onSuccess={() => {
+          void fetchPdis();
+        }}
+        pdiId={editingPdiId}
+        onError={showErrorNotification}
+        onSuccessMessage={showSuccessNotification}
+      />
+
       {/* Modal de Confirmação de Exclusão */}
       {isDeleteConfirmModalOpen && pdiToDelete && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -648,7 +706,8 @@ const PDI = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Select from 'react-select';
 import { X, Plus, Trash2, Target, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
@@ -8,6 +8,8 @@ interface PDIModalProps {
   onClose: () => void;
   onSuccess: () => void;
   pdiId?: number | null;
+  onError?: (message: string) => void;
+  onSuccessMessage?: (message: string) => void;
 }
 
 interface UserOption {
@@ -33,7 +35,7 @@ interface CompetencyItem {
   isExpanded: boolean;
 }
 
-const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
+const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage }: PDIModalProps) => {
   const [consultants, setConsultants] = useState<UserOption[]>([]);
   const [managers, setManagers] = useState<UserOption[]>([]);
   const [competencies, setCompetencies] = useState<CompetencyOption[]>([]);
@@ -49,6 +51,18 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
   const [competencyItems, setCompetencyItems] = useState<CompetencyItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const showErrorNotification = useCallback((message: string) => {
+    if (onError) {
+      onError(message);
+    }
+  }, [onError]);
+
+  const showSuccessNotification = useCallback((message: string) => {
+    if (onSuccessMessage) {
+      onSuccessMessage(message);
+    }
+  }, [onSuccessMessage]);
 
   const fetchConsultants = async () => {
     try {
@@ -215,7 +229,7 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
       }
     } catch (err) {
       console.error('Erro ao buscar dados do PDI:', err);
-      alert('Erro ao carregar dados do PDI. Tente novamente.');
+      showErrorNotification('Erro ao carregar dados do PDI. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
@@ -285,23 +299,23 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
 
   const validateForm = (): boolean => {
     if (!selectedConsultant) {
-      alert('Por favor, selecione um consultor.');
+      showErrorNotification('Por favor, selecione um consultor.');
       return false;
     }
     if (!selectedManager) {
-      alert('Por favor, selecione um responsável.');
+      showErrorNotification('Por favor, selecione um responsável.');
       return false;
     }
     if (!selectedStatus) {
-      alert('Por favor, selecione um status.');
+      showErrorNotification('Por favor, selecione um status.');
       return false;
     }
     if (!startDate || !endDate) {
-      alert('Por favor, preencha as datas de início e fim.');
+      showErrorNotification('Por favor, preencha as datas de início e fim.');
       return false;
     }
     if (competencyItems.length === 0) {
-      alert('Adicione pelo menos uma competência ao PDI.');
+      showErrorNotification('Adicione pelo menos uma competência ao PDI.');
       return false;
     }
     
@@ -311,29 +325,29 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
       .filter(id => id !== null);
     const uniqueIds = new Set(competencyIds);
     if (competencyIds.length !== uniqueIds.size) {
-      alert('Não é permitido adicionar a mesma competência mais de uma vez no PDI.');
+      showErrorNotification('Não é permitido adicionar a mesma competência mais de uma vez no PDI.');
       return false;
     }
     
     for (const item of competencyItems) {
       if (!item.competency_id) {
-        alert('Por favor, selecione a competência em todos os itens.');
+        showErrorNotification('Por favor, selecione a competência em todos os itens.');
         return false;
       }
       if (!item.goal_description.trim()) {
-        alert('Por favor, preencha o objetivo em todas as competências.');
+        showErrorNotification('Por favor, preencha o objetivo em todas as competências.');
         return false;
       }
       if (!item.actions.trim()) {
-        alert('Por favor, preencha as ações em todas as competências.');
+        showErrorNotification('Por favor, preencha as ações em todas as competências.');
         return false;
       }
       if (!item.due_date) {
-        alert('Por favor, preencha o prazo em todas as competências.');
+        showErrorNotification('Por favor, preencha o prazo em todas as competências.');
         return false;
       }
       if (item.level_target <= item.level_current) {
-        alert('O nível meta deve ser maior que o nível atual.');
+        showErrorNotification('O nível meta deve ser maior que o nível atual.');
         return false;
       }
     }
@@ -393,7 +407,7 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
 
         if (itemsError) throw itemsError;
 
-        alert('PDI atualizado com sucesso!');
+        showSuccessNotification('PDI atualizado com sucesso!');
       } else {
         // Modo de criação - inserir novo PDI
         const { data: pdiData, error: pdiError } = await supabase
@@ -432,14 +446,14 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId }: PDIModalProps) => {
 
         if (itemsError) throw itemsError;
 
-        alert('PDI criado com sucesso!');
+        showSuccessNotification('PDI criado com sucesso!');
       }
       
       handleClose();
       onSuccess();
     } catch (err) {
       console.error('Erro ao salvar PDI:', err);
-      alert(`Erro ao ${pdiId ? 'atualizar' : 'criar'} PDI. Tente novamente.`);
+      showErrorNotification(`Erro ao ${pdiId ? 'atualizar' : 'criar'} PDI. Tente novamente.`);
     } finally {
       setIsSubmitting(false);
     }
