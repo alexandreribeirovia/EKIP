@@ -163,7 +163,7 @@ const PDI = () => {
     }
   };
 
-  // Buscar PDIs
+  // Buscar PDIs - Filtro de período baseado na data de atualização (updated_at)
   const fetchPdis = async () => {
     if (isLoading) return;
     
@@ -172,6 +172,7 @@ const PDI = () => {
     try {
       const dateRange = getDateRange();
       
+      // Filtrar por data de atualização (updated_at), não por período do PDI
       let query = supabase
         .from('pdi')
         .select(`*`)
@@ -222,11 +223,31 @@ const PDI = () => {
         });
       }
 
-      // Fazer o join manual entre pdi e domains
+      // Buscar a quantidade de competências de cada PDI
+      const pdiIds = (data || []).map(pdi => pdi.id);
+      let competencyCounts = new Map();
+      
+      if (pdiIds.length > 0) {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('pdi_items')
+          .select('pdi_id')
+          .in('pdi_id', pdiIds);
+        
+        if (!itemsError && itemsData) {
+          // Contar quantos itens cada PDI tem
+          itemsData.forEach((item) => {
+            const count = competencyCounts.get(item.pdi_id) || 0;
+            competencyCounts.set(item.pdi_id, count + 1);
+          });
+        }
+      }
+
+      // Fazer o join manual entre pdi e domains, e adicionar a quantidade de competências
       const pdisWithStatus = (data || []).map((pdi) => {
         return {
           ...pdi,
           status: pdi.status_id ? statusMap.get(pdi.status_id) : null,
+          competency_count: competencyCounts.get(pdi.id) || 0,
         };
       });
 
@@ -339,19 +360,19 @@ const PDI = () => {
       minWidth: 180,
     },
     {
-      headerName: 'Período',
-      field: 'start_date',
-      flex: 1.5,
-      minWidth: 180,
+      headerName: 'Competências',
+      field: 'competency_count',
+      flex: 0.8,
+      minWidth: 120,
       cellRenderer: (params: any) => {
-        if (!params.value || !params.data.end_date) return '-';
-        try {
-          const start = new Date(params.value + 'T12:00:00');
-          const end = new Date(params.data.end_date + 'T12:00:00');
-          return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
-        } catch (error) {
-          return `${params.value} - ${params.data.end_date}`;
-        }
+        const count = params.value || 0;
+        return (
+          <div className="flex items-center justify-center h-full">
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+              {count} {count === 1 ? 'competência' : 'competências'}
+            </span>
+          </div>
+        );
       },
     },
     {

@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabaseClient';
 import Select from 'react-select';
 import { X, Plus, Trash2, Target, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 
+// Log para verificar se o módulo está sendo carregado
+console.log('🔥 PDIModal.tsx - MÓDULO CARREGADO');
+
 interface PDIModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -10,6 +13,10 @@ interface PDIModalProps {
   pdiId?: number | null;
   onError?: (message: string) => void;
   onSuccessMessage?: (message: string) => void;
+  evaluationId?: number | null;
+  feedbackId?: number | null;
+  prefilledConsultant?: { value: string; label: string } | null;
+  prefilledManager?: { value: string; label: string } | null;
 }
 
 interface UserOption {
@@ -35,7 +42,18 @@ interface CompetencyItem {
   isExpanded: boolean;
 }
 
-const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage }: PDIModalProps) => {
+const PDIModal = ({ 
+  isOpen, 
+  onClose, 
+  onSuccess, 
+  pdiId, 
+  onError, 
+  onSuccessMessage,
+  evaluationId,
+  feedbackId,
+  prefilledConsultant,
+  prefilledManager
+}: PDIModalProps) => {
   const [consultants, setConsultants] = useState<UserOption[]>([]);
   const [managers, setManagers] = useState<UserOption[]>([]);
   const [competencies, setCompetencies] = useState<CompetencyOption[]>([]);
@@ -52,6 +70,18 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Log inicial - executa sempre que o componente é renderizado
+  useEffect(() => {
+    console.log('📥 PDIModal - Componente renderizado/atualizado com props:', {
+      isOpen,
+      pdiId,
+      evaluationId,
+      feedbackId,
+      prefilledConsultant,
+      prefilledManager
+    });
+  });
+
   const showErrorNotification = useCallback((message: string) => {
     if (onError) {
       onError(message);
@@ -65,6 +95,7 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
   }, [onSuccessMessage]);
 
   const fetchConsultants = async () => {
+    console.log('🔍 Buscando consultores...');
     try {
       const { data, error } = await supabase
         .from('users')
@@ -79,13 +110,15 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
         label: user.name,
       }));
 
+      console.log('✅ Consultores carregados:', options.length, 'consultores');
       setConsultants(options);
     } catch (err) {
-      console.error('Erro ao buscar consultores:', err);
+      console.error('❌ Erro ao buscar consultores:', err);
     }
   };
 
   const fetchManagers = async () => {
+    console.log('🔍 Buscando gestores...');
     try {
       const { data, error } = await supabase
         .from('users')
@@ -105,9 +138,10 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
         label: user.name,
       }));
 
+      console.log('✅ Gestores carregados:', options.length, 'gestores');
       setManagers(options);
     } catch (err) {
-      console.error('Erro ao buscar gestores:', err);
+      console.error('❌ Erro ao buscar gestores:', err);
     }
   };
 
@@ -235,20 +269,140 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
     }
   };
 
+  // Função para buscar PDI por evaluation_id
+  const fetchPDIByEvaluationId = async (evalId: number) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pdi')
+        .select('id')
+        .eq('evaluation_id', evalId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        // Se encontrou um PDI vinculado, carregar seus dados do banco
+        await fetchPDIData(data.id);
+      } else {
+        // Se não encontrou PDI vinculado - campos já foram pré-preenchidos
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar PDI por evaluation_id:', err);
+      setIsLoading(false);
+      // Campos já foram pré-preenchidos pelo useEffect
+    }
+  };
+
+  // Função para buscar PDI por feedback_id
+  const fetchPDIByFeedbackId = async (fbId: number) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pdi')
+        .select('id')
+        .eq('feedback_id', fbId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        // Se encontrou um PDI vinculado, carregar seus dados do banco
+        await fetchPDIData(data.id);
+      } else {
+        // Se não encontrou PDI vinculado - campos já foram pré-preenchidos
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar PDI por feedback_id:', err);
+      setIsLoading(false);
+      // Campos já foram pré-preenchidos pelo useEffect
+    }
+  };
+
   useEffect(() => {
+    console.log('🔄 useEffect Principal executado:', {
+      isOpen,
+      evaluationId,
+      feedbackId,
+      prefilledConsultant,
+      prefilledManager,
+      pdiId
+    });
+
     if (isOpen) {
+      console.log('✅ Modal aberto - carregando listas...');
       void fetchConsultants();
       void fetchManagers();
       void fetchCompetencies();
       void fetchStatus();
+    } else {
+      console.log('❌ Modal fechado - limpando campos...');
+      // Limpar campos quando fecha
+      setSelectedConsultant(null);
+      setSelectedManager(null);
+      setSelectedStatus(null);
+      setStartDate('');
+      setEndDate('');
+      setComments('');
+      setCompetencyItems([]);
     }
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, evaluationId, feedbackId, prefilledConsultant, prefilledManager, pdiId]);
+
+  // Effect separado para pré-preencher quando vem de avaliação ou feedback
+  // IMPORTANTE: Só preenche DEPOIS que as listas foram carregadas
+  useEffect(() => {
+    console.log('🎯 useEffect Preenchimento executado:', {
+      isOpen,
+      evaluationId,
+      feedbackId,
+      prefilledConsultant,
+      prefilledManager,
+      pdiId,
+      consultantsLength: consultants.length,
+      managersLength: managers.length
+    });
+
+    if (isOpen && (evaluationId || feedbackId) && prefilledConsultant && prefilledManager && !pdiId) {
+      console.log('✅ Condições satisfeitas para preenchimento automático');
+      
+      // Verificar se as listas foram carregadas
+      if (consultants.length > 0 && managers.length > 0) {
+        console.log('🔄 Preenchendo campos automaticamente:', {
+          consultor: prefilledConsultant,
+          responsavel: prefilledManager,
+          origem: feedbackId ? 'feedback' : 'avaliacao'
+        });
+        setSelectedConsultant(prefilledConsultant);
+        setSelectedManager(prefilledManager);
+      } else {
+        console.log('⏳ Aguardando listas serem carregadas...', {
+          consultantsCarregados: consultants.length > 0,
+          managersCarregados: managers.length > 0
+        });
+      }
+    } else {
+      console.log('❌ Condições NÃO satisfeitas:', {
+        isOpen,
+        temEvaluationOuFeedback: !!(evaluationId || feedbackId),
+        temPrefilledConsultant: !!prefilledConsultant,
+        temPrefilledManager: !!prefilledManager,
+        naoPdiId: !pdiId
+      });
+    }
+  }, [isOpen, evaluationId, feedbackId, prefilledConsultant, prefilledManager, pdiId, consultants, managers]);
 
   useEffect(() => {
     if (isOpen && pdiId && competencies.length > 0) {
       void fetchPDIData(pdiId);
+    } else if (isOpen && evaluationId && competencies.length > 0 && !pdiId) {
+      void fetchPDIByEvaluationId(evaluationId);
+    } else if (isOpen && feedbackId && competencies.length > 0 && !pdiId) {
+      void fetchPDIByFeedbackId(feedbackId);
     }
-  }, [isOpen, pdiId, competencies]);
+  }, [isOpen, pdiId, evaluationId, feedbackId, competencies]);
 
   const handleAddCompetency = () => {
     const newItem: CompetencyItem = {
@@ -310,10 +464,7 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
       showErrorNotification('Por favor, selecione um status.');
       return false;
     }
-    if (!startDate || !endDate) {
-      showErrorNotification('Por favor, preencha as datas de início e fim.');
-      return false;
-    }
+  
     if (competencyItems.length === 0) {
       showErrorNotification('Adicione pelo menos uma competência ao PDI.');
       return false;
@@ -373,9 +524,11 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
             status_id: selectedStatus!.value,
             status: selectedStatus!.label,
             name: `PDI - ${selectedConsultant!.label}`,
-            start_date: startDate,
-            end_date: endDate,
+            start_date: startDate || null,
+            end_date: endDate || null,
             comments: comments || null,
+            evaluation_id: evaluationId || null,
+            feedback_id: feedbackId || null,
           })
           .eq('id', pdiId);
 
@@ -420,9 +573,11 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
             status_id: selectedStatus!.value,
             status: selectedStatus!.label,
             name: `PDI - ${selectedConsultant!.label}`,
-            start_date: startDate,
-            end_date: endDate,
+            start_date: startDate || null,
+            end_date: endDate || null,
             comments: comments || null,
+            evaluation_id: evaluationId || null,
+            feedback_id: feedbackId || null,
           })
           .select()
           .single();
@@ -470,7 +625,14 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
     onClose();
   };
 
-  if (!isOpen) return null;
+  console.log('🚪 PDIModal - Verificando isOpen:', isOpen);
+  
+  if (!isOpen) {
+    console.log('❌ PDIModal - isOpen é false, não renderizando');
+    return null;
+  }
+
+  console.log('✅ PDIModal - isOpen é true, renderizando modal');
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -495,13 +657,8 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
             </div>
           </div>
         ) : (
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-              <span className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full flex items-center justify-center text-sm font-bold">1</span>
-              Informações Básicas
-            </h3>
-            
+        <div className="flex-1 overflow-y-auto p-6 pt-3">
+          <div className="mb-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -525,32 +682,18 @@ const PDIModal = ({ isOpen, onClose, onSuccess, pdiId, onError, onSuccessMessage
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Data Início <span className="text-red-500">*</span>
-                </label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Data Fim <span className="text-red-500">*</span>
-                </label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-              </div>
-            </div>
+            
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comentários / Observações</label>
-              <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" placeholder="Adicione observações gerais sobre este PDI..." />
+              <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" placeholder="Adicione observações gerais sobre este PDI..." />
             </div>
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <span className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full flex items-center justify-center text-sm font-bold">2</span>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+               
                 Competências a Desenvolver
               </h3>
               <button onClick={handleAddCompetency} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors">

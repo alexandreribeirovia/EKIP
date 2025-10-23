@@ -15,7 +15,8 @@ import {
   ChevronDown,
   MessageSquare,
   FileCheck,
-  LogOut
+  LogOut,
+  Target
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -55,7 +56,7 @@ const Layout = ({ children }: LayoutProps) => {
       submenu: [
         { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare },
         { name: 'Avaliação', href: '/employee-evaluations', icon: FileCheck },
-        { name: 'PDI', href: '/pdi', icon: FileCheck }
+        { name: 'PDI', href: '/pdi', icon: Target }
       ]
     },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },

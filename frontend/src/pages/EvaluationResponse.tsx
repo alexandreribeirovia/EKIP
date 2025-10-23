@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
-import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target } from 'lucide-react';
 import { EvaluationInfo, CategoryData, EvaluationQuestionData, QuestionResponse } from '../types';
+import PDIModal from '../components/PDIModal';
 
 const NotificationToast = ({ type, message, onClose }: { 
   type: 'success' | 'error', 
@@ -158,6 +159,9 @@ const EvaluationResponse = () => {
 
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<number>>(new Set());
+  
+  // Estados para PDI Modal
+  const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
 
   // Calcular progresso de preenchimento (somente perguntas obrigatórias)
   const calculateProgress = () => {
@@ -1288,6 +1292,15 @@ const EvaluationResponse = () => {
             Voltar
           </button>
           
+          {/* Botão Adicionar PDI */}
+          <button
+            onClick={() => setIsPDIModalOpen(true)}
+            className="px-6 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+          >
+            <Target className="w-4 h-4" />
+            Adicionar PDI
+          </button>
+          
           {/* Botão Encerrar Avaliação - só aparece se estiver concluída, salva e não fechada */}
           {isAllRequiredAnsweredAndSaved() && !evaluation?.is_closed && (
             <button
@@ -1314,6 +1327,20 @@ const EvaluationResponse = () => {
           )}
         </div>
       </div>
+
+      {/* Modal de PDI */}
+      <PDIModal
+        isOpen={isPDIModalOpen}
+        onClose={() => setIsPDIModalOpen(false)}
+        onSuccess={() => {
+          setIsPDIModalOpen(false);
+        }}
+        evaluationId={evaluation?.id || null}
+        prefilledConsultant={evaluation ? { value: evaluation.user_id, label: evaluation.user_name } : null}
+        prefilledManager={evaluation ? { value: evaluation.owner_id, label: evaluation.owner_name } : null}
+        onError={(message) => setError(message)}
+        onSuccessMessage={(message) => setSuccessMessage(message)}
+      />
     </div>
   );
 };

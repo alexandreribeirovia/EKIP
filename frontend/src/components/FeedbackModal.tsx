@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, ThumbsUp, MessageCircle, Trophy, TrendingUp } from 'lucide-react';
+import { X, ThumbsUp, MessageCircle, Trophy, TrendingUp, Target } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { useAuthStore } from '../stores/authStore';
+import PDIModal from './PDIModal';
 
 interface FeedbackData {
   id: number;
@@ -57,6 +58,9 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
   const [privateComment, setPrivateComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  
+  // Estados para PDI Modal
+  const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
 
   // Carrega usuários e preenche o formulário
   useEffect(() => {
@@ -208,6 +212,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
   if (!isOpen) return null;
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full">
         {/* Header */}
@@ -317,7 +322,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
           </div> */}
 
           {/* Footer Buttons */}
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-between items-center gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
@@ -326,24 +331,85 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
             >
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                feedbackToEdit ? 'Salvar Alterações' : 'Salvar Feedback'
+            
+            <div className="flex gap-3">
+              {/* Botão Adicionar PDI - só aparece no modo de edição */}
+              {feedbackToEdit && (
+                <button
+                  type="button"
+                  onClick={() => setIsPDIModalOpen(true)}
+                  className="px-6 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Adicionar PDI
+                </button>
               )}
-            </button>
+              
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  feedbackToEdit ? 'Salvar Alterações' : 'Salvar Feedback'
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
+    
+    {/* Modal de PDI - FORA do modal de feedback para evitar problemas de z-index */}
+    {(() => {
+      console.log('🔍 Verificando renderização do PDIModal:', {
+        feedbackToEdit: !!feedbackToEdit,
+        isPDIModalOpen,
+        feedbackId: feedbackToEdit?.id
+      });
+      
+      if (!feedbackToEdit || !isPDIModalOpen) {
+        console.log('❌ PDIModal NÃO será renderizado');
+        return null;
+      }
+      
+      const consultant = { value: feedbackToEdit.feedback_user_id, label: feedbackToEdit.feedback_user_name };
+      const manager = { value: feedbackToEdit.owner_user_id, label: feedbackToEdit.owner_user_name };
+      
+      console.log('✅ Renderizando PDIModal com:', {
+        feedbackId: feedbackToEdit.id,
+        consultant,
+        manager,
+        isPDIModalOpen
+      });
+      
+      return (
+        <PDIModal
+          isOpen={isPDIModalOpen}
+          onClose={() => {
+            console.log('🔴 Fechando PDIModal');
+            setIsPDIModalOpen(false);
+          }}
+          onSuccess={() => {
+            console.log('🎉 PDI criado com sucesso');
+            setIsPDIModalOpen(false);
+          }}
+          feedbackId={feedbackToEdit.id}
+          prefilledConsultant={consultant}
+          prefilledManager={manager}
+          onError={(message) => {
+            console.log('❌ Erro no PDI:', message);
+            setError(message);
+          }}
+        />
+      );
+    })()}
+    </>
   );
 };
 
