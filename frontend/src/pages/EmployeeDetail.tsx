@@ -707,11 +707,9 @@ const EmployeeDetail = () => {
             const values = subcategoryMap.get(subcategory)!;
             const avgScore = values.totalWeight > 0 ? values.totalScore / values.totalWeight : 0;
             
-            // Formata a data para exibição
-            const date = new Date(evalMeta.updated_at);
-            const formattedDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            
-            dataPoint[`Avaliação ${index + 1} (${formattedDate})`] = Number(avgScore.toFixed(2));
+            // Usa uma chave simples para o dataKey para evitar problemas com o Recharts
+            const dataKey = `evaluation_${index + 1}`;
+            dataPoint[dataKey] = Number(avgScore.toFixed(2));
           }
         });
 
@@ -2124,7 +2122,8 @@ const EmployeeDetail = () => {
                               {evaluationMetadata.map((evalMeta, index) => {
                                 const date = new Date(evalMeta.updated_at);
                                 const formattedDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                const dataKey = `Avaliação ${index + 1} (${formattedDate})`;
+                                const displayName = `Avaliação ${index + 1} (${formattedDate})`;
+                                const dataKey = `evaluation_${index + 1}`;
                                 
                                 // Cores diferentes para cada avaliação
                                 const colors = [
@@ -2143,7 +2142,7 @@ const EmployeeDetail = () => {
                                 return (
                                   <Radar
                                     key={evalMeta.id}
-                                    name={dataKey}
+                                    name={displayName}
                                     dataKey={dataKey}
                                     stroke={color.stroke}
                                     fill={color.fill}
@@ -2153,8 +2152,6 @@ const EmployeeDetail = () => {
                                   />
                                 );
                               })}
-                              
-                              {/* Linha da Média do Time - destacada com estilo diferente */}
                               <Radar
                                 name="Média do Time"
                                 dataKey="Média do Time"

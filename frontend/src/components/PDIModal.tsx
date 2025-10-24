@@ -69,6 +69,7 @@ const PDIModal = ({
   const [competencyItems, setCompetencyItems] = useState<CompetencyItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [internalPdiId, setInternalPdiId] = useState<number | null>(null);
 
   // Log inicial - executa sempre que o componente é renderizado
   useEffect(() => {
@@ -200,6 +201,7 @@ const PDIModal = ({
   };
 
   const fetchPDIData = async (id: number) => {
+    setInternalPdiId(id);
     setIsLoading(true);
     try {
       // Buscar dados do PDI
@@ -286,10 +288,12 @@ const PDIModal = ({
         await fetchPDIData(data.id);
       } else {
         // Se não encontrou PDI vinculado - campos já foram pré-preenchidos
+        setInternalPdiId(null);
         setIsLoading(false);
       }
     } catch (err) {
       console.error('Erro ao buscar PDI por evaluation_id:', err);
+      setInternalPdiId(null);
       setIsLoading(false);
       // Campos já foram pré-preenchidos pelo useEffect
     }
@@ -312,10 +316,12 @@ const PDIModal = ({
         await fetchPDIData(data.id);
       } else {
         // Se não encontrou PDI vinculado - campos já foram pré-preenchidos
+        setInternalPdiId(null);
         setIsLoading(false);
       }
     } catch (err) {
       console.error('Erro ao buscar PDI por feedback_id:', err);
+      setInternalPdiId(null);
       setIsLoading(false);
       // Campos já foram pré-preenchidos pelo useEffect
     }
@@ -347,9 +353,11 @@ const PDIModal = ({
       setEndDate('');
       setComments('');
       setCompetencyItems([]);
+      setCompetencies([]);
+      setInternalPdiId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, evaluationId, feedbackId, prefilledConsultant, prefilledManager, pdiId]);
+  }, [isOpen]);
 
   // Effect separado para pré-preencher quando vem de avaliação ou feedback
   // IMPORTANTE: Só preenche DEPOIS que as listas foram carregadas
@@ -512,7 +520,7 @@ const PDIModal = ({
     setIsSubmitting(true);
 
     try {
-      if (pdiId) {
+      if (internalPdiId) {
         // Modo de edição - atualizar PDI existente
         const { error: pdiError } = await supabase
           .from('pdi')
@@ -530,7 +538,7 @@ const PDIModal = ({
             evaluation_id: evaluationId || null,
             feedback_id: feedbackId || null,
           })
-          .eq('id', pdiId);
+          .eq('id', internalPdiId);
 
         if (pdiError) throw pdiError;
 
@@ -538,13 +546,13 @@ const PDIModal = ({
         const { error: deleteError } = await supabase
           .from('pdi_items')
           .delete()
-          .eq('pdi_id', pdiId);
+          .eq('pdi_id', internalPdiId);
 
         if (deleteError) throw deleteError;
 
         // Inserir os novos itens
         const itemsToInsert = competencyItems.map((item) => ({
-          pdi_id: pdiId,
+          pdi_id: internalPdiId,
           competency_id: item.competency_id,
           level_current: item.level_current,
           level_target: item.level_target,
@@ -608,7 +616,7 @@ const PDIModal = ({
       onSuccess();
     } catch (err) {
       console.error('Erro ao salvar PDI:', err);
-      showErrorNotification(`Erro ao ${pdiId ? 'atualizar' : 'criar'} PDI. Tente novamente.`);
+      showErrorNotification(`Erro ao ${internalPdiId ? 'atualizar' : 'criar'} PDI. Tente novamente.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -641,7 +649,7 @@ const PDIModal = ({
           <div className="flex items-center gap-3">
             <Target className="w-6 h-6" />
             <h2 className="text-xl font-bold">
-              {pdiId ? 'Editar PDI' : 'Novo PDI'} - Plano de Desenvolvimento Individual
+              {internalPdiId ? 'Editar PDI' : 'Novo PDI'} - Plano de Desenvolvimento Individual
             </h2>
           </div>
           <button onClick={handleClose} className="text-white hover:bg-white/20 rounded-lg p-1 transition-colors" disabled={isLoading}>
@@ -820,12 +828,12 @@ const PDIModal = ({
             {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                {pdiId ? 'Atualizando...' : 'Criando...'}
+                {internalPdiId ? 'Atualizando...' : 'Criando...'}
               </>
             ) : (
               <>
                 <Target className="w-4 h-4" />
-                {pdiId ? 'Atualizar PDI' : 'Criar PDI'}
+                {internalPdiId ? 'Atualizar PDI' : 'Criar PDI'}
               </>
             )}
           </button>

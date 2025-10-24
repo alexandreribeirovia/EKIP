@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
-import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target, Maximize } from 'lucide-react';
 import { EvaluationInfo, CategoryData, EvaluationQuestionData, QuestionResponse } from '../types';
 import PDIModal from '../components/PDIModal';
 
@@ -162,6 +162,11 @@ const EvaluationResponse = () => {
   
   // Estados para PDI Modal
   const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
+  const [hasLinkedPDI, setHasLinkedPDI] = useState(false);
+
+  // Modo Apresentação
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
+  const presentationRef = useRef<HTMLDivElement>(null);
 
   // Calcular progresso de preenchimento (somente perguntas obrigatórias)
   const calculateProgress = () => {
@@ -289,6 +294,19 @@ const EvaluationResponse = () => {
         if (!projectsError && projectsData) {
           setProjectNames(projectsData.map((p: any) => p.name));
         }
+      }
+
+      // Verificar PDI vinculado
+      const { data: pdiData, error: pdiError } = await supabase
+        .from('pdi')
+        .select('id')
+        .eq('evaluation_id', parseInt(id))
+        .limit(1);
+
+      if (pdiError) {
+        console.error('Erro ao verificar PDI vinculado:', pdiError);
+      } else {
+        setHasLinkedPDI(pdiData && pdiData.length > 0);
       }
     } catch (err) {
       console.error('Erro ao buscar avaliação:', err);
@@ -727,6 +745,29 @@ const EvaluationResponse = () => {
     }
   };
 
+  // Efeito para modo apresentação (tela cheia)
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsPresentationMode(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+  }, []);
+
+  const togglePresentationMode = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (presentationRef.current) {
+          await presentationRef.current.requestFullscreen();
+        }
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error('Erro ao alternar modo apresentação:', error);
+    }
+  };
+
   // Prevenir navegação com dados não salvos
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -927,7 +968,7 @@ const EvaluationResponse = () => {
   }
 
   return (
-    <div className="h-full flex flex-col space-y-2">
+    <div ref={presentationRef} className="h-full flex flex-col space-y-2 bg-white dark:bg-gray-900 p-2">
       {/* Notificação de Sucesso */}
       {successMessage && (
         <NotificationToast
@@ -995,35 +1036,43 @@ const EvaluationResponse = () => {
       )}
 
       {/* Botão Voltar */}
-      <button
-        onClick={() => {
-          if (hasUnsavedChanges && hasResponseChanges()) {
-            if (
-              window.confirm(
-                'Você tem alterações não salvas. Se sair da tela sem salvar, perderá o que foi preenchido. Deseja continuar?'
-              )
-            ) {
+      {!isPresentationMode && (
+        <button
+          onClick={() => {
+            if (hasUnsavedChanges && hasResponseChanges()) {
+              if (
+                window.confirm(
+                  'Você tem alterações não salvas. Se sair da tela sem salvar, perderá o que foi preenchido. Deseja continuar?'
+                )
+              ) {
+                navigate('/employee-evaluations');
+              }
+            } else {
               navigate('/employee-evaluations');
             }
-          } else {
-            navigate('/employee-evaluations');
-          }
-        }}
-        className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Voltar
-      </button>
+          }}
+          className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar
+        </button>
+      )}
 
       {/* Card de Informações Básicas */}
       <div className="card p-6 pt-2 pb-2">
         {/* Linha 1: Avaliado */}
-        <div className="mb-3">
-          <div>
-            <h2 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">
-              {evaluation.user_name}
-            </h2>
-          </div>
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+            {evaluation.user_name}
+          </h2>
+          <button
+            onClick={togglePresentationMode}
+            className="flex items-center gap-2 px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            title={isPresentationMode ? "Sair do modo apresentação" : "Modo Apresentação"}
+          >
+            <Maximize className="w-4 h-4" />
+            {!isPresentationMode}
+          </button>
         </div>
 
         {/* Linha 2: Demais informações */}
@@ -1111,6 +1160,14 @@ const EvaluationResponse = () => {
         <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-5 h-5" />
           <span>Esta avaliação foi encerrada e está disponível apenas para visualização. Não é possível fazer alterações.</span>
+        </div>
+      )}
+
+      {/* Mensagem de PDI Vinculado */}
+      {hasLinkedPDI && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-lg flex items-center gap-2">
+          <Target className="w-5 h-5" />
+          <span>Existe PDI vinculado a esta avaliação.</span>
         </div>
       )}
 
@@ -1292,13 +1349,13 @@ const EvaluationResponse = () => {
             Voltar
           </button>
           
-          {/* Botão Adicionar PDI */}
+          {/* Botão Adicionar/Exibir PDI */}
           <button
             onClick={() => setIsPDIModalOpen(true)}
             className="px-6 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
           >
             <Target className="w-4 h-4" />
-            Adicionar PDI
+            {hasLinkedPDI ? 'Exibir PDI' : 'Adicionar PDI'}
           </button>
           
           {/* Botão Encerrar Avaliação - só aparece se estiver concluída, salva e não fechada */}

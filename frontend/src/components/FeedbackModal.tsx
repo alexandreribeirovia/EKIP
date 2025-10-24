@@ -61,6 +61,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
   
   // Estados para PDI Modal
   const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
+  const [hasLinkedPDI, setHasLinkedPDI] = useState(false);
 
   // Carrega usuários e preenche o formulário
   useEffect(() => {
@@ -68,6 +69,22 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
       void fetchUsers();
       
       if (feedbackToEdit) {
+        const checkPDI = async () => {
+          const { data, error } = await supabase
+            .from('pdi')
+            .select('id')
+            .eq('feedback_id', feedbackToEdit.id)
+            .limit(1);
+
+          if (error) {
+            console.error('Erro ao verificar PDI vinculado:', error);
+            setHasLinkedPDI(false);
+          } else {
+            setHasLinkedPDI(data && data.length > 0);
+          }
+        };
+        void checkPDI();
+        
         // Modo de edição
         setSelectedFeedbackUser({ value: feedbackToEdit.feedback_user_id, label: feedbackToEdit.feedback_user_name });
         setFeedbackDate(feedbackToEdit.feedback_date.split('T')[0]);
@@ -86,6 +103,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
             label: preSelectedUser.name,
           });
         }
+        setHasLinkedPDI(false);
       }
     } else {
       // Reset form when closing
@@ -127,6 +145,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
     setPublicComment('');
     setPrivateComment('');
     setError('');
+    setHasLinkedPDI(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -306,6 +325,14 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent resize-none"
             />
           </div>
+
+          {/* Alerta de PDI vinculado */}
+          {feedbackToEdit && hasLinkedPDI && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-lg text-sm flex items-center gap-3">
+              <Target className="w-5 h-5" />
+              <span>Existe PDI vinculado a este feedback.</span>
+            </div>
+          )}
 
           {/* Observações Internas
           <div>
