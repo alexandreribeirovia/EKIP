@@ -22,9 +22,10 @@ interface EmployeeEvaluationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  preSelectedUser?: { user_id: string; name: string; } | null;
 }
 
-const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluationModalProps) => {
+const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }: EmployeeEvaluationModalProps) => {
   const [evaluationModels, setEvaluationModels] = useState<EvaluationModelOption[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
   const [managers, setManagers] = useState<ConsultantOption[]>([]);
@@ -177,8 +178,13 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluat
       void fetchConsultants();
       void fetchManagers();
       void fetchProjects();
+      
+      // Pre-select user if provided
+      if (preSelectedUser) {
+        setSelectedConsultants([{ value: preSelectedUser.user_id, label: preSelectedUser.name }]);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, preSelectedUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,7 +266,12 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluat
 
       // Limpa o formulário
       setSelectedModel(null);
-      setSelectedConsultants([]);
+      // Reset to preselected user if provided, otherwise clear all
+      if (preSelectedUser) {
+        setSelectedConsultants([{ value: preSelectedUser.user_id, label: preSelectedUser.name }]);
+      } else {
+        setSelectedConsultants([]);
+      }
       setSelectedManager(null);
       setSelectedProjects([]);
       setPeriodStart('');
@@ -280,7 +291,10 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess }: EmployeeEvaluat
   const handleClose = () => {
     if (!isSubmitting) {
       setSelectedModel(null);
-      setSelectedConsultants([]);
+      // Only clear consultants if no preselection
+      if (!preSelectedUser) {
+        setSelectedConsultants([]);
+      }
       setSelectedManager(null);
       setSelectedProjects([]);
       setPeriodStart('');

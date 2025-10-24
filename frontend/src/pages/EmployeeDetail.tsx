@@ -2,12 +2,14 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2 } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata } from '../types'
 import { supabase } from '../lib/supabaseClient'
 import FeedbackModal from '../components/FeedbackModal'
+import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal'
+import PDIModal from '../components/PDIModal'
 import '../styles/main.css'
 
 const EmployeeDetail = () => {
@@ -17,7 +19,7 @@ const EmployeeDetail = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'acompanhamento'>('tarefas')
+  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento'>('tarefas')
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -30,11 +32,28 @@ const EmployeeDetail = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([])
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false)
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
+  const [feedbackToEdit, setFeedbackToEdit] = useState<any | null>(null)
+  const [feedbackToDelete, setFeedbackToDelete] = useState<any | null>(null)
+  const [isDeleteFeedbackModalOpen, setIsDeleteFeedbackModalOpen] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false);
   
   const [evaluationData, setEvaluationData] = useState<SubcategoryEvaluationData[]>([])
   const [evaluationMetadata, setEvaluationMetadata] = useState<EvaluationMetadata[]>([])
   const [isLoadingEvaluations, setIsLoadingEvaluations] = useState(false)
+  
+  const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [isLoadingEvaluationsList, setIsLoadingEvaluationsList] = useState(false);
+  const [isEvaluationModalOpen, setIsEvaluationModalOpen] = useState(false);
+
+  const [pdis, setPDIs] = useState<any[]>([]);
+  const [isLoadingPDIs, setIsLoadingPDIs] = useState(false);
+  const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
+  const [editingPdiId, setEditingPdiId] = useState<number | null>(null);
+  const [pdiToDelete, setPdiToDelete] = useState<any | null>(null);
+  const [isDeletePdiModalOpen, setIsDeletePdiModalOpen] = useState(false);
+  
+  const [evaluationToDelete, setEvaluationToDelete] = useState<any | null>(null);
+  const [isDeleteEvaluationModalOpen, setIsDeleteEvaluationModalOpen] = useState(false);
   
   const [userSkills, setUserSkills] = useState<UserSkill[]>([])
   const [isLoadingSkills, setIsLoadingSkills] = useState(true)
@@ -734,6 +753,124 @@ const EmployeeDetail = () => {
     }
   };
 
+  // Função para carregar avaliações do usuário
+  const loadEvaluations = async (userId: string) => {
+    setIsLoadingEvaluationsList(true);
+    try {
+        const { data, error } = await supabase
+            .from('evaluations')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Erro ao carregar avaliações:', error);
+            setEvaluations([]);
+            return;
+        }
+
+        const statusIds = (data || []).map(e => e.status_id).filter(Boolean);
+        let statusMap = new Map();
+        if (statusIds.length > 0) {
+            const { data: statuses, error: statusError } = await supabase
+                .from('domains')
+                .select('id, value')
+                .in('id', statusIds)
+                .eq('type', 'evaluation_status');
+            if (!statusError) {
+                statusMap = new Map(statuses.map(s => [s.id, s.value]));
+            }
+        }
+
+        const formattedData = (data || []).map(e => ({
+            ...e,
+            status_name: statusMap.get(e.status_id) || 'N/A'
+        }));
+        setEvaluations(formattedData);
+    } catch (error) {
+        console.error('Erro ao carregar avaliações:', error);
+        setEvaluations([]);
+    } finally {
+        setIsLoadingEvaluationsList(false);
+    }
+  };
+
+  // Função para carregar PDIs do usuário
+  const loadPDIs = async (userId: string) => {
+      setIsLoadingPDIs(true);
+      try {
+          const { data: pdiData, error: pdiError } = await supabase
+              .from('pdi')
+              .select('*')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: false });
+
+          if (pdiError) {
+              console.error('Erro ao carregar PDIs:', pdiError);
+              setPDIs([]);
+              setIsLoadingPDIs(false);
+              return;
+          }
+
+          if (!pdiData || pdiData.length === 0) {
+              setPDIs([]);
+              setIsLoadingPDIs(false);
+              return;
+          }
+
+          // Buscar todos os status da tabela domains
+          const { data: statusData, error: statusError } = await supabase
+              .from('domains')
+              .select('id, value')
+              .eq('type', 'pdi_status');
+
+          if (statusError) {
+              console.error('Erro ao buscar status:', statusError);
+          }
+
+          // Criar um mapa de status
+          const statusMap = new Map();
+          if (statusData) {
+              statusData.forEach((status) => {
+                  statusMap.set(status.id, status);
+              });
+          }
+
+          // Buscar a quantidade de competências de cada PDI
+          const pdiIds = pdiData.map(pdi => pdi.id);
+          let competencyCounts = new Map();
+          
+          if (pdiIds.length > 0) {
+              const { data: itemsData, error: itemsError } = await supabase
+                  .from('pdi_items')
+                  .select('pdi_id')
+                  .in('pdi_id', pdiIds);
+              
+              if (!itemsError && itemsData) {
+                  // Contar quantos itens cada PDI tem
+                  itemsData.forEach((item) => {
+                      const count = competencyCounts.get(item.pdi_id) || 0;
+                      competencyCounts.set(item.pdi_id, count + 1);
+                  });
+              }
+          }
+
+          // Fazer o join manual entre pdi e domains, e adicionar a quantidade de competências
+          const formattedData = pdiData.map(p => ({
+              ...p,
+              status: p.status_id ? statusMap.get(p.status_id) : null,
+              competency_count: competencyCounts.get(p.id) || 0
+          }));
+          
+          setPDIs(formattedData);
+      } catch (error) {
+          console.error('Erro ao carregar PDIs:', error);
+          setPDIs([]);
+      } finally {
+          setIsLoadingPDIs(false);
+      }
+  };
+
   // Função para carregar habilidades do usuário
   const loadUserSkills = async (userId: string) => {
     setIsLoadingSkills(true);
@@ -1009,6 +1146,165 @@ const EmployeeDetail = () => {
     return hierarchy;
   };
 
+  // Funções para gerenciar Feedbacks
+  const handleEditFeedback = (feedbackId: number) => {
+    const feedback = feedbacks.find(f => f.id === feedbackId);
+    if (feedback) {
+      setFeedbackToEdit(feedback);
+      setIsFeedbackModalOpen(true);
+    }
+  };
+
+  const handleDeleteFeedback = (feedbackId: number) => {
+    const feedback = feedbacks.find(f => f.id === feedbackId);
+    if (feedback) {
+      setFeedbackToDelete(feedback);
+      setIsDeleteFeedbackModalOpen(true);
+    }
+  };
+
+  const handleConfirmDeleteFeedback = async () => {
+    if (!feedbackToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('feedbacks')
+        .delete()
+        .eq('id', feedbackToDelete.id);
+
+      if (error) {
+        console.error('Erro ao deletar feedback:', error);
+        alert('Erro ao deletar feedback. Tente novamente.');
+        return;
+      }
+
+      // Remove o feedback da lista local
+      setFeedbacks(prev => prev.filter(f => f.id !== feedbackToDelete.id));
+      
+      // Fecha modal e limpa estado
+      setIsDeleteFeedbackModalOpen(false);
+      setFeedbackToDelete(null);
+    } catch (err) {
+      console.error('Erro ao deletar feedback:', err);
+      alert('Erro ao deletar feedback. Tente novamente.');
+    }
+  };
+
+  // Funções para gerenciar PDIs
+  const handleEditPdi = (pdiId: number) => {
+    setEditingPdiId(pdiId);
+    setIsPDIModalOpen(true);
+  };
+
+  const handleDeletePdi = (pdiId: number) => {
+    const pdi = pdis.find(p => p.id === pdiId);
+    if (pdi) {
+      setPdiToDelete(pdi);
+      setIsDeletePdiModalOpen(true);
+    }
+  };
+
+  const handleConfirmDeletePdi = async () => {
+    if (!pdiToDelete) return;
+
+    try {
+      // 1. Deletar os itens na tabela pdi_items
+      const { error: itemsError } = await supabase
+        .from('pdi_items')
+        .delete()
+        .eq('pdi_id', pdiToDelete.id);
+
+      if (itemsError) {
+        console.error('Erro ao deletar itens do PDI:', itemsError);
+        alert('Erro ao deletar itens do PDI. Tente novamente.');
+        return;
+      }
+
+      // 2. Deletar o PDI principal
+      const { error } = await supabase
+        .from('pdi')
+        .delete()
+        .eq('id', pdiToDelete.id);
+
+      if (error) {
+        console.error('Erro ao deletar PDI:', error);
+        alert('Erro ao deletar PDI. Tente novamente.');
+        return;
+      }
+
+      // Remove o PDI da lista local
+      setPDIs(prev => prev.filter(p => p.id !== pdiToDelete.id));
+      
+      // Fecha modal e limpa estado
+      setIsDeletePdiModalOpen(false);
+      setPdiToDelete(null);
+    } catch (err) {
+      console.error('Erro ao deletar PDI:', err);
+      alert('Erro ao deletar PDI. Tente novamente.');
+    }
+  };
+
+  // Funções para gerenciar Avaliações
+  const handleDeleteEvaluation = (evaluationId: number) => {
+    const evaluation = evaluations.find(e => e.id === evaluationId);
+    if (evaluation) {
+      setEvaluationToDelete(evaluation);
+      setIsDeleteEvaluationModalOpen(true);
+    }
+  };
+
+  const handleConfirmDeleteEvaluation = async () => {
+    if (!evaluationToDelete) return;
+
+    try {
+      // 1. Deletar as respostas da avaliação
+      const { error: repliesError } = await supabase
+        .from('evaluations_questions_reply')
+        .delete()
+        .eq('evaluation_id', evaluationToDelete.id);
+
+      if (repliesError) {
+        console.error('Erro ao deletar respostas da avaliação:', repliesError);
+        alert('Erro ao deletar respostas da avaliação. Tente novamente.');
+        return;
+      }
+
+      // 2. Deletar os vínculos com projetos
+      const { error: projectsError } = await supabase
+        .from('evaluations_projects')
+        .delete()
+        .eq('evaluation_id', evaluationToDelete.id);
+
+      if (projectsError) {
+        console.error('Erro ao deletar vínculos de projetos:', projectsError);
+        alert('Erro ao deletar vínculos de projetos. Tente novamente.');
+        return;
+      }
+
+      // 3. Deletar a avaliação principal
+      const { error } = await supabase
+        .from('evaluations')
+        .delete()
+        .eq('id', evaluationToDelete.id);
+
+      if (error) {
+        console.error('Erro ao deletar avaliação:', error);
+        alert('Erro ao deletar avaliação. Tente novamente.');
+        return;
+      }
+
+      // Remove a avaliação da lista local
+      setEvaluations(prev => prev.filter(e => e.id !== evaluationToDelete.id));
+      
+      // Fecha modal e limpa estado
+      setIsDeleteEvaluationModalOpen(false);
+      setEvaluationToDelete(null);
+    } catch (err) {
+      console.error('Erro ao deletar avaliação:', err);
+      alert('Erro ao deletar avaliação. Tente novamente.');
+    }
+  };
+
   // Configuração das colunas do AG-Grid para registros de tempo
   const timeRecordsColumnDefs: ColDef[] = [
     {
@@ -1051,6 +1347,7 @@ const EmployeeDetail = () => {
   ];
 
   // Configuração das colunas do AG-Grid para feedbacks
+    // Configuração das colunas do AG-Grid para feedbacks
   const feedbacksColumnDefs: ColDef[] = [
     {
       headerName: 'Data',
@@ -1086,7 +1383,36 @@ const EmployeeDetail = () => {
       field: 'type',
       flex: 1,
       minWidth: 150,
-      cellRenderer: (params: any) => params.value || '-',
+      cellRenderer: (params: any) => {
+        const typeValue = params.value;
+        
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        let typeText = 'Não definido';
+        
+        if (typeValue) {
+          typeText = typeValue;
+          
+          // Definir cores baseadas no tipo de feedback
+          const typeLower = typeValue.toLowerCase();
+          if (typeLower.includes('positivo') || typeLower.includes('elogio')) {
+            colorClass = 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+          } else if (typeLower.includes('orientação') || typeLower.includes('orientacao')) {
+            colorClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+          } else if (typeLower.includes('melhoria') || typeLower.includes('desenvolvimento')) {
+            colorClass = 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+          } else if (typeLower.includes('atenção') || typeLower.includes('atencao') || typeLower.includes('crítico') || typeLower.includes('critico')) {
+            colorClass = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+          } else if (typeLower.includes('reconhecimento')) {
+            colorClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+          }
+        }
+        
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+            {typeText}
+          </span>
+        );
+      },
     },
     {
       headerName: 'Comentário',
@@ -1094,6 +1420,218 @@ const EmployeeDetail = () => {
       flex: 3,
       minWidth: 300,
       cellRenderer: (params: any) => params.value || '-',
+    },
+    {
+      headerName: 'Ações',
+      field: 'id',
+      width: 100,
+      cellRenderer: (params: any) => {
+        return (
+          <div className="flex items-center justify-center h-full gap-2">
+            <button
+              onClick={() => handleEditFeedback(params.value)}
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Editar feedback"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+            
+            <button
+              onClick={() => handleDeleteFeedback(params.value)}
+              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Deletar feedback"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+      sortable: false,
+      filter: false,
+    },
+  ];
+
+  // Configuração das colunas do AG-Grid para avaliações
+  const evaluationsColumnDefs: ColDef[] = [
+    
+    { 
+      headerName: 'Avaliação', 
+      field: 'name', 
+      flex: 2, 
+      minWidth: 200 
+    },
+    { 
+      headerName: 'Avaliador', 
+      field: 'owner_name', 
+      flex: 1.5, 
+      minWidth: 150 
+    },
+    {
+      headerName: 'Período',
+      flex: 1.5,
+      minWidth: 180,
+      valueGetter: (params: any) => {
+        if (!params.data.period_start || !params.data.period_end) return '-';
+        const start = new Date(params.data.period_start).toLocaleDateString('pt-BR');
+        const end = new Date(params.data.period_end).toLocaleDateString('pt-BR');
+        return `${start} - ${end}`;
+      }
+    },
+    { 
+      headerName: 'Status', 
+      field: 'status_name', 
+      flex: 1, 
+      minWidth: 120,
+      cellRenderer: (params: any) => {
+        const statusValue = params.value;
+        
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        let statusText = 'Não definido';
+        
+        if (statusValue) {
+          statusText = statusValue;
+          
+          // Definir cores baseadas no status
+          const statusLower = statusValue.toLowerCase();
+          if (statusLower.includes('aberto') || statusLower.includes('pendente')) {
+            colorClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+          } else if (statusLower.includes('em andamento') || statusLower.includes('progresso')) {
+            colorClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+          } else if (statusLower.includes('concluído') || statusLower.includes('finalizado') || statusLower.includes('fechado')) {
+            colorClass = 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+          } else if (statusLower.includes('cancelado') || statusLower.includes('rejeitado')) {
+            colorClass = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+          }
+        }
+        
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+            {statusText}
+          </span>
+        );
+      },
+    },
+    {
+      headerName: 'Ações',
+      field: 'id',
+      width: 100,
+      cellRenderer: (params: any) => {
+        return (
+          <div className="flex items-center justify-center h-full gap-2">
+            <button
+              onClick={() => navigate(`/employee-evaluations/${params.value}`)}
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Ver avaliação"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+            
+            <button
+              onClick={() => handleDeleteEvaluation(params.value)}
+              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Deletar avaliação"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
+      sortable: false,
+      filter: false,
+    },
+  ];
+
+  // Configuração das colunas do AG-Grid para PDIs
+  const pdisColumnDefs: ColDef[] = [
+    {
+      headerName: 'Responsável',
+      field: 'owner_name',
+      flex: 1.5,
+      minWidth: 180,
+    },
+    {
+      headerName: 'Competências',
+      field: 'competency_count',
+      flex: 0.8,
+      minWidth: 120,
+      cellRenderer: (params: any) => {
+        const count = params.value || 0;
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+              {count} {count === 1 ? 'competência' : 'competências'}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Status',
+      field: 'status',
+      flex: 1,
+      minWidth: 130,
+      cellRenderer: (params: any) => {
+        const status = params.value;
+        const statusValue = status?.value;
+        
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        let statusText = 'Não definido';
+        
+        if (statusValue) {
+          statusText = statusValue;
+          
+          // Definir cores baseadas no status
+          const statusLower = statusValue.toLowerCase();
+          if (statusLower.includes('aberto') || statusLower.includes('pendente')) {
+            colorClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+          } else if (statusLower.includes('em andamento') || statusLower.includes('progresso')) {
+            colorClass = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+          } else if (statusLower.includes('concluído') || statusLower.includes('finalizado')) {
+            colorClass = 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+          } else if (statusLower.includes('cancelado') || statusLower.includes('rejeitado')) {
+            colorClass = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+          }
+        }
+        
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+            {statusText}
+          </span>
+        );
+      },
+    },
+    {
+      headerName: 'Ações',
+      field: 'id',
+      width: 100,
+      cellRenderer: (params: any) => {
+        const isClosed = params.data.is_closed;
+        
+        return (
+          <div className="flex items-center justify-center h-full gap-2">
+            <button
+              onClick={() => handleEditPdi(params.value)}
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title={isClosed ? "Visualizar PDI" : "Editar PDI"}
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+            
+            {/* Botão deletar só aparece se o PDI não estiver encerrado */}
+            {!isClosed && (
+              <button
+                onClick={() => handleDeletePdi(params.value)}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Deletar PDI"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        );
+      },
+      sortable: false,
+      filter: false,
     },
   ];
 
@@ -1519,23 +2057,24 @@ const EmployeeDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, employee?.user_id]);
 
-  // Carrega feedbacks quando a aba é selecionada
+  // Carrega dados das abas quando selecionadas
   useEffect(() => {
-    if (employee?.user_id && activeTab === 'feedbacks' && feedbacks.length === 0) {
-      void loadFeedbacks(employee.user_id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, employee?.user_id]);
+    if (!employee?.user_id) return;
 
-  // Carrega dados de avaliações e feedbacks quando a aba de acompanhamento é selecionada
-  useEffect(() => {
-    if (employee?.user_id && activeTab === 'acompanhamento') {
-      if (evaluationData.length === 0) {
-        void loadEvaluationData(employee.user_id);
-      }
-      if (feedbacks.length === 0) {
-        void loadFeedbacks(employee.user_id);
-      }
+    switch (activeTab) {
+      case 'feedbacks':
+        if (feedbacks.length === 0) void loadFeedbacks(employee.user_id);
+        break;
+      case 'avaliacoes':
+        if (evaluations.length === 0) void loadEvaluations(employee.user_id);
+        break;
+      case 'pdi':
+        if (pdis.length === 0) void loadPDIs(employee.user_id);
+        break;
+      case 'acompanhamento':
+        if (evaluationData.length === 0) void loadEvaluationData(employee.user_id);
+        if (feedbacks.length === 0) void loadFeedbacks(employee.user_id);
+        break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, employee?.user_id]);
@@ -1847,6 +2386,26 @@ const EmployeeDetail = () => {
                       Feedbacks
                     </button>
                     <button
+                      onClick={() => setActiveTab('avaliacoes')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+                        activeTab === 'avaliacoes'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Avaliações
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('pdi')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+                        activeTab === 'pdi'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      PDI
+                    </button>
+                    <button
                       onClick={() => setActiveTab('acompanhamento')}
                       className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'acompanhamento'
@@ -2068,6 +2627,70 @@ const EmployeeDetail = () => {
                 </div>
               )}
 
+              {activeTab === 'avaliacoes' && (
+                <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
+                  <div className="flex justify-end mb-4">
+                    <button
+                      onClick={() => setIsEvaluationModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nova Avaliação
+                    </button>
+                  </div>
+                  <div className="ag-theme-alpine w-full flex-1">
+                    {isLoadingEvaluationsList ? (
+                      <div className="flex justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                      </div>
+                    ) : (
+                      <AgGridReact
+                        columnDefs={evaluationsColumnDefs}
+                        rowData={evaluations}
+                        defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                        animateRows={true}
+                        className="w-full"
+                        rowHeight={40}
+                        headerHeight={40}
+                        overlayNoRowsTemplate={'<span class="text-gray-500 dark:text-gray-400">Nenhuma avaliação encontrada.</span>'}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'pdi' && (
+                <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
+                  <div className="flex justify-end mb-4">
+                    <button
+                      onClick={() => setIsPDIModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Novo PDI
+                    </button>
+                  </div>
+                  <div className="ag-theme-alpine w-full flex-1">
+                    {isLoadingPDIs ? (
+                      <div className="flex justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                      </div>
+                    ) : (
+                      <AgGridReact
+                        columnDefs={pdisColumnDefs}
+                        rowData={pdis}
+                        defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                        animateRows={true}
+                        className="w-full"
+                        rowHeight={40}
+                        headerHeight={40}
+                        overlayNoRowsTemplate={'<span class="text-gray-500 dark:text-gray-400">Nenhum PDI encontrado.</span>'}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'acompanhamento' && (
                 <div className="flex-1 overflow-auto p-6 pt-2">
                   {/* Grid de Cards */}
@@ -2268,7 +2891,10 @@ const EmployeeDetail = () => {
       {/* Modal de Novo Feedback */}
       <FeedbackModal
         isOpen={isFeedbackModalOpen}
-        onClose={() => setIsFeedbackModalOpen(false)}
+        onClose={() => {
+          setIsFeedbackModalOpen(false);
+          setFeedbackToEdit(null);
+        }}
         onSuccess={() => {
           // Recarrega a lista de feedbacks após sucesso
           if (employee?.user_id) {
@@ -2276,7 +2902,219 @@ const EmployeeDetail = () => {
           }
         }}
         preSelectedUser={employee?.user_id ? { user_id: employee.user_id as string, name: employee.name } : null}
+        feedbackToEdit={feedbackToEdit}
       />
+
+      {/* Modal de Confirmação de Exclusão de Feedback */}
+      {isDeleteFeedbackModalOpen && feedbackToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-2xl flex items-center gap-3">
+              <Trash2 className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Confirmar Exclusão</h2>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Deletar Feedback
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Tem certeza que deseja deletar este feedback?
+                </p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Tipo: {feedbackToDelete.type}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    Data: {new Date(feedbackToDelete.feedback_date).toLocaleDateString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Responsável: {feedbackToDelete.owner_user_name}
+                  </p>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Esta ação não pode ser desfeita
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-2xl flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  setIsDeleteFeedbackModalOpen(false);
+                  setFeedbackToDelete(null);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmDeleteFeedback}
+                className="px-4 py-2 text-sm text-white font-semibold bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deletar Feedback
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Nova Avaliação */}
+      <EmployeeEvaluationModal
+        isOpen={isEvaluationModalOpen}
+        onClose={() => setIsEvaluationModalOpen(false)}
+        onSuccess={() => {
+          if (employee?.user_id) {
+            void loadEvaluations(employee.user_id);
+          }
+        }}
+        preSelectedUser={employee?.user_id ? { user_id: employee.user_id as string, name: employee.name } : null}
+      />
+
+      {/* Modal de Novo PDI */}
+      <PDIModal
+        isOpen={isPDIModalOpen}
+        onClose={() => {
+          setIsPDIModalOpen(false);
+          setEditingPdiId(null);
+        }}
+        onSuccess={() => {
+          if (employee?.user_id) {
+            void loadPDIs(employee.user_id);
+          }
+        }}
+        pdiId={editingPdiId}
+        prefilledConsultant={employee?.user_id ? { value: employee.user_id as string, label: employee.name } : null}
+      />
+
+      {/* Modal de Confirmação de Exclusão de PDI */}
+      {isDeletePdiModalOpen && pdiToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-2xl flex items-center gap-3">
+              <Trash2 className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Confirmar Exclusão</h2>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Deletar PDI
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Tem certeza que deseja deletar este PDI?
+                </p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Consultor: {pdiToDelete.user_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Responsável: {pdiToDelete.owner_name}
+                  </p>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Esta ação não pode ser desfeita
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-2xl flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  setIsDeletePdiModalOpen(false);
+                  setPdiToDelete(null);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmDeletePdi}
+                className="px-4 py-2 text-sm text-white font-semibold bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deletar PDI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Avaliação */}
+      {isDeleteEvaluationModalOpen && evaluationToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-2xl flex items-center gap-3">
+              <Trash2 className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Confirmar Exclusão</h2>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Deletar Avaliação
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Tem certeza que deseja deletar esta avaliação?
+                </p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    {evaluationToDelete.name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Avaliador: {evaluationToDelete.owner_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Status: {evaluationToDelete.status_name}
+                  </p>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Esta ação não pode ser desfeita e removerá todas as respostas associadas
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-2xl flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  setIsDeleteEvaluationModalOpen(false);
+                  setEvaluationToDelete(null);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmDeleteEvaluation}
+                className="px-4 py-2 text-sm text-white font-semibold bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deletar Avaliação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

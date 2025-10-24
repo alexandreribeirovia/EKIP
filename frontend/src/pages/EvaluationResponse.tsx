@@ -1045,10 +1045,10 @@ const EvaluationResponse = () => {
                   'Você tem alterações não salvas. Se sair da tela sem salvar, perderá o que foi preenchido. Deseja continuar?'
                 )
               ) {
-                navigate('/employee-evaluations');
+                navigate(-1);
               }
             } else {
-              navigate('/employee-evaluations');
+              navigate(-1);
             }
           }}
           className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -1338,10 +1338,10 @@ const EvaluationResponse = () => {
                     'Você tem alterações não salvas. Se sair da tela sem salvar, perderá o que foi preenchido. Deseja continuar?'
                   )
                 ) {
-                  navigate('/employee-evaluations');
+                  navigate(-1);
                 }
               } else {
-                navigate('/employee-evaluations');
+                navigate(-1);
               }
             }}
             className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
