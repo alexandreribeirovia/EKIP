@@ -162,16 +162,16 @@ const RiskModal = ({ isOpen, onClose, onSuccess, projectId, riskData = null }: R
       const riskPayload = {
         project_id: projectId,
         type_id: getDomainId('risk_type', type.value),
-        type: type.value,
+        // type: type.value,
         priority_id: getDomainId('risk_priority', priority.value),
-        priority: priority.value,
+        // priority: priority.value,
         description: description.trim(),
         action_plan: actionPlan.trim(),
         start_date: startDate || null,
         forecast_date: forecastDate || null,
         close_date: closeDate || null,
         status_id: getDomainId('risk_status', status.value),
-        status: status.value,
+        // status: status.value,
         manual_owner: owner.trim() || null,
       };
 
