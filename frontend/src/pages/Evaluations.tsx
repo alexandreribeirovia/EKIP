@@ -166,6 +166,7 @@ const Evaluations = () => {
         .from('evaluations')
         .select(`
           *,
+          is_pdi,
           evaluations_projects (
             project_id
           )
@@ -384,6 +385,30 @@ const Evaluations = () => {
         // Se houver múltiplos projetos, exibir os nomes separados por vírgula
         const projectNames = projects.map((p: any) => p.project_name).join(' | ');
         return projectNames;
+      },
+    },
+    {
+      headerName: 'PDI',
+      field: 'is_pdi',
+      flex: 0.8,
+      minWidth: 120,
+      cellRenderer: (params: any) => {
+        if (params.value) {
+          return (
+            <div className="flex items-center justify-left h-full">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                Sim
+              </span>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+              Não
+            </span>
+          </div>
+        );
       },
     },
     {

@@ -367,9 +367,38 @@ const PDI = () => {
       cellRenderer: (params: any) => {
         const count = params.value || 0;
         return (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-left h-full">
             <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
               {count} {count === 1 ? 'competência' : 'competências'}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Vínculo',
+      field: 'link_type',
+      flex: 0.8,
+      minWidth: 110,
+      cellRenderer: (params: any) => {
+        const hasEvaluation = params.data.evaluation_id;
+        const hasFeedback = params.data.feedback_id;
+        
+        let text = 'Não';
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        
+        if (hasEvaluation) {
+          text = 'Avaliação';
+          colorClass = 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+        } else if (hasFeedback) {
+          text = 'Feedback';
+          colorClass = 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300';
+        }
+        
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+              {text}
             </span>
           </div>
         );

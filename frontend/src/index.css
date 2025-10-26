@@ -167,3 +167,93 @@
 .notification-portal > * {
   pointer-events: auto;
 }
+
+/* React Quill WYSIWYG Editor Styles */
+.quill-editor .ql-container {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  border: none !important;
+}
+
+.quill-editor .ql-toolbar {
+  border: none !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background-color: #f9fafb;
+  border-radius: 8px 8px 0 0;
+}
+
+.dark .quill-editor .ql-toolbar {
+  background-color: #374151;
+  border-bottom: 1px solid #4b5563 !important;
+}
+
+.quill-editor .ql-editor {
+  min-height: 120px;
+  max-height: 300px;
+  overflow-y: auto;
+  border-radius: 0 0 8px 8px;
+}
+
+.quill-editor .ql-editor.ql-blank::before {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.dark .quill-editor .ql-editor.ql-blank::before {
+  color: #6b7280;
+}
+
+/* Dark mode for Quill editor */
+.dark .quill-editor .ql-editor {
+  color: #f9fafb;
+  background-color: #1f2937;
+}
+
+.dark .quill-editor .ql-stroke {
+  stroke: #9ca3af;
+}
+
+.dark .quill-editor .ql-fill {
+  fill: #9ca3af;
+}
+
+.dark .quill-editor .ql-picker-label {
+  color: #9ca3af;
+}
+
+.dark .quill-editor .ql-toolbar button:hover,
+.dark .quill-editor .ql-toolbar button:focus,
+.dark .quill-editor .ql-toolbar button.ql-active {
+  color: #f97316 !important;
+}
+
+.dark .quill-editor .ql-toolbar button:hover .ql-stroke,
+.dark .quill-editor .ql-toolbar button:focus .ql-stroke,
+.dark .quill-editor .ql-toolbar button.ql-active .ql-stroke {
+  stroke: #f97316 !important;
+}
+
+.dark .quill-editor .ql-toolbar button:hover .ql-fill,
+.dark .quill-editor .ql-toolbar button:focus .ql-fill,
+.dark .quill-editor .ql-toolbar button.ql-active .ql-fill {
+  fill: #f97316 !important;
+}
+
+/* Light mode active states */
+.quill-editor .ql-toolbar button:hover,
+.quill-editor .ql-toolbar button:focus,
+.quill-editor .ql-toolbar button.ql-active {
+  color: #f97316 !important;
+}
+
+.quill-editor .ql-toolbar button:hover .ql-stroke,
+.quill-editor .ql-toolbar button:focus .ql-stroke,
+.quill-editor .ql-toolbar button.ql-active .ql-stroke {
+  stroke: #f97316 !important;
+}
+
+.quill-editor .ql-toolbar button:hover .ql-fill,
+.quill-editor .ql-toolbar button:focus .ql-fill,
+.quill-editor .ql-toolbar button.ql-active .ql-fill {
+  fill: #f97316 !important;
+}

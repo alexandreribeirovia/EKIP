@@ -16,6 +16,7 @@ interface FeedbackData {
   public_comment: string;
   private_comment?: string | null;
   type_id?: number | null;
+  is_pdi?: boolean;
 }
 
 interface FeedbackModalProps {
@@ -71,7 +72,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
       if (feedbackToEdit) {
         const checkPDI = async () => {
           const { data, error } = await supabase
-            .from('pdi')
+            .from('pdis')
             .select('id')
             .eq('feedback_id', feedbackToEdit.id)
             .limit(1);
@@ -80,7 +81,22 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
             console.error('Erro ao verificar PDI vinculado:', error);
             setHasLinkedPDI(false);
           } else {
-            setHasLinkedPDI(data && data.length > 0);
+            const hasPDI = data && data.length > 0;
+            setHasLinkedPDI(hasPDI);
+            
+            // Se existe PDI vinculado mas o campo is_pdi está false, atualiza
+            if (hasPDI && !feedbackToEdit.is_pdi) {
+              const { error: updateError } = await supabase
+                .from('feedbacks')
+                .update({ is_pdi: true })
+                .eq('id', feedbackToEdit.id);
+              
+              if (updateError) {
+                console.error('Erro ao atualizar is_pdi:', updateError);
+              } else {
+                console.log('✅ Campo is_pdi atualizado para true no feedback', feedbackToEdit.id);
+              }
+            }
           }
         };
         void checkPDI();
@@ -368,7 +384,7 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
                   className="px-6 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
                 >
                   <Target className="w-4 h-4" />
-                  Adicionar PDI
+                  Exibir PDI
                 </button>
               )}
               
@@ -422,8 +438,24 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
             console.log('🔴 Fechando PDIModal');
             setIsPDIModalOpen(false);
           }}
-          onSuccess={() => {
+          onSuccess={async () => {
             console.log('🎉 PDI criado com sucesso');
+            setHasLinkedPDI(true);
+            
+            // Atualiza o campo is_pdi na tabela feedbacks
+            if (feedbackToEdit) {
+              const { error: updateError } = await supabase
+                .from('feedbacks')
+                .update({ is_pdi: true })
+                .eq('id', feedbackToEdit.id);
+              
+              if (updateError) {
+                console.error('Erro ao atualizar is_pdi:', updateError);
+              } else {
+                console.log('✅ Campo is_pdi atualizado para true após criação do PDI');
+              }
+            }
+            
             setIsPDIModalOpen(false);
           }}
           feedbackId={feedbackToEdit.id}

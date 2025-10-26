@@ -1,10 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Select from 'react-select';
-import { X, Plus, Trash2, Target, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Plus, Trash2, Target, TrendingUp, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 // Log para verificar se o módulo está sendo carregado
 console.log('🔥 PDIModal.tsx - MÓDULO CARREGADO');
+
+// Configuração do editor WYSIWYG
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'indent': '-1'}, { 'indent': '+1' }],
+    ['link'],
+    ['clean']
+  ],
+};
+
+const quillFormats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike',
+  'list', 'bullet', 'indent',
+  'link'
+];
 
 interface PDIModalProps {
   isOpen: boolean;
@@ -70,6 +91,10 @@ const PDIModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [internalPdiId, setInternalPdiId] = useState<number | null>(null);
+  
+  // Estados para armazenar IDs de vinculação carregados do banco
+  const [loadedEvaluationId, setLoadedEvaluationId] = useState<number | null>(null);
+  const [loadedFeedbackId, setLoadedFeedbackId] = useState<number | null>(null);
 
   // Log inicial - executa sempre que o componente é renderizado
   useEffect(() => {
@@ -241,6 +266,10 @@ const PDIModal = ({
       setStartDate(pdiData.start_date || '');
       setEndDate(pdiData.end_date || '');
       setComments(pdiData.comments || '');
+      
+      // Armazenar IDs de vinculação (evaluation_id e feedback_id)
+      setLoadedEvaluationId(pdiData.evaluation_id || null);
+      setLoadedFeedbackId(pdiData.feedback_id || null);
 
       // Preencher os itens de competência
       if (itemsData && itemsData.length > 0) {
@@ -355,6 +384,8 @@ const PDIModal = ({
       setCompetencyItems([]);
       setCompetencies([]);
       setInternalPdiId(null);
+      setLoadedEvaluationId(null);
+      setLoadedFeedbackId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -459,6 +490,14 @@ const PDIModal = ({
     );
   };
 
+  // Helper function para verificar se o conteúdo HTML está vazio
+  const isHtmlEmpty = (html: string): boolean => {
+    if (!html) return true;
+    // Remove tags HTML e verifica se sobra algum texto
+    const text = html.replace(/<[^>]*>/g, '').trim();
+    return text.length === 0;
+  };
+
   const validateForm = (): boolean => {
     if (!selectedConsultant) {
       showErrorNotification('Por favor, selecione um consultor.');
@@ -493,20 +532,16 @@ const PDIModal = ({
         showErrorNotification('Por favor, selecione a competência em todos os itens.');
         return false;
       }
-      if (!item.goal_description.trim()) {
+      if (isHtmlEmpty(item.goal_description)) {
         showErrorNotification('Por favor, preencha o objetivo em todas as competências.');
         return false;
       }
-      if (!item.actions.trim()) {
+      if (isHtmlEmpty(item.actions)) {
         showErrorNotification('Por favor, preencha as ações em todas as competências.');
         return false;
       }
       if (!item.due_date) {
         showErrorNotification('Por favor, preencha o prazo em todas as competências.');
-        return false;
-      }
-      if (item.level_target <= item.level_current) {
-        showErrorNotification('O nível meta deve ser maior que o nível atual.');
         return false;
       }
     }
@@ -554,8 +589,8 @@ const PDIModal = ({
         const itemsToInsert = competencyItems.map((item) => ({
           pdi_id: internalPdiId,
           competency_id: item.competency_id,
-          level_current: item.level_current,
-          level_target: item.level_target,
+          level_current: null,
+          level_target: null,
           goal_description: item.goal_description,
           actions: item.actions,
           due_date: item.due_date,
@@ -567,6 +602,33 @@ const PDIModal = ({
           .insert(itemsToInsert);
 
         if (itemsError) throw itemsError;
+
+        // Atualizar is_pdi nas tabelas vinculadas (feedback ou avaliação)
+        if (feedbackId) {
+          const { error: updateFeedbackError } = await supabase
+            .from('feedbacks')
+            .update({ is_pdi: true })
+            .eq('id', feedbackId);
+          
+          if (updateFeedbackError) {
+            console.error('Erro ao atualizar is_pdi no feedback:', updateFeedbackError);
+          } else {
+            console.log('✅ Campo is_pdi atualizado no feedback', feedbackId);
+          }
+        }
+        
+        if (evaluationId) {
+          const { error: updateEvaluationError } = await supabase
+            .from('evaluations')
+            .update({ is_pdi: true })
+            .eq('id', evaluationId);
+          
+          if (updateEvaluationError) {
+            console.error('Erro ao atualizar is_pdi na avaliação:', updateEvaluationError);
+          } else {
+            console.log('✅ Campo is_pdi atualizado na avaliação', evaluationId);
+          }
+        }
 
         showSuccessNotification('PDI atualizado com sucesso!');
       } else {
@@ -595,8 +657,8 @@ const PDIModal = ({
         const itemsToInsert = competencyItems.map((item) => ({
           pdi_id: pdiData.id,
           competency_id: item.competency_id,
-          level_current: item.level_current,
-          level_target: item.level_target,
+          level_current: null,
+          level_target: null,
           goal_description: item.goal_description,
           actions: item.actions,
           due_date: item.due_date,
@@ -608,6 +670,33 @@ const PDIModal = ({
           .insert(itemsToInsert);
 
         if (itemsError) throw itemsError;
+
+        // Atualizar is_pdi nas tabelas vinculadas (feedback ou avaliação)
+        if (feedbackId) {
+          const { error: updateFeedbackError } = await supabase
+            .from('feedbacks')
+            .update({ is_pdi: true })
+            .eq('id', feedbackId);
+          
+          if (updateFeedbackError) {
+            console.error('Erro ao atualizar is_pdi no feedback:', updateFeedbackError);
+          } else {
+            console.log('✅ Campo is_pdi atualizado no feedback', feedbackId);
+          }
+        }
+        
+        if (evaluationId) {
+          const { error: updateEvaluationError } = await supabase
+            .from('evaluations')
+            .update({ is_pdi: true })
+            .eq('id', evaluationId);
+          
+          if (updateEvaluationError) {
+            console.error('Erro ao atualizar is_pdi na avaliação:', updateEvaluationError);
+          } else {
+            console.log('✅ Campo is_pdi atualizado na avaliação', evaluationId);
+          }
+        }
 
         showSuccessNotification('PDI criado com sucesso!');
       }
@@ -765,34 +854,38 @@ const PDIModal = ({
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Nível Atual <span className="text-red-500">*</span>
-                        </label>
-                        <input type="number" min="1" max="5" value={item.level_current} onChange={(e) => handleUpdateCompetency(item.id, 'level_current', parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Escala de 1 a 5</p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Nível Meta <span className="text-red-500">*</span>
-                        </label>
-                        <input type="number" min="1" max="5" value={item.level_target} onChange={(e) => handleUpdateCompetency(item.id, 'level_target', parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Escala de 1 a 5</p>
-                      </div>
-
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Objetivo <span className="text-red-500">*</span>
                         </label>
-                        <textarea value={item.goal_description} onChange={(e) => handleUpdateCompetency(item.id, 'goal_description', e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" placeholder="Descreva o objetivo de desenvolvimento para esta competência..." />
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600">
+                          <ReactQuill
+                            theme="snow"
+                            value={item.goal_description}
+                            onChange={(value) => handleUpdateCompetency(item.id, 'goal_description', value)}
+                            modules={quillModules}
+                            formats={quillFormats}
+                            placeholder="Descreva o objetivo de desenvolvimento para esta competência..."
+                            className="quill-editor"
+                          />
+                        </div>
                       </div>
 
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Ações / Plano de Ação <span className="text-red-500">*</span>
                         </label>
-                        <textarea value={item.actions} onChange={(e) => handleUpdateCompetency(item.id, 'actions', e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" placeholder="Liste as ações específicas que serão realizadas..." />
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600">
+                          <ReactQuill
+                            theme="snow"
+                            value={item.actions}
+                            onChange={(value) => handleUpdateCompetency(item.id, 'actions', value)}
+                            modules={quillModules}
+                            formats={quillFormats}
+                            placeholder="Liste as ações específicas que serão realizadas..."
+                            className="quill-editor"
+                          />
+                        </div>
                       </div>
 
                       <div>
@@ -820,23 +913,49 @@ const PDIModal = ({
         </div>
         )}
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-          <button onClick={handleClose} disabled={isSubmitting || isLoading} className="px-6 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            Cancelar
-          </button>
-          <button onClick={handleSubmit} disabled={isSubmitting || isLoading} className="px-6 py-2 text-sm text-white font-semibold bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                {internalPdiId ? 'Atualizando...' : 'Criando...'}
-              </>
-            ) : (
-              <>
-                <Target className="w-4 h-4" />
-                {internalPdiId ? 'Atualizar PDI' : 'Criar PDI'}
-              </>
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center gap-3">
+          <div className="flex items-center gap-2">
+            {(evaluationId || loadedEvaluationId) && (
+              <a
+                href={`/employee-evaluations/${evaluationId || loadedEvaluationId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                PDI vinculado a Avaliação
+              </a>
             )}
-          </button>
+            {(feedbackId || loadedFeedbackId) && (
+              <a
+                href={`/feedbacks`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                PDI vinculado a Feedback
+              </a>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={handleClose} disabled={isSubmitting || isLoading} className="px-6 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Cancelar
+            </button>
+            <button onClick={handleSubmit} disabled={isSubmitting || isLoading} className="px-6 py-2 text-sm text-white font-semibold bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  {internalPdiId ? 'Atualizando...' : 'Criando...'}
+                </>
+              ) : (
+                <>
+                  <Target className="w-4 h-4" />
+                  {internalPdiId ? 'Atualizar PDI' : 'Criar PDI'}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata } from '../types'
@@ -60,6 +60,20 @@ const EmployeeDetail = () => {
   const [allSkills, setAllSkills] = useState<Skill[]>([])
   const [isLoadingAllSkills, setIsLoadingAllSkills] = useState(false)
   const [showSkillSelector, setShowSkillSelector] = useState(false)
+  
+  // Estado para histórico de horas por cliente
+  const [clientTimeHistory, setClientTimeHistory] = useState<Array<{
+    client_name: string;
+    total_hours: number;
+    total_seconds: number;
+    projects: Array<{
+      project_name: string;
+      total_hours: number;
+      total_seconds: number;
+    }>;
+  }>>([])
+  const [isLoadingClientHistory, setIsLoadingClientHistory] = useState(false)
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
   const containerRef = useRef<HTMLDivElement>(null)
   const rightPanelRef = useRef<HTMLDivElement>(null);
@@ -795,6 +809,77 @@ const EmployeeDetail = () => {
     }
   };
 
+  // Função para carregar histórico de horas por cliente
+  const loadClientTimeHistory = async (userId: string) => {
+    setIsLoadingClientHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('time_worked')
+        .select('client_name, project_name, time')
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Erro ao carregar histórico de horas por cliente:', error);
+        setClientTimeHistory([]);
+        return;
+      }
+
+      // Agrupa por client_name e depois por project_name
+      const clientMap = new Map<string, { 
+        total_seconds: number; 
+        projects: Map<string, number> 
+      }>();
+      
+      (data || []).forEach(record => {
+        const clientName = record.client_name || 'Sem cliente';
+        const projectName = record.project_name || 'Sem projeto';
+        const time = record.time || 0;
+        
+        if (!clientMap.has(clientName)) {
+          clientMap.set(clientName, { 
+            total_seconds: 0, 
+            projects: new Map() 
+          });
+        }
+        
+        const client = clientMap.get(clientName)!;
+        client.total_seconds += time;
+        
+        const currentProjectTime = client.projects.get(projectName) || 0;
+        client.projects.set(projectName, currentProjectTime + time);
+      });
+
+      // Converte para array e calcula horas
+      const history = Array.from(clientMap.entries()).map(([client_name, data]) => {
+        // Converte os projetos para array e ordena por horas
+        const projects = Array.from(data.projects.entries())
+          .map(([project_name, total_seconds]) => ({
+            project_name,
+            total_hours: total_seconds / 3600,
+            total_seconds
+          }))
+          .sort((a, b) => b.total_hours - a.total_hours);
+
+        return {
+          client_name,
+          total_hours: data.total_seconds / 3600,
+          total_seconds: data.total_seconds,
+          projects
+        };
+      });
+
+      // Ordena por total de horas (decrescente)
+      history.sort((a, b) => b.total_hours - a.total_hours);
+
+      setClientTimeHistory(history);
+    } catch (error) {
+      console.error('Erro ao carregar histórico de horas por cliente:', error);
+      setClientTimeHistory([]);
+    } finally {
+      setIsLoadingClientHistory(false);
+    }
+  };
+
   // Função para carregar PDIs do usuário
   const loadPDIs = async (userId: string) => {
       setIsLoadingPDIs(true);
@@ -1024,6 +1109,19 @@ const EmployeeDetail = () => {
     } catch (error) {
       console.error('Erro ao adicionar habilidade:', error);
     }
+  };
+
+  // Função para alternar expansão de cliente
+  const toggleClientExpansion = (clientName: string) => {
+    setExpandedClients(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(clientName)) {
+        newSet.delete(clientName);
+      } else {
+        newSet.add(clientName);
+      }
+      return newSet;
+    });
   };
 
   // Função para ativar/desativar funcionário
@@ -2074,6 +2172,7 @@ const EmployeeDetail = () => {
       case 'acompanhamento':
         if (evaluationData.length === 0) void loadEvaluationData(employee.user_id);
         if (feedbacks.length === 0) void loadFeedbacks(employee.user_id);
+        if (clientTimeHistory.length === 0) void loadClientTimeHistory(employee.user_id);
         break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2863,23 +2962,110 @@ const EmployeeDetail = () => {
                       </div>
                     </div>
 
-                    {/* Card 4: Placeholder */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6">
+                    {/* Card 4: Histórico de Horas por Cliente */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
                       <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
-                          <Award className="w-5 h-5 text-purple-500" />
-                          Indicadores
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-purple-500" />
+                          Histórico de Horas Lançadas
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          KPIs e métricas de desempenho
+                          Total de horas lançadas por cliente e projeto
                         </p>
                       </div>
-                      <div className="flex justify-center items-center h-80">
-                        <div className="text-center text-gray-400 dark:text-gray-500">
-                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">Aguardando implementação</p>
+                      
+                      {isLoadingClientHistory ? (
+                        <div className="flex justify-center items-center h-80">
+                          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
                         </div>
-                      </div>
+                      ) : clientTimeHistory.length === 0 ? (
+                        <div className="flex justify-center items-center h-80">
+                          <div className="text-center text-gray-400 dark:text-gray-500">
+                            <Clock className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                            <p className="text-sm">Nenhum lançamento de horas encontrado</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-80 overflow-y-auto">
+                          {/* Lista de clientes com projetos */}
+                          <div className="space-y-2">
+                            {clientTimeHistory.map((client, index) => {
+                              const isExpanded = expandedClients.has(client.client_name);
+                              
+                              return (
+                                <div key={index}>
+                                  {/* Linha do cliente */}
+                                  <div 
+                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                                    onClick={() => toggleClientExpansion(client.client_name)}
+                                  >
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <button className="flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                                        {isExpanded ? (
+                                          <ChevronDown className="w-5 h-5" />
+                                        ) : (
+                                          <ChevronRight className="w-5 h-5" />
+                                        )}
+                                      </button>
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                        {client.client_name}
+                                      </p>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                                        ({client.projects.length} {client.projects.length === 1 ? 'projeto' : 'projetos'})
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-4 ml-4">
+                                      <div className="text-right">
+                                        <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                                          {client.total_hours.toFixed(1)}h
+                                        </p>
+                                        
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Projetos (exibidos quando expandido) */}
+                                  {isExpanded && (
+                                    <div className="ml-8 mt-1 space-y-1">
+                                      {client.projects.map((project, projectIndex) => (
+                                        <div 
+                                          key={projectIndex}
+                                          className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
+                                        >
+                                          <p className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1 mr-4">
+                                            {project.project_name}
+                                          </p>
+                                          <div className="text-right flex-shrink-0">
+                                            <p className="text-sm font-medium text-purple-500 dark:text-purple-400">
+                                              {project.total_hours.toFixed(1)}h
+                                            </p>
+                                           
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          {/* Total geral */}
+                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                Total Geral
+                              </p>
+                              <div className="text-right">
+                                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                                  {clientTimeHistory.reduce((sum, c) => sum + c.total_hours, 0).toFixed(1)}h
+                                </p>
+                               
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -170,22 +170,7 @@ const Employees = () => {
         );
       },
     },
-    // {
-    //   headerName: 'Status',
-    //   field: 'is_active',
-    //   minWidth: 120,
-    //   cellRenderer: (params: any) => (
-    //     <span
-    //       className={`px-2 py-1 text-xs font-medium rounded-full ${
-    //         params.value
-    //           ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-    //           : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-    //       }`}
-    //     >
-    //       {params.value ? 'Ativo' : 'Inativo'}
-    //     </span>
-    //   ),
-    // },
+   
   ]
 
   const handleSearch = (value: string) => {

@@ -21,6 +21,7 @@ interface FeedbackData {
   feedback_date: string;
   type: string;
   public_comment: string;
+  has_pdi?: boolean;
 }
 
 const Feedbacks = () => {
@@ -113,7 +114,7 @@ const Feedbacks = () => {
       
       let query = supabase
         .from('feedbacks')
-        .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment')
+        .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment, is_pdi')
         .gte('feedback_date', dateRange.start)
         .lte('feedback_date', dateRange.end)
         .order('feedback_date', { ascending: false });
@@ -131,7 +132,13 @@ const Feedbacks = () => {
         return;
       }
 
-      setFeedbacks(data || []);
+      // Usa diretamente o campo is_pdi da tabela feedbacks
+      const feedbacksWithPDI = (data || []).map((feedback: any) => ({
+        ...feedback,
+        has_pdi: feedback.is_pdi || false,
+      }));
+
+      setFeedbacks(feedbacksWithPDI);
     } catch (err) {
       console.error('Erro ao buscar feedbacks:', err);
     } finally {
@@ -243,6 +250,30 @@ const Feedbacks = () => {
       flex: 1,
       minWidth: 150,
       cellRenderer: (params: any) => params.value || '-',
+    },
+    {
+      headerName: 'PDI',
+      field: 'has_pdi',
+      flex: 0.8,
+      minWidth: 120,
+      cellRenderer: (params: any) => {
+        if (params.value) {
+          return (
+            <div className="flex items-center justify-left h-full">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                Sim
+              </span>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+              Não
+            </span>
+          </div>
+        );
+      },
     },
     {
       headerName: 'Comentário',
