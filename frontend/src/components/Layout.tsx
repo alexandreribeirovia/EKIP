@@ -16,7 +16,8 @@ import {
   MessageSquare,
   FileCheck,
   LogOut,
-  Target
+  Target,
+  Database
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -68,7 +69,8 @@ const Layout = ({ children }: LayoutProps) => {
       hasSubmenu: true,
       submenu: [
         { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList },
-        { name: 'Usuários', href: '/users', icon: Users }
+        { name: 'Usuários', href: '/users', icon: Users },
+        { name: 'Domínios', href: '/domains', icon: Database }
       ]
     },
   ]

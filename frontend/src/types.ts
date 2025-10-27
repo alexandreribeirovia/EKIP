@@ -152,6 +152,17 @@ export interface DbDomain {
   type: string;
   value: string;
   is_active: boolean;
+  parent_id: number | null;
+  description: string | null;
+  parent?: {
+    id: number;
+    type: string;
+    value: string;
+  } | null;
+}
+
+export interface DomainWithChildren extends DbDomain {
+  children?: DbDomain[];
 }
 
 export interface DbRisk {

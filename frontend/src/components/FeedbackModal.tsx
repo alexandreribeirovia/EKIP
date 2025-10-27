@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { useAuthStore } from '../stores/authStore';
 import PDIModal from './PDIModal';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 interface FeedbackData {
   id: number;
@@ -333,13 +335,25 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Comentário: *
             </label>
-            <textarea
-              value={publicComment}
-              onChange={(e) => setPublicComment(e.target.value)}
-              rows={4}
-              placeholder="Digite o feedback que será compartilhado com o consultor..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent resize-none"
-            />
+            <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={publicComment}
+                onChange={setPublicComment}
+                placeholder="Digite o feedback que será compartilhado com o consultor..."
+                className="feedback-wysiwyg"
+                modules={{
+                  toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['link'],
+                    ['clean']
+                  ],
+                }}
+              />
+            </div>
           </div>
 
           {/* Alerta de PDI vinculado */}

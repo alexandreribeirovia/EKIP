@@ -5,9 +5,6 @@ import { X, Plus, Trash2, Target, TrendingUp, ChevronDown, ChevronUp, ExternalLi
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
-// Log para verificar se o módulo está sendo carregado
-console.log('🔥 PDIModal.tsx - MÓDULO CARREGADO');
-
 // Configuração do editor WYSIWYG
 const quillModules = {
   toolbar: [
@@ -96,18 +93,6 @@ const PDIModal = ({
   const [loadedEvaluationId, setLoadedEvaluationId] = useState<number | null>(null);
   const [loadedFeedbackId, setLoadedFeedbackId] = useState<number | null>(null);
 
-  // Log inicial - executa sempre que o componente é renderizado
-  useEffect(() => {
-    console.log('📥 PDIModal - Componente renderizado/atualizado com props:', {
-      isOpen,
-      pdiId,
-      evaluationId,
-      feedbackId,
-      prefilledConsultant,
-      prefilledManager
-    });
-  });
-
   const showErrorNotification = useCallback((message: string) => {
     if (onError) {
       onError(message);
@@ -121,7 +106,6 @@ const PDIModal = ({
   }, [onSuccessMessage]);
 
   const fetchConsultants = async () => {
-    console.log('🔍 Buscando consultores...');
     try {
       const { data, error } = await supabase
         .from('users')
@@ -136,7 +120,6 @@ const PDIModal = ({
         label: user.name,
       }));
 
-      console.log('✅ Consultores carregados:', options.length, 'consultores');
       setConsultants(options);
     } catch (err) {
       console.error('❌ Erro ao buscar consultores:', err);
@@ -144,7 +127,6 @@ const PDIModal = ({
   };
 
   const fetchManagers = async () => {
-    console.log('🔍 Buscando gestores...');
     try {
       const { data, error } = await supabase
         .from('users')
@@ -164,7 +146,6 @@ const PDIModal = ({
         label: user.name,
       }));
 
-      console.log('✅ Gestores carregados:', options.length, 'gestores');
       setManagers(options);
     } catch (err) {
       console.error('❌ Erro ao buscar gestores:', err);
@@ -357,23 +338,12 @@ const PDIModal = ({
   };
 
   useEffect(() => {
-    console.log('🔄 useEffect Principal executado:', {
-      isOpen,
-      evaluationId,
-      feedbackId,
-      prefilledConsultant,
-      prefilledManager,
-      pdiId
-    });
-
     if (isOpen) {
-      console.log('✅ Modal aberto - carregando listas...');
       void fetchConsultants();
       void fetchManagers();
       void fetchCompetencies();
       void fetchStatus();
     } else {
-      console.log('❌ Modal fechado - limpando campos...');
       // Limpar campos quando fecha
       setSelectedConsultant(null);
       setSelectedManager(null);
@@ -393,43 +363,12 @@ const PDIModal = ({
   // Effect separado para pré-preencher quando vem de avaliação ou feedback
   // IMPORTANTE: Só preenche DEPOIS que as listas foram carregadas
   useEffect(() => {
-    console.log('🎯 useEffect Preenchimento executado:', {
-      isOpen,
-      evaluationId,
-      feedbackId,
-      prefilledConsultant,
-      prefilledManager,
-      pdiId,
-      consultantsLength: consultants.length,
-      managersLength: managers.length
-    });
-
     if (isOpen && (evaluationId || feedbackId) && prefilledConsultant && prefilledManager && !pdiId) {
-      console.log('✅ Condições satisfeitas para preenchimento automático');
-      
       // Verificar se as listas foram carregadas
       if (consultants.length > 0 && managers.length > 0) {
-        console.log('🔄 Preenchendo campos automaticamente:', {
-          consultor: prefilledConsultant,
-          responsavel: prefilledManager,
-          origem: feedbackId ? 'feedback' : 'avaliacao'
-        });
         setSelectedConsultant(prefilledConsultant);
         setSelectedManager(prefilledManager);
-      } else {
-        console.log('⏳ Aguardando listas serem carregadas...', {
-          consultantsCarregados: consultants.length > 0,
-          managersCarregados: managers.length > 0
-        });
       }
-    } else {
-      console.log('❌ Condições NÃO satisfeitas:', {
-        isOpen,
-        temEvaluationOuFeedback: !!(evaluationId || feedbackId),
-        temPrefilledConsultant: !!prefilledConsultant,
-        temPrefilledManager: !!prefilledManager,
-        naoPdiId: !pdiId
-      });
     }
   }, [isOpen, evaluationId, feedbackId, prefilledConsultant, prefilledManager, pdiId, consultants, managers]);
 
@@ -612,8 +551,6 @@ const PDIModal = ({
           
           if (updateFeedbackError) {
             console.error('Erro ao atualizar is_pdi no feedback:', updateFeedbackError);
-          } else {
-            console.log('✅ Campo is_pdi atualizado no feedback', feedbackId);
           }
         }
         
@@ -625,8 +562,6 @@ const PDIModal = ({
           
           if (updateEvaluationError) {
             console.error('Erro ao atualizar is_pdi na avaliação:', updateEvaluationError);
-          } else {
-            console.log('✅ Campo is_pdi atualizado na avaliação', evaluationId);
           }
         }
 
@@ -680,8 +615,6 @@ const PDIModal = ({
           
           if (updateFeedbackError) {
             console.error('Erro ao atualizar is_pdi no feedback:', updateFeedbackError);
-          } else {
-            console.log('✅ Campo is_pdi atualizado no feedback', feedbackId);
           }
         }
         
@@ -693,8 +626,6 @@ const PDIModal = ({
           
           if (updateEvaluationError) {
             console.error('Erro ao atualizar is_pdi na avaliação:', updateEvaluationError);
-          } else {
-            console.log('✅ Campo is_pdi atualizado na avaliação', evaluationId);
           }
         }
 
@@ -722,14 +653,9 @@ const PDIModal = ({
     onClose();
   };
 
-  console.log('🚪 PDIModal - Verificando isOpen:', isOpen);
-  
   if (!isOpen) {
-    console.log('❌ PDIModal - isOpen é false, não renderizando');
     return null;
   }
-
-  console.log('✅ PDIModal - isOpen é true, renderizando modal');
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">

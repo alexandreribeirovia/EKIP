@@ -172,6 +172,78 @@ const ProgressBarRenderer = (params: { value: number }) => {
   );
 };
 
+// Componente para renderizar badges de Tipo com cores
+const RiskTypeBadge = ({ value }: { value: string }) => {
+  const getTypeColor = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'tarefa':
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+      case 'informação':
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+      case 'problema':
+        return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+      case 'risco':
+        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+      default:
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+    }
+  };
+
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(value)}`}>
+      {value}
+    </span>
+  );
+};
+
+// Componente para renderizar badges de Prioridade com cores
+const RiskPriorityBadge = ({ value }: { value: string }) => {
+  const getPriorityColor = (priority: string) => {
+    switch (priority.toLowerCase()) {
+      case 'baixa':
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+      case 'média':
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+      case 'alta':
+        return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+      case 'bloqueante':
+        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+      default:
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+    }
+  };
+
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(value)}`}>
+      {value}
+    </span>
+  );
+};
+
+// Componente para renderizar badges de Status com cores
+const RiskStatusBadge = ({ value }: { value: string }) => {
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'aberto':
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+      case 'em andamento':
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+      case 'concluído':
+        return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+      case 'pendente':
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+      default:
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+    }
+  };
+
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(value)}`}>
+      {value}
+    </span>
+  );
+};
+
 const RiskActionsRenderer = ({ 
   data, 
   onDelete, 
@@ -638,6 +710,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
               status: statusValue,
             };
           });
+          console.log('Risks loaded with values:', risksWithValues); // Debug
           setRisks(risksWithValues as DbRisk[]);
         }
         setIsLoadingRisks(false);
@@ -769,9 +842,11 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   }, [tasks]);
 
   const riskStatusOptions = useMemo(() => {
-    if (!domains) return [];
-    const statusDomains = domains.filter(domain => domain.type === 'risks_status');
-    return statusDomains.map(domain => ({ value: domain.value, label: domain.value }));
+    if (!domains || domains.length === 0) return [];
+    const statusDomains = domains.filter(domain => domain.type === 'risk_status' && domain.is_active);
+    const options = statusDomains.map(domain => ({ value: domain.value, label: domain.value }));
+   
+    return options;
   }, [domains]);
 
   const showErrorNotification = useCallback((message: string) => {
@@ -913,12 +988,14 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       field: 'type',
       flex: 1,
       minWidth: 120,
+      cellRenderer: (params: any) => <RiskTypeBadge value={params.value || ''} />,
     },
     {
       headerName: 'Prioridade',
       field: 'priority',
       flex: 1,
       minWidth: 120,
+      cellRenderer: (params: any) => <RiskPriorityBadge value={params.value || ''} />,
     },
     {
       headerName: 'Descrição',
@@ -958,6 +1035,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       field: 'status',
       flex: 1,
       minWidth: 120,
+      cellRenderer: (params: any) => <RiskStatusBadge value={params.value || ''} />,
     },
     {
       headerName: 'Responsável',
@@ -1702,7 +1780,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
                 }`}
               >
-                Riscos
+                Riscos/Ações
               </button>
               <button
                 onClick={() => setActiveTab('status-report')}
@@ -1897,6 +1975,39 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       animateRows={true}
                       rowHeight={48}
                       headerHeight={48}
+                      getRowStyle={(params) => {
+                        if (!params.data) return undefined;
+                        
+                        const risk = params.data;
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        
+                        // Se status é concluído, não aplicar cores na linha
+                        if (risk.status && risk.status.toLowerCase() === 'concluído') {
+                          return undefined;
+                        }
+                        
+                        // Sem data de previsão -> linha amarela
+                        if (!risk.forecast_date) {
+                          return {
+                            backgroundColor: 'rgba(250, 204, 21, 0.2)',
+                            borderLeft: '4px solid rgb(250, 204, 21)'
+                          };
+                        }
+                        
+                        // Previsão atrasada (< hoje) -> linha vermelha
+                        const forecastDate = new Date(risk.forecast_date);
+                        forecastDate.setHours(0, 0, 0, 0);
+                        
+                        if (forecastDate < today) {
+                          return {
+                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            borderLeft: '4px solid rgb(239, 68, 68)'
+                          };
+                        }
+                        
+                        return undefined;
+                      }}
                       overlayNoRowsTemplate={
                         '<span class="text-gray-500 dark:text-gray-400">Nenhum risco encontrado para esse projeto.</span>'
                       }

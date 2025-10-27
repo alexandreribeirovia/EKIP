@@ -169,91 +169,119 @@
 }
 
 /* React Quill WYSIWYG Editor Styles */
-.quill-editor .ql-container {
+.quill-editor .ql-container,
+.feedback-wysiwyg .ql-container {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
   border: none !important;
 }
 
-.quill-editor .ql-toolbar {
+.quill-editor .ql-toolbar,
+.feedback-wysiwyg .ql-toolbar {
   border: none !important;
   border-bottom: 1px solid #e5e7eb !important;
   background-color: #f9fafb;
   border-radius: 8px 8px 0 0;
 }
 
-.dark .quill-editor .ql-toolbar {
+.dark .quill-editor .ql-toolbar,
+.dark .feedback-wysiwyg .ql-toolbar {
   background-color: #374151;
   border-bottom: 1px solid #4b5563 !important;
 }
 
-.quill-editor .ql-editor {
+.quill-editor .ql-editor,
+.feedback-wysiwyg .ql-editor {
   min-height: 120px;
   max-height: 300px;
   overflow-y: auto;
   border-radius: 0 0 8px 8px;
 }
 
-.quill-editor .ql-editor.ql-blank::before {
+.quill-editor .ql-editor.ql-blank::before,
+.feedback-wysiwyg .ql-editor.ql-blank::before {
   color: #9ca3af;
   font-style: italic;
 }
 
-.dark .quill-editor .ql-editor.ql-blank::before {
+.dark .quill-editor .ql-editor.ql-blank::before,
+.dark .feedback-wysiwyg .ql-editor.ql-blank::before {
   color: #6b7280;
 }
 
 /* Dark mode for Quill editor */
-.dark .quill-editor .ql-editor {
+.dark .quill-editor .ql-editor,
+.dark .feedback-wysiwyg .ql-editor {
   color: #f9fafb;
   background-color: #1f2937;
 }
 
-.dark .quill-editor .ql-stroke {
+.dark .quill-editor .ql-stroke,
+.dark .feedback-wysiwyg .ql-stroke {
   stroke: #9ca3af;
 }
 
-.dark .quill-editor .ql-fill {
+.dark .quill-editor .ql-fill,
+.dark .feedback-wysiwyg .ql-fill {
   fill: #9ca3af;
 }
 
-.dark .quill-editor .ql-picker-label {
+.dark .quill-editor .ql-picker-label,
+.dark .feedback-wysiwyg .ql-picker-label {
   color: #9ca3af;
 }
 
 .dark .quill-editor .ql-toolbar button:hover,
 .dark .quill-editor .ql-toolbar button:focus,
-.dark .quill-editor .ql-toolbar button.ql-active {
+.dark .quill-editor .ql-toolbar button.ql-active,
+.dark .feedback-wysiwyg .ql-toolbar button:hover,
+.dark .feedback-wysiwyg .ql-toolbar button:focus,
+.dark .feedback-wysiwyg .ql-toolbar button.ql-active {
   color: #f97316 !important;
 }
 
 .dark .quill-editor .ql-toolbar button:hover .ql-stroke,
 .dark .quill-editor .ql-toolbar button:focus .ql-stroke,
-.dark .quill-editor .ql-toolbar button.ql-active .ql-stroke {
+.dark .quill-editor .ql-toolbar button.ql-active .ql-stroke,
+.dark .feedback-wysiwyg .ql-toolbar button:hover .ql-stroke,
+.dark .feedback-wysiwyg .ql-toolbar button:focus .ql-stroke,
+.dark .feedback-wysiwyg .ql-toolbar button.ql-active .ql-stroke {
   stroke: #f97316 !important;
 }
 
 .dark .quill-editor .ql-toolbar button:hover .ql-fill,
 .dark .quill-editor .ql-toolbar button:focus .ql-fill,
-.dark .quill-editor .ql-toolbar button.ql-active .ql-fill {
+.dark .quill-editor .ql-toolbar button.ql-active .ql-fill,
+.dark .feedback-wysiwyg .ql-toolbar button:hover .ql-fill,
+.dark .feedback-wysiwyg .ql-toolbar button:focus .ql-fill,
+.dark .feedback-wysiwyg .ql-toolbar button.ql-active .ql-fill {
   fill: #f97316 !important;
 }
 
 /* Light mode active states */
 .quill-editor .ql-toolbar button:hover,
 .quill-editor .ql-toolbar button:focus,
-.quill-editor .ql-toolbar button.ql-active {
+.quill-editor .ql-toolbar button.ql-active,
+.feedback-wysiwyg .ql-toolbar button:hover,
+.feedback-wysiwyg .ql-toolbar button:focus,
+.feedback-wysiwyg .ql-toolbar button.ql-active {
   color: #f97316 !important;
 }
 
 .quill-editor .ql-toolbar button:hover .ql-stroke,
 .quill-editor .ql-toolbar button:focus .ql-stroke,
-.quill-editor .ql-toolbar button.ql-active .ql-stroke {
+.quill-editor .ql-toolbar button.ql-active .ql-stroke,
+.feedback-wysiwyg .ql-toolbar button:hover .ql-stroke,
+.feedback-wysiwyg .ql-toolbar button:focus .ql-stroke,
+.feedback-wysiwyg .ql-toolbar button.ql-active .ql-stroke {
   stroke: #f97316 !important;
 }
 
 .quill-editor .ql-toolbar button:hover .ql-fill,
 .quill-editor .ql-toolbar button:focus .ql-fill,
-.quill-editor .ql-toolbar button.ql-active .ql-fill {
+.quill-editor .ql-toolbar button.ql-active .ql-fill,
+.feedback-wysiwyg .ql-toolbar button:hover .ql-fill,
+.feedback-wysiwyg .ql-toolbar button:focus .ql-fill,
+.feedback-wysiwyg .ql-toolbar button.ql-active .ql-fill {
   fill: #f97316 !important;
 }

@@ -125,6 +125,55 @@ The `ProjectDetail.tsx` component is tab-based:
 - **Dark mode**: Native dark mode support (`dark:` prefix)
 - **Colors**: Primary orange/yellow palette (see STATUS_REPORT.md for hex values)
 
+### Badge Pattern (rounded-full)
+All status badges, priority indicators, and category tags should follow this standardized pattern with dark mode support:
+
+```tsx
+// Example: Status Badge Component
+const StatusBadge = ({ value }: { value: string }) => {
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'aberto':
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+      case 'em andamento':
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+      case 'concluído':
+        return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+      case 'pendente':
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+      default:
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+    }
+  };
+
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(value)}`}>
+      {value}
+    </span>
+  );
+};
+```
+
+**Badge Design Rules:**
+- **Shape**: Always use `rounded-full` for pill-shaped badges
+- **Padding**: Standard `px-2 py-1` for compact appearance
+- **Text**: `text-xs font-medium` for readability
+- **Colors**: Use light background with darker text in light mode (`bg-blue-100 text-blue-700`)
+- **Dark Mode**: Use transparent overlay pattern (`dark:bg-blue-900/30 dark:text-blue-300`)
+- **Color Palette**:
+  - **Blue**: Info, Low Priority, Tasks (`bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300`)
+  - **Green**: Success, Completed (`bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300`)
+  - **Yellow**: Warning, Pending, Medium Priority (`bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300`)
+  - **Red**: Error, High Priority, Problems (`bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300`)
+  - **Purple**: Special, Blocker, Risks (`bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300`)
+  - **Orange**: Notifications, Counts (`bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300`)
+  - **Gray**: Neutral, Undefined (`bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`)
+
+**Examples in Use:**
+- See `EmployeeDetail.tsx` evaluation status badges
+- See `ProjectDetail.tsx` risk type, priority, and status badges
+- Use this pattern consistently across all new features requiring status indicators
+
 ### Modal Pattern
 All modals in the application should follow this standardized pattern (see `RiskModal.tsx` for reference):
 

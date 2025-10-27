@@ -2794,175 +2794,8 @@ const EmployeeDetail = () => {
                 <div className="flex-1 overflow-auto p-6 pt-2">
                   {/* Grid de Cards */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Card 1: Gráfico Radar - Evolução por Subcategoria */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
-                      <div className="mb-1">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
-                          <Award className="w-5 h-5 text-orange-500" />
-                          Avaliação do Desempenho
-                        </h3>
-                      
-                        {evaluationMetadata.length > 0 && (
-                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            {evaluationMetadata.length} {evaluationMetadata.length === 1 ? 'avaliação encontrada' : 'avaliações encontradas'}
-                            {' • Linha tracejada preta = média do time'}
-                          </p>
-                        )}
-                      </div>
-
-                      {isLoadingEvaluations ? (
-                        <div className="flex justify-center items-center h-96">
-                          <div className="text-center">
-                            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
-                            <p className="text-gray-600 dark:text-gray-400">Carregando dados das avaliações...</p>
-                          </div>
-                        </div>
-                      ) : evaluationData.length === 0 ? (
-                        <div className="flex justify-center items-center h-96">
-                          <div className="text-center text-gray-500 dark:text-gray-400">
-                            <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                            <p>Nenhuma avaliação encontrada para este consultor</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="h-96">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <RadarChart data={evaluationData}>
-                              <PolarGrid stroke="#d1d5db" />
-                              <PolarAngleAxis 
-                                dataKey="subcategory" 
-                                tick={{ fill: '#6b7280', fontSize: 11 }}
-                                tickLine={{ stroke: '#9ca3af' }}
-                              />
-                              <PolarRadiusAxis 
-                                angle={90} 
-                                domain={[0, 5]} 
-                                tick={{ fill: '#6b7280', fontSize: 11 }}
-                                tickCount={6}
-                              />
-                              {/* Renderiza uma linha Radar para cada avaliação */}
-                              {evaluationMetadata.map((evalMeta, index) => {
-                                const date = new Date(evalMeta.updated_at);
-                                const formattedDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                const displayName = `Avaliação ${index + 1} (${formattedDate})`;
-                                const dataKey = `evaluation_${index + 1}`;
-                                
-                                // Cores diferentes para cada avaliação
-                                const colors = [
-                                  { stroke: '#f97316', fill: '' }, // Laranja
-                                  { stroke: '#3b82f6', fill: '' }, // Azul
-                                  { stroke: '#10b981', fill: '' }, // Verde
-                                  { stroke: '#8b5cf6', fill: '' }, // Roxo
-                                  { stroke: '#ef4444', fill: '' }, // Vermelho
-                                  { stroke: '#f59e0b', fill: '' }, // Amarelo
-                                  { stroke: '#06b6d4', fill: '' }, // Cyan
-                                  { stroke: '#ec4899', fill: '' }, // Rosa
-                                ];
-                                
-                                const color = colors[index % colors.length];
-                                
-                                return (
-                                  <Radar
-                                    key={evalMeta.id}
-                                    name={displayName}
-                                    dataKey={dataKey}
-                                    stroke={color.stroke}
-                                    fill={color.fill}
-                                    fillOpacity={0}
-                                    strokeWidth={3}
-                                    
-                                  />
-                                );
-                              })}
-                              <Radar
-                                name="Média do Time"
-                                dataKey="Média do Time"
-                                stroke="#2b2b2b"
-                                fill="#000000"
-                                fillOpacity={0}
-                                strokeWidth={3}
-                                strokeDasharray="5 5"
-                                dot={{ fill: '#2b2b2b', r: 1 }}
-                              />
-                              
-                              <Legend 
-                                wrapperStyle={{ paddingTop: '5px' }}
-                                iconType="circle"
-                              />
-                            </RadarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                    </div>
-
-                                        {/* Card 2: Gráfico de Feedbacks por Tipo */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
-                          <MessageSquare className="w-5 h-5 text-blue-500" />
-                          Feedbacks por Tipo
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                          Distribuição dos feedbacks recebidos.
-                        </p>
-                      </div>
-                      {isLoadingFeedbacks ? (
-                        <div className="flex justify-center items-center h-96">
-                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-                        </div>
-                      ) : feedbackByTypeData.length === 0 ? (
-                        <div className="flex justify-center items-center h-96">
-                          <div className="text-center text-gray-400 dark:text-gray-500">
-                            <MessageSquare className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                            <p className="text-sm">Nenhum feedback para exibir</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="h-96">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={feedbackByTypeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
-                              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
-                              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
-                              <Tooltip
-                                cursor={{ fill: 'rgba(249, 115, 22, 0.1)' }}
-                                contentStyle={{
-                                  backgroundColor: '#fff',
-                                  border: '1px solid #e5e7eb',
-                                  borderRadius: '0.5rem',
-                                  fontSize: '12px'
-                                }}
-                              />
-                              <Bar dataKey="count" name="Quantidade" fill="#3b82f6" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Segunda linha de cards (opcional) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                    {/* Card 3: Placeholder */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
-                          <Award className="w-5 h-5 text-green-500" />
-                          Análise Complementar
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Espaço para métricas adicionais
-                        </p>
-                      </div>
-                      <div className="flex justify-center items-center h-80">
-                        <div className="text-center text-gray-400 dark:text-gray-500">
-                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">Aguardando implementação</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Card 4: Histórico de Horas por Cliente */}
+                    
+ {/* Card 4: Histórico de Horas por Cliente */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
                       <div className="mb-4">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
@@ -3067,6 +2900,177 @@ const EmployeeDetail = () => {
                         </div>
                       )}
                     </div>
+                    
+                    
+                    {/* Card 1: Gráfico Radar - Evolução por Subcategoria */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
+                      <div className="mb-1">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-orange-500" />
+                          Avaliação do Desempenho
+                        </h3>
+                      
+                        {evaluationMetadata.length > 0 && (
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {evaluationMetadata.length} {evaluationMetadata.length === 1 ? 'avaliação encontrada' : 'avaliações encontradas'}
+                            {' • Linha tracejada preta = média do time'}
+                          </p>
+                        )}
+                      </div>
+
+                      {isLoadingEvaluations ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center">
+                            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
+                            <p className="text-gray-600 dark:text-gray-400">Carregando dados das avaliações...</p>
+                          </div>
+                        </div>
+                      ) : evaluationData.length === 0 ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center text-gray-500 dark:text-gray-400">
+                            <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                            <p>Nenhuma avaliação encontrada para este consultor</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-96">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart data={evaluationData}>
+                              <PolarGrid stroke="#d1d5db" />
+                              <PolarAngleAxis 
+                                dataKey="subcategory" 
+                                tick={{ fill: '#6b7280', fontSize: 11 }}
+                                tickLine={{ stroke: '#9ca3af' }}
+                              />
+                              <PolarRadiusAxis 
+                                angle={90} 
+                                domain={[0, 5]} 
+                                tick={{ fill: '#6b7280', fontSize: 11 }}
+                                tickCount={6}
+                              />
+                              {/* Renderiza uma linha Radar para cada avaliação */}
+                              {evaluationMetadata.map((evalMeta, index) => {
+                                const date = new Date(evalMeta.updated_at);
+                                const formattedDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                const displayName = `Avaliação ${index + 1} (${formattedDate})`;
+                                const dataKey = `evaluation_${index + 1}`;
+                                
+                                // Cores diferentes para cada avaliação
+                                const colors = [
+                                  { stroke: '#f97316', fill: '' }, // Laranja
+                                  { stroke: '#3b82f6', fill: '' }, // Azul
+                                  { stroke: '#10b981', fill: '' }, // Verde
+                                  { stroke: '#8b5cf6', fill: '' }, // Roxo
+                                  { stroke: '#ef4444', fill: '' }, // Vermelho
+                                  { stroke: '#f59e0b', fill: '' }, // Amarelo
+                                  { stroke: '#06b6d4', fill: '' }, // Cyan
+                                  { stroke: '#ec4899', fill: '' }, // Rosa
+                                ];
+                                
+                                const color = colors[index % colors.length];
+                                
+                                return (
+                                  <Radar
+                                    key={evalMeta.id}
+                                    name={displayName}
+                                    dataKey={dataKey}
+                                    stroke={color.stroke}
+                                    fill={color.fill}
+                                    fillOpacity={0}
+                                    strokeWidth={3}
+                                    
+                                  />
+                                );
+                              })}
+                              <Radar
+                                name="Média do Time"
+                                dataKey="Média do Time"
+                                stroke="#2b2b2b"
+                                fill="#000000"
+                                fillOpacity={0}
+                                strokeWidth={3}
+                                strokeDasharray="5 5"
+                                dot={{ fill: '#2b2b2b', r: 1 }}
+                              />
+                              
+                              <Legend 
+                                wrapperStyle={{ paddingTop: '5px' }}
+                                iconType="circle"
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Segunda linha de cards (opcional) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                      {/* Card 2: Gráfico de Feedbacks por Tipo */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
+                          <MessageSquare className="w-5 h-5 text-blue-500" />
+                          Feedbacks por Tipo
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          Distribuição dos feedbacks recebidos.
+                        </p>
+                      </div>
+                      {isLoadingFeedbacks ? (
+                        <div className="flex justify-center items-center h-96">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                        </div>
+                      ) : feedbackByTypeData.length === 0 ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center text-gray-400 dark:text-gray-500">
+                            <MessageSquare className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                            <p className="text-sm">Nenhum feedback para exibir</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-96">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={feedbackByTypeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+                              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
+                              <Tooltip
+                                cursor={{ fill: 'rgba(249, 115, 22, 0.1)' }}
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '0.5rem',
+                                  fontSize: '12px'
+                                }}
+                              />
+                              <Bar dataKey="count" name="Quantidade" fill="#3b82f6" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card 3: Placeholder */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-green-500" />
+                          Análise Complementar
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Espaço para métricas adicionais
+                        </p>
+                      </div>
+                      <div className="flex justify-center items-center h-80">
+                        <div className="text-center text-gray-400 dark:text-gray-500">
+                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                          <p className="text-sm">Aguardando implementação</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    
                   </div>
                 </div>
               )}

@@ -39,6 +39,13 @@ const Feedbacks = () => {
   const [endDate, setEndDate] = useState('');
   const [selectedConsultants, setSelectedConsultants] = useState<ConsultantOption[]>([]);
   
+  // Função auxiliar para remover tags HTML
+  const stripHtml = (html: string): string => {
+    const tmp = document.createElement('DIV');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  };
+  
 
 
   // Função para calcular o intervalo de datas baseado no tipo de período
@@ -249,7 +256,32 @@ const Feedbacks = () => {
       field: 'type',
       flex: 1,
       minWidth: 150,
-      cellRenderer: (params: any) => params.value || '-',
+      cellRenderer: (params: any) => {
+        if (!params.value) return '-';
+        
+        const getTypeStyle = (type: string) => {
+          switch (type) {
+            case 'Positivo':
+              return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+            case 'Elogio':
+              return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+            case 'Orientação':
+              return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+            case 'Melhoria':
+              return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+            default:
+              return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+          }
+        };
+        
+        return (
+          <div className="flex items-center h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeStyle(params.value)}`}>
+              {params.value}
+            </span>
+          </div>
+        );
+      },
     },
     {
       headerName: 'PDI',
@@ -280,7 +312,23 @@ const Feedbacks = () => {
       field: 'public_comment',
       flex: 3,
       minWidth: 300,
-      cellRenderer: (params: any) => params.value || '-',
+      cellRenderer: (params: any) => {
+        if (!params.value) return '-';
+        const plainText = stripHtml(params.value);
+        return (
+          <div 
+            className="line-clamp-2 overflow-hidden" 
+            style={{ 
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden'
+            }}
+            title={plainText}
+            dangerouslySetInnerHTML={{ __html: params.value }}
+          />
+        );
+      },
     },
     {
       headerName: 'Ação',
@@ -401,25 +449,25 @@ const Feedbacks = () => {
             </div>
           </div>
 
-          {/* Orientação */}
+          {/* Elogio */}
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs text-blue-600 dark:text-blue-400">Orientação</div>
-              <MessageCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <div className="text-xs text-blue-600 dark:text-blue-400">Elogio</div>
+              <Trophy className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
-              {feedbacks.filter(f => f.type === 'Orientação').length}
+              {feedbacks.filter(f => f.type === 'Elogio').length}
             </div>
           </div>
 
-          {/* Elogio */}
+          {/* Orientação */}
           <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-2 border border-yellow-200 dark:border-yellow-800">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-xs text-yellow-600 dark:text-yellow-400">Elogio</div>
-              <Trophy className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              <div className="text-xs text-yellow-600 dark:text-yellow-400">Orientação</div>
+              <MessageCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
             </div>
             <div className="text-xl font-bold text-yellow-700 dark:text-yellow-300">
-              {feedbacks.filter(f => f.type === 'Elogio').length}
+              {feedbacks.filter(f => f.type === 'Orientação').length}
             </div>
           </div>
 

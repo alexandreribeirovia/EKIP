@@ -15,6 +15,7 @@ import EmployeeEvaluations from '@/pages/Evaluations'
 import PDI from '@/pages/PDI'
 import EvaluationResponse from '@/pages/EvaluationResponse'
 import Users from '@/pages/Users'
+import Domains from '@/pages/Domains'
 import Login from '@/pages/Login'
 import ForgotPassword from '@/pages/ForgotPassword'
 import ResetPassword from '@/pages/ResetPassword'
@@ -102,6 +103,7 @@ function App() {
             <Route path="/pdi" element={<ProtectedRoute><PDI /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+            <Route path="/domains" element={<ProtectedRoute><Domains /></ProtectedRoute>} />
           </Routes>
         </Layout>
       } />
