@@ -2,10 +2,16 @@ import { useState, useEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
 import { Plus, Edit, Database, FolderTree, CheckCircle, XCircle, Copy } from 'lucide-react'
+import Select from 'react-select'
 import DomainModal from '@/components/DomainModal'
 import NotificationToast from '@/components/NotificationToast'
 import { supabase } from '@/lib/supabaseClient'
 import { DbDomain } from '@/types'
+
+interface TypeOption {
+  value: string;
+  label: string;
+}
 
 const Domains = () => {
   const [domains, setDomains] = useState<DbDomain[]>([])
@@ -17,7 +23,7 @@ const Domains = () => {
 
   // Filtros
   const [searchText, setSearchText] = useState('')
-  const [filterType, setFilterType] = useState<string>('all')
+  const [selectedTypes, setSelectedTypes] = useState<TypeOption[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
   // Buscar domínios
@@ -47,7 +53,7 @@ const Domains = () => {
       }))
 
       setDomains(domainsWithParent)
-      applyFilters(domainsWithParent, searchText, filterType, filterStatus)
+      applyFilters(domainsWithParent, searchText, selectedTypes, filterStatus)
     } catch (err) {
       console.error('Erro ao buscar domínios:', err)
     } finally {
@@ -59,7 +65,7 @@ const Domains = () => {
   const applyFilters = (
     data: DbDomain[],
     search: string,
-    type: string,
+    types: TypeOption[],
     status: string
   ) => {
     let filtered = [...data]
@@ -75,9 +81,10 @@ const Domains = () => {
       )
     }
 
-    // Filtro de tipo
-    if (type !== 'all') {
-      filtered = filtered.filter((domain) => domain.type === type)
+    // Filtro de tipo (múltipla seleção)
+    if (types.length > 0) {
+      const selectedTypeValues = types.map(t => t.value)
+      filtered = filtered.filter((domain) => selectedTypeValues.includes(domain.type))
     }
 
     // Filtro de status
@@ -97,8 +104,8 @@ const Domains = () => {
 
   // Reaplica filtros quando mudam
   useEffect(() => {
-    applyFilters(domains, searchText, filterType, filterStatus)
-  }, [searchText, filterType, filterStatus, domains])
+    applyFilters(domains, searchText, selectedTypes, filterStatus)
+  }, [searchText, selectedTypes, filterStatus, domains])
 
   // Abrir modal para criar domínio
   const handleCreateDomain = () => {
@@ -145,6 +152,10 @@ const Domains = () => {
 
   // Obter tipos únicos para o filtro
   const uniqueTypes = Array.from(new Set(domains.map((d) => d.type))).sort()
+  const typeOptions: TypeOption[] = uniqueTypes.map(type => ({
+    value: type,
+    label: type
+  }))
 
   // Estatísticas
   const stats = {
@@ -270,19 +281,16 @@ const Domains = () => {
           </div>
 
           {/* Filtro de Tipo */}
-          <div className="w-full lg:w-56">
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
-            >
-              <option value="all">Todos os Tipos</option>
-              {uniqueTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
+          <div className="flex-1 min-w-0">
+            <Select
+              isMulti
+              value={selectedTypes}
+              onChange={(selected) => setSelectedTypes(selected as TypeOption[])}
+              options={typeOptions}
+              placeholder="Filtrar tipo"
+              className="react-select-container"
+              classNamePrefix="react-select"
+            />
           </div>
 
           {/* Filtro de Status */}

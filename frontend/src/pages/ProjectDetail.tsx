@@ -13,6 +13,7 @@ import AssigneeCellRenderer from '../components/AssigneeCellRenderer.tsx';
 import ProjectOwnerRenderer from '../components/ProjectOwnerRenderer.tsx';
 import ProjectProgressModal from '../components/ProjectProgressModal.tsx';
 import RiskModal from '../components/RiskModal.tsx';
+import HtmlCellRenderer from '../components/HtmlCellRenderer.tsx';
 
 interface SelectOption {
   value: string;
@@ -1002,12 +1003,14 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       field: 'description',
       flex: 2,
       minWidth: 200,
+      cellRenderer: HtmlCellRenderer,
     },
     {
       headerName: 'Plano de Ação',
       field: 'action_plan',
       flex: 2,
       minWidth: 200,
+      cellRenderer: HtmlCellRenderer,
     },
     {
       headerName: 'Início',

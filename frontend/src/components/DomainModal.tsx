@@ -183,7 +183,7 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
           )}
 
           {/* Tipo e Valor - Grid 2 colunas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
             {/* Tipo */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -213,10 +213,10 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
             </div>
           </div>
 
-          {/* Domínio Pai e Status - Grid 2 colunas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Domínio Pai */}
-            <div>
+          {/* Domínio Pai e Status - Grid 3 colunas (2/3 + 1/3) */}
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            {/* Domínio Pai - 2/3 da linha */}
+            <div className="md:col-span-5">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Domínio Pai (opcional):
               </label>
@@ -228,11 +228,13 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
                 className="react-select-container"
                 classNamePrefix="react-select"
                 isClearable
+                menuPosition="fixed"
+                menuPlacement="auto"
               />
             </div>
 
-            {/* Status Ativo */}
-            <div>
+            {/* Status Ativo - 1/3 da linha */}
+            <div className="md:col-span-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Status:
               </label>

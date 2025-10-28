@@ -249,6 +249,94 @@ All modals in the application should follow this standardized pattern (see `Risk
 - **Max height**: `max-h-[90vh] overflow-y-auto` for scrollable content
 - **Labels**: `text-sm font-medium` with `mb-1` spacing
 
+### WYSIWYG Editor Pattern (ReactQuill)
+For rich text input fields, use the ReactQuill WYSIWYG editor with standardized configuration (see `FeedbackModal.tsx` for reference):
+
+```tsx
+// Import dependencies
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+
+// State management
+const [content, setContent] = useState('');
+
+// Render the WYSIWYG editor
+<div>
+  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+    Field Label: *
+  </label>
+  <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
+    <ReactQuill
+      theme="snow"
+      value={content}
+      onChange={setContent}
+      placeholder="Digite o conteúdo..."
+      className="feedback-wysiwyg"
+      modules={{
+        toolbar: [
+          [{ 'header': [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          [{ 'color': [] }, { 'background': [] }],
+          ['link'],
+          ['clean']
+        ],
+      }}
+    />
+  </div>
+</div>
+```
+
+**WYSIWYG Editor Rules:**
+- **Library**: Use `react-quill` package (already installed in project)
+- **Theme**: Always use `theme="snow"` for consistent appearance
+- **Container**: Wrap in `div` with border, rounded corners, and overflow-hidden
+- **Border styling**: `border border-gray-300 dark:border-gray-600 rounded-lg`
+- **Background**: `bg-white dark:bg-gray-800` for dark mode support
+- **Custom class**: Use `feedback-wysiwyg` class for additional styling
+- **Toolbar modules**: Standard set includes headers (H1-H3), bold, italic, underline, strike, ordered/bullet lists, text/background color, links, and clean formatting
+- **Placeholder**: Always provide descriptive placeholder text
+- **State**: Use string state variable with `value={content}` and `onChange={setContent}`
+- **Styling in index.css**: Custom styles for dark mode are defined in `frontend/src/index.css` under `.feedback-wysiwyg`
+
+**Required CSS (already in index.css):**
+```css
+/* ReactQuill Dark Mode Styles */
+.feedback-wysiwyg .ql-toolbar {
+  @apply bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600;
+}
+
+.feedback-wysiwyg .ql-container {
+  @apply bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600;
+  min-height: 150px;
+}
+
+.feedback-wysiwyg .ql-editor {
+  @apply text-gray-900 dark:text-gray-100;
+  min-height: 150px;
+}
+
+.feedback-wysiwyg .ql-editor.ql-blank::before {
+  @apply text-gray-400 dark:text-gray-500;
+}
+
+.feedback-wysiwyg .ql-stroke {
+  @apply stroke-gray-700 dark:stroke-gray-300;
+}
+
+.feedback-wysiwyg .ql-fill {
+  @apply fill-gray-700 dark:fill-gray-300;
+}
+
+.feedback-wysiwyg .ql-picker-label {
+  @apply text-gray-700 dark:text-gray-300;
+}
+```
+
+**Examples in Use:**
+- See `FeedbackModal.tsx` for public comment field
+- Use this pattern for any long-form text input that benefits from formatting (comments, descriptions, notes, etc.)
+
 ### Notification Toast Pattern
 All success/error notifications should use the standardized `NotificationToast` component (see `ProjectDetail.tsx` for reference):
 

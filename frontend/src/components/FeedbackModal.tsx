@@ -74,13 +74,12 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
       if (feedbackToEdit) {
         const checkPDI = async () => {
           const { data, error } = await supabase
-            .from('pdis')
+            .from('pdi')
             .select('id')
             .eq('feedback_id', feedbackToEdit.id)
             .limit(1);
 
           if (error) {
-            console.error('Erro ao verificar PDI vinculado:', error);
             setHasLinkedPDI(false);
           } else {
             const hasPDI = data && data.length > 0;
@@ -88,16 +87,10 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
             
             // Se existe PDI vinculado mas o campo is_pdi está false, atualiza
             if (hasPDI && !feedbackToEdit.is_pdi) {
-              const { error: updateError } = await supabase
+              await supabase
                 .from('feedbacks')
                 .update({ is_pdi: true })
                 .eq('id', feedbackToEdit.id);
-              
-              if (updateError) {
-                console.error('Erro ao atualizar is_pdi:', updateError);
-              } else {
-                console.log('✅ Campo is_pdi atualizado para true no feedback', feedbackToEdit.id);
-              }
             }
           }
         };
@@ -139,7 +132,6 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
         .order('name');
 
       if (usersError) {
-        console.error('Erro ao buscar usuários:', usersError);
         setError('Erro ao carregar lista de usuários');
         return;
       }
@@ -151,7 +143,6 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
 
       setUsers(userOptions);
     } catch (err) {
-      console.error('Erro ao buscar usuários:', err);
       setError('Erro ao carregar lista de usuários');
     }
   };
@@ -239,7 +230,6 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
       onSuccess();
       onClose();
     } catch (err: any) {
-      console.error('Erro ao salvar feedback:', err);
       setError(err.message || 'Erro ao salvar feedback. Tente novamente.');
     } finally {
       setIsSubmitting(false);
@@ -423,65 +413,29 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
     </div>
     
     {/* Modal de PDI - FORA do modal de feedback para evitar problemas de z-index */}
-    {(() => {
-      console.log('🔍 Verificando renderização do PDIModal:', {
-        feedbackToEdit: !!feedbackToEdit,
-        isPDIModalOpen,
-        feedbackId: feedbackToEdit?.id
-      });
-      
-      if (!feedbackToEdit || !isPDIModalOpen) {
-        console.log('❌ PDIModal NÃO será renderizado');
-        return null;
-      }
-      
-      const consultant = { value: feedbackToEdit.feedback_user_id, label: feedbackToEdit.feedback_user_name };
-      const manager = { value: feedbackToEdit.owner_user_id, label: feedbackToEdit.owner_user_name };
-      
-      console.log('✅ Renderizando PDIModal com:', {
-        feedbackId: feedbackToEdit.id,
-        consultant,
-        manager,
-        isPDIModalOpen
-      });
-      
-      return (
-        <PDIModal
-          isOpen={isPDIModalOpen}
-          onClose={() => {
-            console.log('🔴 Fechando PDIModal');
-            setIsPDIModalOpen(false);
-          }}
-          onSuccess={async () => {
-            console.log('🎉 PDI criado com sucesso');
-            setHasLinkedPDI(true);
-            
-            // Atualiza o campo is_pdi na tabela feedbacks
-            if (feedbackToEdit) {
-              const { error: updateError } = await supabase
-                .from('feedbacks')
-                .update({ is_pdi: true })
-                .eq('id', feedbackToEdit.id);
-              
-              if (updateError) {
-                console.error('Erro ao atualizar is_pdi:', updateError);
-              } else {
-                console.log('✅ Campo is_pdi atualizado para true após criação do PDI');
-              }
-            }
-            
-            setIsPDIModalOpen(false);
-          }}
-          feedbackId={feedbackToEdit.id}
-          prefilledConsultant={consultant}
-          prefilledManager={manager}
-          onError={(message) => {
-            console.log('❌ Erro no PDI:', message);
-            setError(message);
-          }}
-        />
-      );
-    })()}
+    {feedbackToEdit && isPDIModalOpen && (
+      <PDIModal
+        isOpen={isPDIModalOpen}
+        onClose={() => setIsPDIModalOpen(false)}
+        onSuccess={async () => {
+          setHasLinkedPDI(true);
+          
+          // Atualiza o campo is_pdi na tabela feedbacks
+          if (feedbackToEdit) {
+            await supabase
+              .from('feedbacks')
+              .update({ is_pdi: true })
+              .eq('id', feedbackToEdit.id);
+          }
+          
+          setIsPDIModalOpen(false);
+        }}
+        feedbackId={feedbackToEdit.id}
+        prefilledConsultant={{ value: feedbackToEdit.feedback_user_id, label: feedbackToEdit.feedback_user_name }}
+        prefilledManager={{ value: feedbackToEdit.owner_user_id, label: feedbackToEdit.owner_user_name }}
+        onError={(message) => setError(message)}
+      />
+    )}
     </>
   );
 };

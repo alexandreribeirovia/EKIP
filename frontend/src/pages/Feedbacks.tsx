@@ -5,6 +5,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Edit } from 'lucide-react';
 import FeedbackModal from '../components/FeedbackModal';
+import HtmlCellRenderer from '../components/HtmlCellRenderer';
 import '../styles/main.css';
 
 interface ConsultantOption {
@@ -39,15 +40,6 @@ const Feedbacks = () => {
   const [endDate, setEndDate] = useState('');
   const [selectedConsultants, setSelectedConsultants] = useState<ConsultantOption[]>([]);
   
-  // Função auxiliar para remover tags HTML
-  const stripHtml = (html: string): string => {
-    const tmp = document.createElement('DIV');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
-  };
-  
-
-
   // Função para calcular o intervalo de datas baseado no tipo de período
   const getDateRange = () => {
     const now = new Date();
@@ -312,23 +304,7 @@ const Feedbacks = () => {
       field: 'public_comment',
       flex: 3,
       minWidth: 300,
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        const plainText = stripHtml(params.value);
-        return (
-          <div 
-            className="line-clamp-2 overflow-hidden" 
-            style={{ 
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
-            }}
-            title={plainText}
-            dangerouslySetInnerHTML={{ __html: params.value }}
-          />
-        );
-      },
+      cellRenderer: HtmlCellRenderer,
     },
     {
       headerName: 'Ação',

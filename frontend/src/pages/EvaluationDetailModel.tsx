@@ -158,8 +158,9 @@ const EvaluationDetail = () => {
 
       setCategories(data || []);
       
-      // Expandir todas as categorias e subcategorias APENAS na primeira carga
+      // Expandir todas as categorias APENAS na primeira carga
       // (quando ainda não há nenhuma categoria expandida)
+      // Subcategorias ficam fechadas por padrão
       setExpandedCategories(prev => {
         if (prev.size === 0) {
           return new Set(categoryIds);
@@ -167,9 +168,10 @@ const EvaluationDetail = () => {
         return prev;
       });
       
+      // Subcategorias começam fechadas - não expandir automaticamente
       setExpandedSubcategories(prev => {
         if (prev.size === 0) {
-          return new Set(subcategoryIds);
+          return new Set(); // Set vazio = todas fechadas
         }
         return prev;
       });

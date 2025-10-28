@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { DbRisk, DbDomain } from '../types';
 
 interface RiskModalProps {
@@ -350,13 +352,25 @@ const RiskModal = ({ isOpen, onClose, onSuccess, projectId, riskData = null }: R
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Descrição: *
             </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Descreva o risco identificado..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent resize-none"
-            />
+            <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={description}
+                onChange={setDescription}
+                placeholder="Descreva o risco identificado..."
+                className="feedback-wysiwyg"
+                modules={{
+                  toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['link'],
+                    ['clean']
+                  ],
+                }}
+              />
+            </div>
           </div>
 
           {/* Plano de Ação */}
@@ -364,13 +378,25 @@ const RiskModal = ({ isOpen, onClose, onSuccess, projectId, riskData = null }: R
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Plano de Ação: *
             </label>
-            <textarea
-              value={actionPlan}
-              onChange={(e) => setActionPlan(e.target.value)}
-              rows={3}
-              placeholder="Descreva o plano de ação para mitigar o risco..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent resize-none"
-            />
+            <div className="border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
+              <ReactQuill
+                theme="snow"
+                value={actionPlan}
+                onChange={setActionPlan}
+                placeholder="Descreva o plano de ação para mitigar o risco..."
+                className="feedback-wysiwyg"
+                modules={{
+                  toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['link'],
+                    ['clean']
+                  ],
+                }}
+              />
+            </div>
           </div>
 
           {/* Footer Buttons */}

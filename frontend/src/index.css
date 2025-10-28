@@ -285,3 +285,71 @@
 .feedback-wysiwyg .ql-toolbar button.ql-active .ql-fill {
   fill: #f97316 !important;
 }
+
+/* HTML Cell Renderer Tooltip Styles */
+.prose {
+  max-width: none;
+}
+
+.prose p {
+  margin-bottom: 0.5em;
+}
+
+.prose ul, .prose ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin-bottom: 0.25em;
+}
+
+.prose strong {
+  font-weight: 600;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose a {
+  color: #f97316;
+  text-decoration: underline;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  font-weight: 600;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose h1 {
+  font-size: 1.25rem;
+}
+
+.prose h2 {
+  font-size: 1.125rem;
+}
+
+.prose h3 {
+  font-size: 1rem;
+}
+
+/* Dark mode prose styles */
+.dark .prose {
+  color: #f9fafb;
+}
+
+.dark .prose strong {
+  color: #f9fafb;
+}
+
+.dark .prose a {
+  color: #fb923c;
+}
+
+.dark .prose h1, 
+.dark .prose h2, 
+.dark .prose h3 {
+  color: #f9fafb;
+}
