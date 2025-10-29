@@ -1,11 +1,18 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "coverage"
+    "build",
+    "coverage",
+    ".turbo",
+    ".next",
+    "public",
+    "**/*.d.ts",
+    "**/*.gen.*"
   ]
 }

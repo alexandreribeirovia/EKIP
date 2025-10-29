@@ -1,8 +1,11 @@
-dist
-node_modules
-*.js
-prisma/migrations
-coverage
+# comuns
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.turbo/
+**/.next/
+**/public/
+**/*.d.ts
+**/*.gen.*
 .env
-dist
-*.js

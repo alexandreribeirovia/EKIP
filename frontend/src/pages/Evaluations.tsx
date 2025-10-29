@@ -383,8 +383,7 @@ const Evaluations = () => {
         }
         
         // Se houver múltiplos projetos, exibir os nomes separados por vírgula
-        const projectNames = projects.map((p: any) => p.project_name).join(' | ');
-        return projectNames;
+        return projects.map((p: any) => p.project_name).join(' | ');
       },
     },
     {

@@ -450,7 +450,7 @@ const TimeEntries = () => {
   const sortedTimeEntries = useMemo(() => {
     if (!sortColumn) return timeEntries;
 
-    const sorted = [...timeEntries].sort((a, b) => {
+    return [...timeEntries].sort((a, b) => {
       let compareValue = 0;
 
       switch (sortColumn) {
@@ -490,8 +490,6 @@ const TimeEntries = () => {
 
       return sortDirection === 'asc' ? compareValue : -compareValue;
     });
-
-    return sorted;
   }, [timeEntries, sortColumn, sortDirection]);
 
   // Cálculo dos totais

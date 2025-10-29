@@ -750,7 +750,7 @@ const EmployeeDetail = () => {
         if (teamAverageMap.has(subcategory)) {
           const teamValues = teamAverageMap.get(subcategory)!;
           const teamAvgScore = teamValues.totalWeight > 0 ? teamValues.totalScore / teamValues.totalWeight : 0;
-          dataPoint['Média do Time'] = Number(teamAvgScore.toFixed(2));
+          dataPoint['Media do Time'] = Number(teamAvgScore.toFixed(2));
         }
 
         return dataPoint;

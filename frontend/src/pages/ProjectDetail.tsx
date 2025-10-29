@@ -46,11 +46,8 @@ const NotificationToast = ({ type, message, onClose }: {
   const startTimers = useCallback(() => {
     clearTimers();
     
-    // Resetar progresso para o valor atual proporcional
-    const currentProgress = progress;
-    
     // Criar timeout baseado no progresso atual
-    const remainingTime = (currentProgress / 100) * 10000;
+    const remainingTime = (progress / 100) * 10000;
     
     timeoutRef.current = setTimeout(() => {
       onClose();
@@ -845,9 +842,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const riskStatusOptions = useMemo(() => {
     if (!domains || domains.length === 0) return [];
     const statusDomains = domains.filter(domain => domain.type === 'risk_status' && domain.is_active);
-    const options = statusDomains.map(domain => ({ value: domain.value, label: domain.value }));
-   
-    return options;
+    return statusDomains.map(domain => ({ value: domain.value, label: domain.value }));
   }, [domains]);
 
   const showErrorNotification = useCallback((message: string) => {
@@ -1624,9 +1619,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     
     // Progresso planejado acumulativo: cada semana adiciona uma porcentagem igual
     const progressPerWeek = 100 / totalWeeks;
-    const accumulatedProgress = Math.min(100, currentWeek * progressPerWeek);
-    
-    return accumulatedProgress;
+    return Math.min(100, currentWeek * progressPerWeek);
   }, []);
 
 

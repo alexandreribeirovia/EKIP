@@ -590,11 +590,10 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
           const areaData = skillsHierarchy[area];
           const hasCategories = Object.keys(areaData.categories || {}).length > 0;
           const directSkills = (areaData.directSkills || []).filter((skill: Skill) => {
-            const isValidSkill = !userSkillIds.has(skill.id) && (
+            return !userSkillIds.has(skill.id) && (
               (skill.skill && skill.skill.trim() !== '') || // Skill normal
               (!skill.skill && !skill.category) // Área como skill (ZENDESK)
             );
-            return isValidSkill;
           });
           
           // Se há categorias com habilidades disponíveis, tem próximo nível
@@ -602,14 +601,12 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
           if (hasCategories) {
             hasCategoriesWithSkills = Object.keys(areaData.categories).some(category => {
               const categorySkills = areaData.categories[category] || [];
-              const validSkills = categorySkills.some((skill: Skill) => {
-                const isValidSkill = !userSkillIds.has(skill.id) && (
+              return categorySkills.some((skill: Skill) => {
+                return !userSkillIds.has(skill.id) && (
                   (skill.skill && skill.skill.trim() !== '') || // Skill normal
                   (!skill.skill && skill.category && skill.category.trim() !== '') // Category como skill
                 );
-                return isValidSkill;
               });
-              return validSkills;
             });
           }
           
@@ -630,22 +627,20 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
           
           // Verifica habilidades diretas válidas (que têm skill não nulo ou área como skill)
           const hasDirectSkills = (areaData.directSkills || []).some((skill: Skill) => {
-            const isValidSkill = !userSkillIds.has(skill.id) && (
+            return !userSkillIds.has(skill.id) && (
               (skill.skill && skill.skill.trim() !== '') || // Skill normal
               (!skill.skill && !skill.category) // Área como skill (ZENDESK)
             );
-            return isValidSkill;
           });
           
           // Verifica habilidades em categorias válidas (que têm skill não nulo OU category como skill)
           const hasCategorySkills = Object.keys(areaData.categories || {}).some(category => {
             const categorySkills = areaData.categories[category] || [];
             return categorySkills.some((skill: Skill) => {
-              const isValidSkill = !userSkillIds.has(skill.id) && (
+              return !userSkillIds.has(skill.id) && (
                 (skill.skill && skill.skill.trim() !== '') || // Skill normal
                 (!skill.skill && skill.category && skill.category.trim() !== '') // Category como skill
               );
-              return isValidSkill;
             });
           });
           
@@ -665,11 +660,10 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         // Habilidades diretas da área (só se existirem e forem válidas)
         if (areaData.directSkills && areaData.directSkills.length > 0) {
           const availableDirectSkills = areaData.directSkills.filter((skill: Skill) => {
-            const isValidSkill = !userSkillIds.has(skill.id) && (
+            return !userSkillIds.has(skill.id) && (
               (skill.skill && skill.skill.trim() !== '') || // Skill normal
               (!skill.skill && !skill.category) // Área como skill (ZENDESK)
             );
-            return isValidSkill;
           });
           
           if (availableDirectSkills.length > 0) {
@@ -702,11 +696,10 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         Object.keys(areaData.categories || {}).forEach(category => {
           const categorySkills = areaData.categories[category] || [];
           const availableSkills = categorySkills.filter((skill: Skill) => {
-            const isValidSkill = !userSkillIds.has(skill.id) && (
+            return !userSkillIds.has(skill.id) && (
               (skill.skill && skill.skill.trim() !== '') || // Skill normal
               (!skill.skill && skill.category && skill.category.trim() !== '') // Category como skill
             );
-            return isValidSkill;
           });
           
           if (availableSkills.length > 0) {
@@ -759,12 +752,11 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
         // Adiciona habilidades disponíveis (apenas válidas)
         skills
           .filter(skill => {
-            const isValidSkill = !userSkillIds.has(skill.id) && (
+            return !userSkillIds.has(skill.id) && (
               (skill.skill && skill.skill.trim() !== '') || // Skill normal
               (!skill.skill && skill.category && skill.category.trim() !== '') || // Category como skill
               (!skill.skill && !skill.category) // Área como skill (ZENDESK)
             );
-            return isValidSkill;
           })
           .forEach(skill => {
             const skillName = skill.skill || skill.category || skill.area || '';
@@ -807,11 +799,10 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
           // Esta área tem apenas uma habilidade direta, vamos encontrá-la e adicioná-la
           const directSkills = areaData.directSkills || [];
           const availableSkills = directSkills.filter((skill: Skill) => {
-            const isValidSkill = !userSkillIds.has(skill.id) && (
+            return !userSkillIds.has(skill.id) && (
               (skill.skill && skill.skill.trim() !== '') || // Skill normal
               (!skill.skill && !skill.category) // Área como skill (ZENDESK)
             );
-            return isValidSkill;
           });
           
           if (availableSkills.length === 1) {

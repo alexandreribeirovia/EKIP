@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
-import { Plus, Trash2, FileText, Edit, Settings, CreditCard } from 'lucide-react';
+import { Plus, Trash2, FileText, Edit, CreditCard } from 'lucide-react';
 import { EvaluationData } from '../types';
 import EvaluationModelModal from '../components/EvaluationModelModal';
 import '../styles/main.css';

@@ -101,8 +101,7 @@ const EvaluationDetail = () => {
   
   useEffect(() => {
     // Salvar posição do scroll antes do re-render
-    const currentScroll = window.scrollY;
-    scrollPositionRef.current = currentScroll;
+    scrollPositionRef.current = window.scrollY;
   });
 
   useEffect(() => {
@@ -386,10 +385,7 @@ const EvaluationDetail = () => {
     }
     
     // Adicionar a categoria e suas subcategorias temporariamente ao array de categorias
-    setCategories(prev => {
-      const updated = [...prev, selectedCategory, ...(subcats || [])];
-      return updated;
-    });
+    setCategories(prev => [...prev, selectedCategory, ...(subcats || [])]);
     
     // Expandir a categoria
     setExpandedCategories(prev => {
@@ -1684,8 +1680,8 @@ const EvaluationDetail = () => {
                   questionForm={questionForm}
                   replyTypes={replyTypes}
                   categories={categories}
-                  onSave={(question, description, replyTypeId, weight, required) => {
-                    handleSaveNewQuestion(category.id, question, description, replyTypeId, weight, required);
+                  onSave={async (question, description, replyTypeId, weight, required) => {
+                    await handleSaveNewQuestion(category.id, question, description, replyTypeId, weight, required);
                   }}
                   onCancel={handleCancelNewQuestion}
                 />
@@ -1865,7 +1861,7 @@ const EvaluationDetail = () => {
                       onMouseDown={(e) => {
                         e.preventDefault(); // Previne blur
                         // Passar valores locais diretamente para a função de salvar
-                        handleSaveEditQuestion(
+                        void handleSaveEditQuestion(
                           localQuestion, 
                           localDescription, 
                           localReplyTypeId, 

@@ -32,11 +32,8 @@ const NotificationToast = ({ type, message, onClose }: {
   const startTimers = useCallback(() => {
     clearTimers();
     
-    // Resetar progresso para o valor atual proporcional
-    const currentProgress = progress;
-    
     // Criar timeout baseado no progresso atual
-    const remainingTime = (currentProgress / 100) * 10000;
+    const remainingTime = (progress / 100) * 10000;
     
     timeoutRef.current = setTimeout(() => {
       onClose();

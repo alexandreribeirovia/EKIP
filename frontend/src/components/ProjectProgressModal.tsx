@@ -711,13 +711,13 @@ const ProjectProgressModal = ({
                    .replace(/[ìíîï]/gi, 'i')
                    .replace(/[òóôõö]/gi, 'o')
                    .replace(/[ùúûü]/gi, 'u')
-                   .replace(/[ç]/gi, 'c') === 
+                   .replace(/ç/gi, 'c') === 
               faseNameNormalized.replace(/[àáâãäå]/gi, 'a')
                                 .replace(/[èéêë]/gi, 'e')
                                 .replace(/[ìíîï]/gi, 'i')
                                 .replace(/[òóôõö]/gi, 'o')
                                 .replace(/[ùúûü]/gi, 'u')
-                                .replace(/[ç]/gi, 'c')
+                                .replace(/ç/gi, 'c')
             );
             
             if (similarPhase) {
