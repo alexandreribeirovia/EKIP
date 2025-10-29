@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
-import { Plus, Trash2, FileText, Edit } from 'lucide-react';
+import { Plus, Trash2, FileText, Edit, Settings, CreditCard } from 'lucide-react';
 import { EvaluationData } from '../types';
 import EvaluationModelModal from '../components/EvaluationModelModal';
 import '../styles/main.css';
@@ -12,6 +12,7 @@ const Evaluations = () => {
   const [evaluations, setEvaluations] = useState<EvaluationData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [evaluationToEdit, setEvaluationToEdit] = useState<EvaluationData | null>(null);
   const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
   const [evaluationToDelete, setEvaluationToDelete] = useState<EvaluationData | null>(null);
   const navigate = useNavigate();
@@ -53,6 +54,21 @@ const Evaluations = () => {
       setEvaluationToDelete(evaluation);
       setIsDeleteConfirmModalOpen(true);
     }
+  };
+
+  // Função para abrir modal de edição
+  const handleEditEvaluation = (evaluationId: number) => {
+    const evaluation = evaluations.find(e => e.id === evaluationId);
+    if (evaluation) {
+      setEvaluationToEdit(evaluation);
+      setIsModalOpen(true);
+    }
+  };
+
+  // Função para fechar modal e limpar estado de edição
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEvaluationToEdit(null);
   };
 
   // Função para confirmar exclusão da avaliação
@@ -141,7 +157,7 @@ const Evaluations = () => {
             className="flex items-center h-full cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
             onClick={() => handleViewEvaluation(params.data.id)}
           >
-            <FileText className="w-4 h-4 mr-2" />
+            <CreditCard className="w-4 h-4 mr-2" />
             <span className="font-medium">{params.value}</span>
           </div>
         );
@@ -190,16 +206,23 @@ const Evaluations = () => {
     {
       headerName: 'Ações',
       field: 'id',
-      width: 120,
+      width: 150,
       cellRenderer: (params: any) => {
         return (
           <div className="flex items-center justify-center h-full gap-2">
             <button
-              onClick={() => handleViewEvaluation(params.value)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Ver detalhes"
+              onClick={() => handleEditEvaluation(params.value)}
+              className="text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+              title="Editar nome e descrição"
             >
               <Edit className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleViewEvaluation(params.value)}
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Ver detalhes e perguntas"
+            >
+              <FileText className="w-4 h-4" />
             </button>
             <button
               onClick={() => handleDeleteEvaluation(params.value)}
@@ -307,13 +330,14 @@ const Evaluations = () => {
         )}
       </div>
 
-      {/* Modal de Nova Avaliação */}
+      {/* Modal de Nova/Editar Avaliação */}
       <EvaluationModelModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         onSuccess={() => {
           void fetchEvaluations();
         }}
+        evaluationToEdit={evaluationToEdit}
       />
 
       {/* Modal de Confirmação de Exclusão */}

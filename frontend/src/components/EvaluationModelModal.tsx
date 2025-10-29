@@ -1,18 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { X, FileText } from 'lucide-react';
+import { EvaluationData } from '../types';
 
 interface EvaluationModelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  evaluationToEdit?: EvaluationData | null;
 }
 
-const EvaluationModelModal = ({ isOpen, onClose, onSuccess }: EvaluationModelModalProps) => {
+const EvaluationModelModal = ({ isOpen, onClose, onSuccess, evaluationToEdit }: EvaluationModelModalProps) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Preencher formulário quando estiver editando
+  useEffect(() => {
+    if (evaluationToEdit) {
+      setName(evaluationToEdit.name);
+      setDescription(evaluationToEdit.description || '');
+      setIsActive(evaluationToEdit.is_active);
+    } else {
+      setName('');
+      setDescription('');
+      setIsActive(true);
+    }
+  }, [evaluationToEdit, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,20 +40,39 @@ const EvaluationModelModal = ({ isOpen, onClose, onSuccess }: EvaluationModelMod
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from('evaluations_model')
-        .insert([
-          {
+      if (evaluationToEdit) {
+        // Atualizar avaliação existente
+        const { error } = await supabase
+          .from('evaluations_model')
+          .update({
             name: name.trim(),
             description: description.trim() || null,
             is_active: isActive,
-          }
-        ]);
+          })
+          .eq('id', evaluationToEdit.id);
 
-      if (error) {
-        console.error('Erro ao criar avaliação:', error);
-        alert('Erro ao criar avaliação. Tente novamente.');
-        return;
+        if (error) {
+          console.error('Erro ao atualizar avaliação:', error);
+          alert('Erro ao atualizar avaliação. Tente novamente.');
+          return;
+        }
+      } else {
+        // Criar nova avaliação
+        const { error } = await supabase
+          .from('evaluations_model')
+          .insert([
+            {
+              name: name.trim(),
+              description: description.trim() || null,
+              is_active: isActive,
+            }
+          ]);
+
+        if (error) {
+          console.error('Erro ao criar avaliação:', error);
+          alert('Erro ao criar avaliação. Tente novamente.');
+          return;
+        }
       }
 
       // Limpa o formulário
@@ -50,8 +84,8 @@ const EvaluationModelModal = ({ isOpen, onClose, onSuccess }: EvaluationModelMod
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Erro ao criar avaliação:', err);
-      alert('Erro ao criar avaliação. Tente novamente.');
+      console.error('Erro ao salvar avaliação:', err);
+      alert('Erro ao salvar avaliação. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -75,7 +109,7 @@ const EvaluationModelModal = ({ isOpen, onClose, onSuccess }: EvaluationModelMod
         <div className="p-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-2xl flex items-center justify-between">
           <div className="flex items-center gap-3">
             <FileText className="w-6 h-6" />
-            <h2 className="text-xl font-bold">Nova Avaliação</h2>
+            <h2 className="text-xl font-bold">{evaluationToEdit ? 'Editar Avaliação' : 'Nova Avaliação'}</h2>
           </div>
           <button
             onClick={handleClose}
@@ -152,7 +186,7 @@ const EvaluationModelModal = ({ isOpen, onClose, onSuccess }: EvaluationModelMod
               className="px-4 py-2 text-sm text-white font-semibold bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileText className="w-4 h-4" />
-              {isSubmitting ? 'Criando...' : 'Criar Avaliação'}
+              {isSubmitting ? 'Salvando...' : (evaluationToEdit ? 'Salvar Alterações' : 'Criar Avaliação')}
             </button>
           </div>
         </form>

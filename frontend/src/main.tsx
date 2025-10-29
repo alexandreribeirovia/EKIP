@@ -1,4 +1,4 @@
-import React from 'react'
+// import React from 'react' - Removido temporariamente (StrictMode desabilitado)
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from 'react-query'
@@ -16,21 +16,22 @@ const queryClient = new QueryClient({
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-          }}
-        />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </React.StrictMode>,
+  // <React.StrictMode> - TEMPORARIAMENTE DESABILITADO para corrigir problema de focus loss
+  <QueryClientProvider client={queryClient}>
+    <BrowserRouter>
+      <App />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
+    </BrowserRouter>
+  </QueryClientProvider>
+  // </React.StrictMode>
+  ,
 ) 

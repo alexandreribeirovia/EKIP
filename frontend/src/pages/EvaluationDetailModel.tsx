@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { 
@@ -77,6 +77,41 @@ const EvaluationDetail = () => {
     reply_type_id: null as number | null,
     weight: 1,
     required: true,
+  });
+
+  // ❌ REMOVIDO handleQuestionFormChange - não usado mais (estado local no NewQuestionForm)
+  // ❌ REMOVIDO handleEditQuestionFormChange - não sincroniza mais no blur
+  // Estado local é usado durante edição, sincronização apenas no save
+
+  // Salvar e restaurar posição do scroll após re-renders + Prevenir auto-scroll
+  const scrollPositionRef = React.useRef<number>(0);
+  
+  useEffect(() => {
+    // PREVENIR AUTO-SCROLL DO NAVEGADOR
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    
+    return () => {
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'auto';
+      }
+    };
+  }, []);
+  
+  useEffect(() => {
+    // Salvar posição do scroll antes do re-render
+    const currentScroll = window.scrollY;
+    scrollPositionRef.current = currentScroll;
+  });
+
+  useEffect(() => {
+    // Restaurar posição do scroll após o re-render
+    const savedScroll = scrollPositionRef.current;
+    
+    if (savedScroll > 0) {
+      window.scrollTo(0, savedScroll);
+    }
   });
 
   // Buscar dados da avaliação
@@ -218,6 +253,7 @@ const EvaluationDetail = () => {
           questions_model (
             id,
             question,
+            description,
             category,
             subcategory,
             category_id,
@@ -242,6 +278,7 @@ const EvaluationDetail = () => {
           return {
             id: q.id,
             question: q.question,
+            description: q.description || '',
             category: q.category,
             subcategory: q.subcategory,
             category_id: q.category_id,
@@ -702,27 +739,49 @@ const EvaluationDetail = () => {
       return;
     }
 
-    const categoryId = activeSubcategory.parent_id;
-    if (!categoryId) {
+    const activeCategoryId = activeSubcategory.parent_id;
+    const overCategoryId = overSubcategory.parent_id;
+    
+    if (!activeCategoryId || !overCategoryId) {
       return;
     }
 
-    // Pegar todas as subcategorias desta categoria que têm perguntas
-    const subcategoriesWithQuestions = categories.filter(c => 
-      c.parent_id === categoryId && 
-      questions.some(q => q.subcategory_id === c.id)
-    );
+    // VERIFICAR: Só pode mover subcategorias dentro da mesma categoria
+    if (activeCategoryId !== overCategoryId) {
+      console.warn('Não é possível mover subcategorias entre categorias diferentes');
+      return;
+    }
+
+    // Pegar todas as subcategorias desta categoria que têm perguntas, ordenadas
+    const subcategoriesWithQuestions = categories
+      .filter(c => 
+        c.parent_id === activeCategoryId && 
+        questions.some(q => q.subcategory_id === c.id)
+      )
+      .map(sub => {
+        // Pegar a menor subcategory_order das perguntas desta subcategoria
+        const subcatQuestions = questions.filter(q => q.subcategory_id === sub.id);
+        const minOrder = subcatQuestions.length > 0 
+          ? Math.min(...subcatQuestions.map(q => q.subcategory_order))
+          : 0;
+        return { ...sub, order: minOrder };
+      })
+      .sort((a, b) => a.order - b.order);
 
     const oldIndex = subcategoriesWithQuestions.findIndex(sub => sub.id === active.id);
     const newIndex = subcategoriesWithQuestions.findIndex(sub => sub.id === over.id);
 
-    // Reordenar localmente
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    // Reordenar usando arrayMove
     const reorderedSubcategories = arrayMove(subcategoriesWithQuestions, oldIndex, newIndex);
 
-    // Atualizar no banco de dados
+    // Atualizar no banco de dados - dar novas ordens sequenciais para todas
     for (let i = 0; i < reorderedSubcategories.length; i++) {
       const subcategory = reorderedSubcategories[i];
-      await updateSubcategoryOrder(categoryId, subcategory.id, i);
+      await updateSubcategoryOrder(activeCategoryId, subcategory.id, i);
     }
 
     // Recarregar perguntas para atualizar a ordem
@@ -737,22 +796,41 @@ const EvaluationDetail = () => {
     })
   );
 
-  // Função de detecção de colisão customizada que prioriza perguntas sobre subcategorias
+  // Função de detecção de colisão customizada
   const customCollisionDetection = (args: any) => {
-    // Primeiro, tenta detectar perguntas usando pointerWithin (mais preciso)
     const pointerCollisions = pointerWithin(args);
     
     if (pointerCollisions.length > 0) {
-      // Filtrar apenas perguntas se estamos arrastando uma pergunta
       const isDraggingQuestion = questions.some(q => q.id === args.active.id);
+      const isDraggingSubcategory = categories.some(c => c.parent_id !== null && c.id === args.active.id);
       
       if (isDraggingQuestion) {
+        // Priorizar colisões com perguntas
         const questionCollisions = pointerCollisions.filter(collision => 
           questions.some(q => q.id === collision.id)
         );
         
         if (questionCollisions.length > 0) {
           return questionCollisions;
+        }
+      }
+      
+      if (isDraggingSubcategory) {
+        // Para subcategorias, só permitir colisão com outras subcategorias da mesma categoria
+        const activeSubcat = categories.find(c => c.id === args.active.id);
+        if (activeSubcat && activeSubcat.parent_id) {
+          const validCollisions = pointerCollisions.filter(collision => {
+            const overSubcat = categories.find(c => c.id === collision.id);
+            // Só permitir colisão com subcategorias da mesma categoria pai
+            return overSubcat && overSubcat.parent_id === activeSubcat.parent_id;
+          });
+          
+          if (validCollisions.length > 0) {
+            return validCollisions;
+          }
+          
+          // Se não encontrou colisões válidas, retornar vazio para impedir o drop
+          return [];
         }
       }
       
@@ -777,28 +855,42 @@ const EvaluationDetail = () => {
   };
 
   // Salvar nova pergunta
-  const handleSaveNewQuestion = async (categoryId: number) => {
-    if (!questionForm.question.trim()) {
+  const handleSaveNewQuestion = async (
+    categoryId: number,
+    overrideQuestion?: string,
+    overrideDescription?: string,
+    overrideReplyTypeId?: number | null,
+    overrideWeight?: number,
+    overrideRequired?: boolean
+  ) => {
+    // Usar valores passados ou valores do estado global
+    const question = overrideQuestion !== undefined ? overrideQuestion : questionForm.question;
+    const description = overrideDescription !== undefined ? overrideDescription : questionForm.description;
+    const replyTypeId = overrideReplyTypeId !== undefined ? overrideReplyTypeId : questionForm.reply_type_id;
+    const weight = overrideWeight !== undefined ? overrideWeight : questionForm.weight;
+    const required = overrideRequired !== undefined ? overrideRequired : questionForm.required;
+
+    if (!question.trim()) {
       alert('Por favor, preencha a pergunta.');
       return;
     }
 
-    if (!questionForm.reply_type_id) {
+    if (!replyTypeId) {
       alert('Por favor, selecione o tipo de resposta.');
       return;
     }
 
     // Verificar se o tipo selecionado é texto
-    const selectedType = replyTypes.find(t => t.id === questionForm.reply_type_id);
+    const selectedType = replyTypes.find(t => t.id === replyTypeId);
     const isTextType = selectedType?.value.toLowerCase().includes('texto');
 
     // Validar peso: se não for texto, deve ser >= 1; se for texto, deve ser 0
-    if (!isTextType && questionForm.weight < 1) {
+    if (!isTextType && weight < 1) {
       alert('O peso deve ser maior ou igual a 1.');
       return;
     }
 
-    if (isTextType && questionForm.weight !== 0) {
+    if (isTextType && weight !== 0) {
       alert('O peso deve ser 0 para perguntas do tipo texto.');
       return;
     }
@@ -830,15 +922,53 @@ const EvaluationDetail = () => {
         ? categories.find(c => c.id === selectedSubcategoryForModal)
         : null;
 
-      // Calcular a próxima ordem da categoria e da pergunta
-      const categoryQuestions = getQuestionsByCategory(categoryId);
-      const nextQuestionOrder = categoryQuestions.length > 0
-        ? Math.max(...categoryQuestions.map(q => q.question_order)) + 1
-        : 0;
-      
       const allQuestions = questions;
-      const nextCategoryOrder = allQuestions.length > 0
-        ? Math.max(...allQuestions.map(q => q.category_order)) + 1
+      
+      // CORRIGIDO: Calcular ordem da categoria
+      // Verificar se esta categoria já existe (tem perguntas)
+      const existingCategoryQuestions = allQuestions.filter(q => q.category_id === categoryId);
+      let nextCategoryOrder: number;
+      
+      if (existingCategoryQuestions.length > 0) {
+        // Se a categoria já existe, usar a mesma category_order
+        nextCategoryOrder = existingCategoryQuestions[0].category_order;
+      } else {
+        // Se é uma categoria nova, adicionar por último
+        const allCategoryOrders = allQuestions.map(q => q.category_order);
+        nextCategoryOrder = allCategoryOrders.length > 0
+          ? Math.max(...allCategoryOrders) + 1
+          : 0;
+      }
+      
+      // CORRIGIDO: Calcular ordem da subcategoria
+      let nextSubcategoryOrder = 0;
+      if (selectedSubcategoryForModal) {
+        const existingSubcategoryQuestions = allQuestions.filter(
+          q => q.category_id === categoryId && q.subcategory_id === selectedSubcategoryForModal
+        );
+        
+        if (existingSubcategoryQuestions.length > 0) {
+          // Se a subcategoria já existe, usar a mesma subcategory_order
+          nextSubcategoryOrder = existingSubcategoryQuestions[0].subcategory_order;
+        } else {
+          // Se é uma subcategoria nova, adicionar por último dentro da categoria
+          const allSubcategoryOrdersInCategory = allQuestions
+            .filter(q => q.category_id === categoryId && q.subcategory_id !== null)
+            .map(q => q.subcategory_order);
+          nextSubcategoryOrder = allSubcategoryOrdersInCategory.length > 0
+            ? Math.max(...allSubcategoryOrdersInCategory) + 1
+            : 0;
+        }
+      }
+
+      // Calcular a próxima ordem da pergunta dentro do container (categoria ou subcategoria)
+      const categoryQuestions = getQuestionsByCategory(categoryId);
+      const containerQuestions = selectedSubcategoryForModal
+        ? categoryQuestions.filter(q => q.subcategory_id === selectedSubcategoryForModal)
+        : categoryQuestions.filter(q => q.subcategory_id === null);
+      
+      const nextQuestionOrder = containerQuestions.length > 0
+        ? Math.max(...containerQuestions.map(q => q.question_order)) + 1
         : 0;
 
       // 1. Primeiro, criar a pergunta na tabela questions_model
@@ -847,15 +977,15 @@ const EvaluationDetail = () => {
         .from('questions_model')
         .insert([
           {
-            question: questionForm.question.trim(),
-            description: questionForm.description.trim() || null,
+            question: question.trim(),
+            description: description.trim() || null,
             category: category?.value || '',
             subcategory: subcategory?.value || '',
             category_id: categoryId,
             subcategory_id: selectedSubcategoryForModal,
-            weight: questionForm.weight,
-            required: questionForm.required,
-            reply_type_id: questionForm.reply_type_id,
+            weight: weight,
+            required: required,
+            reply_type_id: replyTypeId,
           }
         ])
         .select();
@@ -869,17 +999,6 @@ const EvaluationDetail = () => {
       // 2. Depois, criar o vínculo na tabela evaluations_questions_model
       // Agora inclui a ordem da categoria, subcategoria e da pergunta
       if (questionData && questionData.length > 0) {
-        // Calcular próxima ordem de subcategoria
-        let nextSubcategoryOrder = 0;
-        if (selectedSubcategoryForModal) {
-          const subcategoryQuestions = allQuestions.filter(
-            q => q.category_id === categoryId && q.subcategory_id === selectedSubcategoryForModal
-          );
-          nextSubcategoryOrder = subcategoryQuestions.length > 0
-            ? Math.max(...subcategoryQuestions.map(q => q.subcategory_order)) + 1
-            : 0;
-        }
-
         const { error: linkError } = await supabase
           .from('evaluations_questions_model')
           .insert([
@@ -971,10 +1090,10 @@ const EvaluationDetail = () => {
   };
 
   // Abrir modal de confirmação de exclusão
-  const handleDeleteQuestion = (questionId: number) => {
+  const handleDeleteQuestion = useCallback((questionId: number) => {
     setQuestionToDelete(questionId);
     setShowDeleteModal(true);
-  };
+  }, []);
 
   // Confirmar exclusão da pergunta
   const confirmDeleteQuestion = async () => {
@@ -1027,7 +1146,7 @@ const EvaluationDetail = () => {
   };
 
   // Iniciar edição de uma pergunta
-  const handleEditQuestion = (question: QuestionData) => {
+  const handleEditQuestion = useCallback((question: QuestionData) => {
     setEditingQuestionId(question.id);
     setEditQuestionForm({
       question: question.question,
@@ -1036,33 +1155,46 @@ const EvaluationDetail = () => {
       weight: question.weight,
       required: question.required,
     });
-  };
+  }, []);
 
   // Salvar edição da pergunta
-  const handleSaveEditQuestion = async () => {
+  const handleSaveEditQuestion = useCallback(async (
+    overrideQuestion?: string, 
+    overrideDescription?: string,
+    overrideReplyTypeId?: number | null,
+    overrideWeight?: number,
+    overrideRequired?: boolean
+  ) => {
     if (!editingQuestionId) return;
 
-    if (!editQuestionForm.question.trim()) {
+    // Usar valores override se fornecidos, senão usar editQuestionForm
+    const questionToSave = overrideQuestion !== undefined ? overrideQuestion : editQuestionForm.question;
+    const descriptionToSave = overrideDescription !== undefined ? overrideDescription : editQuestionForm.description;
+    const replyTypeIdToSave = overrideReplyTypeId !== undefined ? overrideReplyTypeId : editQuestionForm.reply_type_id;
+    const weightToSave = overrideWeight !== undefined ? overrideWeight : editQuestionForm.weight;
+    const requiredToSave = overrideRequired !== undefined ? overrideRequired : editQuestionForm.required;
+
+    if (!questionToSave.trim()) {
       alert('Por favor, preencha a pergunta.');
       return;
     }
 
-    if (!editQuestionForm.reply_type_id) {
+    if (!replyTypeIdToSave) {
       alert('Por favor, selecione o tipo de resposta.');
       return;
     }
 
     // Verificar se o tipo selecionado é texto
-    const selectedType = replyTypes.find(t => t.id === editQuestionForm.reply_type_id);
+    const selectedType = replyTypes.find(t => t.id === replyTypeIdToSave);
     const isTextType = selectedType?.value.toLowerCase().includes('texto');
 
     // Validar peso
-    if (!isTextType && editQuestionForm.weight < 1) {
+    if (!isTextType && weightToSave < 1) {
       alert('O peso deve ser maior ou igual a 1.');
       return;
     }
 
-    if (isTextType && editQuestionForm.weight !== 0) {
+    if (isTextType && weightToSave !== 0) {
       alert('O peso deve ser 0 para perguntas do tipo texto.');
       return;
     }
@@ -1072,11 +1204,11 @@ const EvaluationDetail = () => {
       const { error } = await supabase
         .from('questions_model')
         .update({
-          question: editQuestionForm.question.trim(),
-          description: editQuestionForm.description.trim() || null,
-          reply_type_id: editQuestionForm.reply_type_id,
-          weight: editQuestionForm.weight,
-          required: editQuestionForm.required,
+          question: questionToSave.trim(),
+          description: descriptionToSave.trim() || null,
+          reply_type_id: replyTypeIdToSave,
+          weight: weightToSave,
+          required: requiredToSave,
         })
         .eq('id', editingQuestionId);
 
@@ -1086,9 +1218,11 @@ const EvaluationDetail = () => {
         return;
       }
 
+
+
       // Recarregar perguntas
       await fetchQuestions();
-      
+
       // Limpar estado de edição
       setEditingQuestionId(null);
       setEditQuestionForm({
@@ -1102,10 +1236,10 @@ const EvaluationDetail = () => {
       console.error('Erro ao atualizar pergunta:', err);
       alert('Erro ao atualizar pergunta. Tente novamente.');
     }
-  };
+  }, [editingQuestionId, editQuestionForm, replyTypes]);
 
   // Cancelar edição da pergunta
-  const handleCancelEditQuestion = () => {
+  const handleCancelEditQuestion = useCallback(() => {
     setEditingQuestionId(null);
     setEditQuestionForm({
       question: '',
@@ -1114,7 +1248,7 @@ const EvaluationDetail = () => {
       weight: 1,
       required: true,
     });
-  };
+  }, []);
 
   // Função auxiliar para agrupar perguntas por subcategoria
   const groupQuestionsBySubcategory = (categoryQuestions: QuestionData[]) => {
@@ -1204,14 +1338,16 @@ const EvaluationDetail = () => {
         {isExpanded && (
           <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 space-y-2">
             <div className="space-y-2">
-              {subcatQuestions.map((question, index) => (
-                <SortableQuestionItem
-                  key={question.id}
-                  question={question}
-                  index={index}
-                  onDelete={handleDeleteQuestion}
-                />
-              ))}
+              {subcatQuestions.map((question, index) => {
+                return (
+                  <SortableQuestionItem
+                    key={question.id}
+                    question={question}
+                    index={index}
+                    onDelete={handleDeleteQuestion}
+                  />
+                );
+              })}
             </div>
           
             {/* Botão para adicionar pergunta nesta subcategoria */}
@@ -1241,6 +1377,163 @@ const EvaluationDetail = () => {
     subcategories: CategoryData[];
     isAddingQuestion: boolean;
   }
+
+  // ========== NEW QUESTION FORM COMPONENT (with local state) ==========
+  const NewQuestionForm = React.memo(({ 
+    categoryId,
+    selectedSubcategoryForModal,
+    questionForm,
+    replyTypes,
+    categories,
+    onSave,
+    onCancel
+  }: {
+    categoryId: number;
+    selectedSubcategoryForModal: number | null;
+    questionForm: any;
+    replyTypes: any[];
+    categories: CategoryData[];
+    onSave: (question: string, description: string, replyTypeId: number | null, weight: number, required: boolean) => void;
+    onCancel: () => void;
+  }) => {
+    // ✅ ESTADO LOCAL - não causa re-render do componente pai
+    const [localQuestion, setLocalQuestion] = React.useState(questionForm.question);
+    const [localDescription, setLocalDescription] = React.useState(questionForm.description);
+    const [localReplyTypeId, setLocalReplyTypeId] = React.useState(questionForm.reply_type_id);
+    const [localWeight, setLocalWeight] = React.useState(questionForm.weight);
+    const [localRequired, setLocalRequired] = React.useState(questionForm.required);
+
+    const selectedReplyType = replyTypes.find(t => t.id === localReplyTypeId);
+    const isTextType = selectedReplyType?.value?.toLowerCase().includes('texto');
+
+    const handleSave = () => {
+      onSave(localQuestion, localDescription, localReplyTypeId, localWeight, localRequired);
+    };
+
+    return (
+      <div className="p-4 bg-gray-50 dark:bg-gray-900/10 rounded-lg border-2 border-dashed border-orange-300 dark:border-orange-700">
+        <div className="space-y-3">
+          {selectedSubcategoryForModal && (
+            <div className="text-sm text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
+              <strong>Subcategoria:</strong> {categories.find(c => c.id === selectedSubcategoryForModal)?.value || 'N/A'}
+            </div>
+          )}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Pergunta <span className="text-red-500">*</span>
+            </label>
+            <input
+              id={`new-question-input-${categoryId}-${selectedSubcategoryForModal || 'none'}`}
+              name="new_question"
+              type="text"
+              value={localQuestion}
+              onChange={(e) => setLocalQuestion(e.target.value)}
+              placeholder="Digite a pergunta..."
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Descrição
+            </label>
+            <textarea
+              id={`new-description-input-${categoryId}-${selectedSubcategoryForModal || 'none'}`}
+              name="new_description"
+              value={localDescription}
+              onChange={(e) => setLocalDescription(e.target.value)}
+              placeholder="Adicione uma descrição ou contexto para a pergunta (opcional)..."
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Tipo de Resposta <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={localReplyTypeId || ''}
+                onChange={(e) => {
+                  const selectedId = e.target.value ? parseInt(e.target.value) : null;
+                  const selectedType = replyTypes.find(t => t.id === selectedId);
+                  const isText = selectedType?.value.toLowerCase().includes('texto');
+                  
+                  setLocalReplyTypeId(selectedId);
+                  if (isText) {
+                    setLocalWeight(0);
+                  } else if (localWeight === 0) {
+                    setLocalWeight(1);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+              >
+                <option value="">Selecione...</option>
+                {replyTypes.map(type => (
+                  <option key={type.id} value={type.id}>
+                    {type.value}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Peso {isTextType ? (
+                  <span className="text-xs text-gray-500">(fixo em 0 para texto)</span>
+                ) : (
+                  <span className="text-red-500">*</span>
+                )}
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={localWeight}
+                onChange={(e) => setLocalWeight(parseInt(e.target.value) || 0)}
+                disabled={isTextType}
+                className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm ${
+                  isTextType 
+                    ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed opacity-60' 
+                    : 'bg-white dark:bg-gray-800'
+                }`}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="flex items-center text-sm">
+              <input
+                type="checkbox"
+                checked={localRequired}
+                onChange={(e) => setLocalRequired(e.target.checked)}
+                className="w-4 h-4 text-orange-500 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 dark:focus:ring-orange-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 mr-2"
+              />
+              <span className="text-gray-700 dark:text-gray-300">Obrigatória</span>
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={onCancel}
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 font-medium bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+            >
+              <X className="w-4 h-4" />
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-3 py-1.5 text-sm text-white font-medium bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
+            >
+              <Save className="w-4 h-4" />
+              Salvar Pergunta
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  });
 
   const SortableCategoryItem = ({ 
     category, 
@@ -1322,14 +1615,16 @@ const EvaluationDetail = () => {
               {/* Perguntas sem subcategoria */}
               {questionsWithoutSubcategory.length > 0 && (
                 <div className="space-y-2">
-                  {questionsWithoutSubcategory.map((question, index) => (
-                    <SortableQuestionItem
-                      key={question.id}
-                      question={question}
-                      index={index}
-                      onDelete={handleDeleteQuestion}
-                    />
-                  ))}
+                  {questionsWithoutSubcategory.map((question, index) => {
+                    return (
+                      <SortableQuestionItem
+                        key={question.id}
+                        question={question}
+                        index={index}
+                        onDelete={handleDeleteQuestion}
+                      />
+                    );
+                  })}
                 </div>
               )}
 
@@ -1382,145 +1677,21 @@ const EvaluationDetail = () => {
               ))}
 
               {/* Formulário de Nova Pergunta */}
-              {isAddingQuestion ? (
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/10 rounded-lg border-2 border-dashed border-orange-300 dark:border-orange-700">
-                  <div className="space-y-3">
-                    {selectedSubcategoryForModal && (
-                      <div className="text-sm text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-                        <strong>Subcategoria:</strong> {categories.find(c => c.id === selectedSubcategoryForModal)?.value || 'N/A'}
-                      </div>
-                    )}
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Pergunta <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={questionForm.question}
-                        onChange={(e) => setQuestionForm({ ...questionForm, question: e.target.value })}
-                        placeholder="Digite a pergunta..."
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
-                        autoFocus
-                      />
-                    </div>
+              {isAddingQuestion && (
+                <NewQuestionForm
+                  categoryId={category.id}
+                  selectedSubcategoryForModal={selectedSubcategoryForModal}
+                  questionForm={questionForm}
+                  replyTypes={replyTypes}
+                  categories={categories}
+                  onSave={(question, description, replyTypeId, weight, required) => {
+                    handleSaveNewQuestion(category.id, question, description, replyTypeId, weight, required);
+                  }}
+                  onCancel={handleCancelNewQuestion}
+                />
+              )}
 
-                    {/* Campo Descrição */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Descrição
-                      </label>
-                      <textarea
-                        value={questionForm.description}
-                        onChange={(e) => setQuestionForm({ ...questionForm, description: e.target.value })}
-                        placeholder="Adicione uma descrição ou contexto para a pergunta (opcional)..."
-                        rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm resize-none"
-                      />
-                    </div>
-
-                    {/* Grid com 2 colunas: Tipo de Resposta, Peso */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Tipo de Resposta */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Tipo de Resposta <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={questionForm.reply_type_id || ''}
-                          onChange={(e) => {
-                            const selectedId = e.target.value ? parseInt(e.target.value) : null;
-                            const selectedType = replyTypes.find(t => t.id === selectedId);
-                            
-                            // Se o tipo for "texto", setar peso como 0
-                            const isTextType = selectedType?.value.toLowerCase().includes('texto');
-                            
-                            setQuestionForm({ 
-                              ...questionForm, 
-                              reply_type_id: selectedId,
-                              weight: isTextType ? 0 : (questionForm.weight === 0 ? 1 : questionForm.weight)
-                            });
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
-                        >
-                          <option value="">Selecione...</option>
-                          {replyTypes.map(type => (
-                            <option key={type.id} value={type.id}>
-                              {type.value}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Peso */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Peso {(() => {
-                            const selectedType = replyTypes.find(t => t.id === questionForm.reply_type_id);
-                            const isTextType = selectedType?.value.toLowerCase().includes('texto');
-                            return isTextType ? (
-                              <span className="text-xs text-gray-500">(fixo em 0 para texto)</span>
-                            ) : (
-                              <span className="text-red-500">*</span>
-                            );
-                          })()}
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={questionForm.weight}
-                          onChange={(e) => setQuestionForm({ 
-                            ...questionForm, 
-                            weight: parseInt(e.target.value) || 0 
-                          })}
-                          disabled={(() => {
-                            const selectedType = replyTypes.find(t => t.id === questionForm.reply_type_id);
-                            return selectedType?.value.toLowerCase().includes('texto');
-                          })()}
-                          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm ${
-                            (() => {
-                              const selectedType = replyTypes.find(t => t.id === questionForm.reply_type_id);
-                              const isTextType = selectedType?.value.toLowerCase().includes('texto');
-                              return isTextType 
-                                ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed opacity-60' 
-                                : 'bg-white dark:bg-gray-800';
-                            })()
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center text-sm">
-                        <input
-                          type="checkbox"
-                          checked={questionForm.required}
-                          onChange={(e) => setQuestionForm({ ...questionForm, required: e.target.checked })}
-                          className="w-4 h-4 text-orange-500 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 dark:focus:ring-orange-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 mr-2"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Obrigatória</span>
-                      </label>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button
-                        onClick={handleCancelNewQuestion}
-                        className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 font-medium bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
-                      >
-                        <X className="w-4 h-4" />
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => handleSaveNewQuestion(category.id)}
-                        className="px-3 py-1.5 text-sm text-white font-medium bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
-                      >
-                        <Save className="w-4 h-4" />
-                        Salvar Pergunta
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
+              {!isAddingQuestion && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1539,8 +1710,8 @@ const EvaluationDetail = () => {
     );
   };
 
-  // Componente para item de pergunta arrastável
-  const SortableQuestionItem = ({ question, index, onDelete }: { question: QuestionData; index: number; onDelete: (id: number) => void }) => {
+  // Componente para item de pergunta arrastável - MEMOIZADO com comparação customizada
+  const SortableQuestionItem = React.memo(({ question, index, onDelete }: { question: QuestionData; index: number; onDelete: (id: number) => void }) => {
     const {
       attributes,
       listeners,
@@ -1557,8 +1728,31 @@ const EvaluationDetail = () => {
     };
 
     const isEditing = editingQuestionId === question.id;
-    const selectedReplyType = replyTypes.find(t => t.id === (isEditing ? editQuestionForm.reply_type_id : question.reply_type_id));
+    
+    // Estado LOCAL para edição (não causa re-render do componente pai!)
+    // IMPORTANTE: Declarar ANTES de usar nas variáveis abaixo
+    const [localQuestion, setLocalQuestion] = React.useState(editQuestionForm.question);
+    const [localDescription, setLocalDescription] = React.useState(editQuestionForm.description);
+    const [localReplyTypeId, setLocalReplyTypeId] = React.useState(editQuestionForm.reply_type_id);
+    const [localWeight, setLocalWeight] = React.useState(editQuestionForm.weight);
+    const [localRequired, setLocalRequired] = React.useState(editQuestionForm.required);
+    
+    const selectedReplyType = replyTypes.find(t => t.id === (isEditing ? localReplyTypeId : question.reply_type_id));
     const isTextType = selectedReplyType?.value?.toLowerCase() === 'texto';
+
+    // Atualizar estado local quando editQuestionForm mudar (apenas quando começar a editar)
+    React.useEffect(() => {
+      if (isEditing) {
+        setLocalQuestion(editQuestionForm.question);
+        setLocalDescription(editQuestionForm.description);
+        setLocalReplyTypeId(editQuestionForm.reply_type_id);
+        setLocalWeight(editQuestionForm.weight);
+        setLocalRequired(editQuestionForm.required);
+      }
+    }, [isEditing, editQuestionForm.question, editQuestionForm.description, editQuestionForm.reply_type_id, editQuestionForm.weight, editQuestionForm.required]);
+
+    // ❌ REMOVIDO: Não sincronizar no blur - causa re-render desnecessário
+    // A sincronização acontece apenas no SAVE
 
     return (
       <div
@@ -1587,17 +1781,23 @@ const EvaluationDetail = () => {
                 <div className="flex-1 space-y-3">
                   {/* Campo Pergunta */}
                   <input
+                    key={`edit-question-${question.id}-${editingQuestionId}`}
+                    id={`edit-question-input-${question.id}`}
+                    name={`edit_question_${question.id}`}
                     type="text"
-                    value={editQuestionForm.question}
-                    onChange={(e) => setEditQuestionForm({ ...editQuestionForm, question: e.target.value })}
+                    value={localQuestion}
+                    onChange={(e) => setLocalQuestion(e.target.value)}
                     placeholder="Pergunta"
                     className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
                   />
                   
                   {/* Campo Descrição */}
                   <textarea
-                    value={editQuestionForm.description}
-                    onChange={(e) => setEditQuestionForm({ ...editQuestionForm, description: e.target.value })}
+                    key={`edit-description-${question.id}-${editingQuestionId}`}
+                    id={`edit-description-input-${question.id}`}
+                    name={`edit_description_${question.id}`}
+                    value={localDescription}
+                    onChange={(e) => setLocalDescription(e.target.value)}
                     placeholder="Descrição (opcional)"
                     rows={2}
                     className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 resize-none"
@@ -1610,16 +1810,13 @@ const EvaluationDetail = () => {
                         Tipo de Resposta
                       </label>
                       <select
-                        value={editQuestionForm.reply_type_id || ''}
+                        value={localReplyTypeId || ''}
                         onChange={(e) => {
                           const newReplyTypeId = Number(e.target.value);
                           const newReplyType = replyTypes.find(t => t.id === newReplyTypeId);
                           const isText = newReplyType?.value?.toLowerCase() === 'texto';
-                          setEditQuestionForm({
-                            ...editQuestionForm,
-                            reply_type_id: newReplyTypeId,
-                            weight: isText ? 0 : editQuestionForm.weight
-                          });
+                          setLocalReplyTypeId(newReplyTypeId);
+                          setLocalWeight(isText ? 0 : localWeight);
                         }}
                         className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
                       >
@@ -1639,8 +1836,8 @@ const EvaluationDetail = () => {
                       </label>
                       <input
                         type="number"
-                        value={editQuestionForm.weight}
-                        onChange={(e) => setEditQuestionForm({ ...editQuestionForm, weight: Number(e.target.value) })}
+                        value={localWeight}
+                        onChange={(e) => setLocalWeight(Number(e.target.value))}
                         disabled={isTextType}
                         className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
                       />
@@ -1654,8 +1851,8 @@ const EvaluationDetail = () => {
                       <div className="flex items-center h-[38px]">
                         <input
                           type="checkbox"
-                          checked={editQuestionForm.required}
-                          onChange={(e) => setEditQuestionForm({ ...editQuestionForm, required: e.target.checked })}
+                          checked={localRequired}
+                          onChange={(e) => setLocalRequired(e.target.checked)}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
                         />
                       </div>
@@ -1665,7 +1862,17 @@ const EvaluationDetail = () => {
                   {/* Botões Save/Cancel */}
                   <div className="flex gap-2">
                     <button
-                      onClick={handleSaveEditQuestion}
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Previne blur
+                        // Passar valores locais diretamente para a função de salvar
+                        handleSaveEditQuestion(
+                          localQuestion, 
+                          localDescription, 
+                          localReplyTypeId, 
+                          localWeight, 
+                          localRequired
+                        );
+                      }}
                       className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Salvar
@@ -1760,7 +1967,7 @@ const EvaluationDetail = () => {
         )}
       </div>
     );
-  };
+  });
 
   if (isLoading) {
     return (
@@ -1913,7 +2120,7 @@ const EvaluationDetail = () => {
               items={[
                 ...displayCategories.map(c => c.id),
                 ...categories.filter(c => c.parent_id !== null).map(c => c.id), // subcategorias
-                ...questions.map(q => q.id)
+                // NÃO incluir perguntas aqui - elas são renderizadas dentro das categorias/subcategorias
               ]}
               strategy={verticalListSortingStrategy}
             >
