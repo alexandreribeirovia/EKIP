@@ -2984,7 +2984,7 @@ const EmployeeDetail = () => {
                               })}
                               <Radar
                                 name="Média do Time"
-                                dataKey="Média do Time"
+                                dataKey="Media do Time"
                                 stroke="#2b2b2b"
                                 fill="#000000"
                                 fillOpacity={0}
