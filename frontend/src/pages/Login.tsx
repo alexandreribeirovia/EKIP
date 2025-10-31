@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import { supabase } from '@/lib/supabaseClient'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
 import logo from '../../img/logo.png'
 import { Link } from 'react-router-dom'
@@ -33,8 +34,21 @@ const Login = () => {
         return;
       }
       
-      // Armazenar usuário e token no Zustand
-      login(result.data.user, result.data.session)
+      // CRÍTICO: Setar a sessão no cliente Supabase do frontend
+      // Isso garante que o JWT token será incluído automaticamente em todas as requisições
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: result.data.session.access_token,
+        refresh_token: result.data.session.refresh_token,
+      })
+
+      if (sessionError) {
+        console.error('Erro ao setar sessão no Supabase:', sessionError)
+        setError('Erro ao configurar sessão de autenticação')
+        return
+      }
+      
+      // Armazenar usuário e sessão no Zustand
+      login(result.data.user, sessionData.session!)
 
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro inesperado.')

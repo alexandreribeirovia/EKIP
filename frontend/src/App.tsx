@@ -16,6 +16,7 @@ import PDI from '@/pages/PDI'
 import EvaluationResponse from '@/pages/EvaluationResponse'
 import Users from '@/pages/Users'
 import Domains from '@/pages/Domains'
+import Notifications from '@/pages/Notifications'
 import Login from '@/pages/Login'
 import ForgotPassword from '@/pages/ForgotPassword'
 import ResetPassword from '@/pages/ResetPassword'
@@ -104,6 +105,7 @@ function App() {
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
             <Route path="/domains" element={<ProtectedRoute><Domains /></ProtectedRoute>} />
+            <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           </Routes>
         </Layout>
       } />

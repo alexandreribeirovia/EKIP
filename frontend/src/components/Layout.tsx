@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import NotificationBell from './NotificationBell'
 import { 
   LayoutDashboard, 
   Users, 
   Settings, 
   Moon, 
   Sun,
-  Bell,
   ChevronLeft,
   CalendarRange,
   ClipboardList,
@@ -17,7 +17,8 @@ import {
   FileCheck,
   LogOut,
   Target,
-  Database
+  Database,
+  Bell
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -213,10 +214,7 @@ const Layout = ({ children }: LayoutProps) => {
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
               
-              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
+              <NotificationBell />
               
               <div className="border-l border-gray-200 dark:border-gray-700 h-8"></div>
               
@@ -237,6 +235,14 @@ const Layout = ({ children }: LayoutProps) => {
                 
                 {profileDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50">
+                    <Link
+                      to="/notifications"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <Bell className="w-4 h-4 mr-2" />
+                      Minhas Notificações
+                    </Link>
                     <button
                       onClick={() => {
                         void logout()

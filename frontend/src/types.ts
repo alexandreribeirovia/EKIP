@@ -393,3 +393,46 @@ export interface EvaluationMetadata {
   name: string;
   updated_at: string;
 }
+
+// Notification types
+export interface Notification {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  title: string;
+  message: string;
+  type_id: number;
+  type: 'info' | 'success' | 'warning' | 'error';
+  source_type: string | null; // 'feedback', 'evaluation', 'task', 'system'
+  source_id: string | null;
+  audience: 'all' | 'user';
+  auth_user_id: string | null;
+  link_url: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  is_deleted?: boolean; // Para notificações 'all', indica se o usuário marcou como deletada
+}
+
+export interface NotificationAllUsersState {
+  id: number;
+  notification_id: number;
+  auth_user_id: string;
+  is_read: boolean;
+  read_at: string | null;
+  is_deleted: boolean;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateNotificationParams {
+  title: string;
+  message: string;
+  type_id: number;
+  type: 'info' | 'success' | 'warning' | 'error';
+  audience?: 'all' | 'user';
+  auth_user_id?: string | null;
+  link_url?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+}
