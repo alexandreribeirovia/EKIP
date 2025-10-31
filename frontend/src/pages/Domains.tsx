@@ -125,7 +125,8 @@ const Domains = () => {
     const clonedDomain: DbDomain = {
       id: 0, // ID temporário, será ignorado ao criar
       type: domain.type,
-      value: '', // Limpar o valor para o usuário preencher
+      value: '',
+      tag: '',
       description: null,
       is_active: true,
       parent_id: domain.parent_id,
@@ -187,6 +188,12 @@ const Domains = () => {
     {
       headerName: 'Valor',
       field: 'value',
+      flex: 1.5,
+      minWidth: 180,
+    },
+    {
+      headerName: 'tag',
+      field: 'tag',
       flex: 1.5,
       minWidth: 180,
     },

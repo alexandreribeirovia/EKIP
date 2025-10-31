@@ -19,11 +19,13 @@ interface SelectOption {
 const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainModalProps) => {
   const [type, setType] = useState('');
   const [value, setValue] = useState('');
+  const [tag, setTag] = useState('');
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [parentId, setParentId] = useState<SelectOption | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [tagManuallyEdited, setTagManuallyEdited] = useState(false);
   
   // Estados para as opções de domínios pais
   const [parentDomainOptions, setParentDomainOptions] = useState<SelectOption[]>([]);
@@ -64,11 +66,23 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
   useEffect(() => {
     if (isOpen) {
       if (domainData) {
-        // Modo edição
+        const isEditMode = domainData.id > 0;
+        
+        // Preencher campos
         setType(domainData.type || '');
         setValue(domainData.value || '');
         setDescription(domainData.description || '');
         setIsActive(domainData.is_active);
+        
+        if (isEditMode) {
+          // Modo edição: mantém a tag existente e marca como editada manualmente
+          setTag(domainData.tag || '');
+          setTagManuallyEdited(true);
+        } else {
+          // Modo clonagem: não preenche tag e permite preenchimento automático
+          setTag('');
+          setTagManuallyEdited(false);
+        }
         
         // Definir parent_id se existir
         if (domainData.parent_id && parentDomainOptions.length > 0) {
@@ -78,6 +92,7 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
       } else {
         // Modo criação - valores padrão
         setIsActive(true);
+        setTagManuallyEdited(false);
       }
     } else {
       // Reset form when closing
@@ -88,10 +103,38 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
   const resetForm = () => {
     setType('');
     setValue('');
+    setTag('');
     setDescription('');
     setIsActive(true);
     setParentId(null);
     setError('');
+    setTagManuallyEdited(false);
+  };
+
+  // Função para gerar tag automaticamente a partir do valor
+  const generateTagFromValue = (val: string): string => {
+    return val
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '_'); // Substitui espaços por underscore
+  };
+
+  // Handler para mudanças no campo valor (atualiza tag automaticamente)
+  const handleValueChange = (newValue: string) => {
+    setValue(newValue);
+    
+    // Só atualiza tag automaticamente se não foi editada manualmente
+    if (!tagManuallyEdited) {
+      setTag(generateTagFromValue(newValue));
+    }
+  };
+
+  // Handler para mudanças no campo tag (impede espaços e marca como editado manualmente)
+  const handleTagChange = (newTag: string) => {
+    // Remove espaços do input
+    const sanitizedTag = newTag.replace(/\s+/g, '_').toLowerCase();
+    setTag(sanitizedTag);
+    setTagManuallyEdited(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,11 +152,43 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
       return;
     }
 
+    if (!tag.trim()) {
+      setError('Digite a tag do domínio');
+      return;
+    }
+
+    // Validar se tag contém espaços
+    if (tag.includes(' ')) {
+      setError('A tag não pode conter espaços. Use underscore (_) no lugar.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      // Verificar se já existe um domínio com o mesmo type e tag
+      const { data: existingDomain, error: checkError } = await supabase
+        .from('domains')
+        .select('id, type, tag')
+        .eq('type', type.trim())
+        .eq('tag', tag.trim())
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('Erro ao verificar domínio existente:', checkError);
+        setError('Erro ao verificar domínio existente. Tente novamente.');
+        return;
+      }
+
+      // Se encontrou um domínio e não está editando o mesmo
+      if (existingDomain && existingDomain.id !== domainData?.id) {
+        setError(`Já existe um domínio com tipo "${type}" e tag "${tag}". Por favor, use uma tag diferente.`);
+        return;
+      }
+
       const domainPayload = {
         type: type.trim(),
         value: value.trim(),
+        tag: tag.trim(),
         description: description.trim() || null,
         is_active: isActive,
         parent_id: parentId?.value || null,
@@ -198,25 +273,9 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
               />
             </div>
 
-            {/* Valor */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Valor: *
-              </label>
-              <input
-                type="text"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="Ex: Técnico, Planejamento"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Domínio Pai e Status - Grid 3 colunas (2/3 + 1/3) */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             {/* Domínio Pai - 2/3 da linha */}
-            <div className="md:col-span-5">
+            <div>
+
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Domínio Pai (opcional):
               </label>
@@ -231,6 +290,38 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
                 menuPosition="fixed"
                 menuPlacement="auto"
               />
+            </div>
+          </div>
+
+          {/*  Grid 3 colunas (2/3 + 1/3) */}
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+            {/* Valor */}
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Valor: *
+              </label>
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => handleValueChange(e.target.value)}
+                placeholder="Ex: Técnico, Planejamento"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+
+             {/* tag */}
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Tag: *
+              </label>
+              <input
+                type="text"
+                value={tag}
+                onChange={(e) => handleTagChange(e.target.value)}
+                placeholder="Ex: técnico, planejamento"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+              />
+          
             </div>
 
             {/* Status Ativo - 1/3 da linha */}

@@ -151,6 +151,7 @@ export interface DbDomain {
   updated_at: string;
   type: string;
   value: string;
+  tag: string;
   is_active: boolean;
   parent_id: number | null;
   description: string | null;
