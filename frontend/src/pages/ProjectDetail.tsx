@@ -2509,7 +2509,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 h-full">
                         {getCurrentWeekPhases.map((phase, index) => {
                         //  const colors = ['#F97316', '#FB923C', '#FCD34D', '#FBBF24', '#F59E0B'];
-                        const colors = ['#F59E0B', '#F59E0B', '#F59E0B', '#F59E0B', '#F59E0B'];
+                        const colors = ['#f28c1a', '#f28c1a', '#f28c1a', '#f28c1a', '#f28c1a'];
                          const color = colors[index % colors.length];
                          
                          // Lógica para cor de fundo da área central baseada na comparação entre progresso e meta

@@ -35,7 +35,7 @@ const Feedbacks = () => {
   const [feedbackToEdit, setFeedbackToEdit] = useState<FeedbackData | null>(null);
   
   // Filtros
-  const [periodType, setPeriodType] = useState<'current_month' | 'previous_month' | 'current_year' | 'custom'>('current_month');
+  const [periodType, setPeriodType] = useState<'current_month' | 'previous_month' | 'current_year' | 'custom'>('current_year');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedConsultants, setSelectedConsultants] = useState<ConsultantOption[]>([]);

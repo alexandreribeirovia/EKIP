@@ -1418,11 +1418,19 @@ const EmployeeDetail = () => {
         return `${day}/${month}/${year}`;
       },
     },
+    
     {
       headerName: 'Projeto',
       field: 'project_name',
       flex: 2,
       minWidth: 200,
+      cellRenderer: (params: any) => params.value || '-',
+    },
+    {
+      headerName: 'Tipo',
+      field: 'type_name',
+      flex: 1,
+      minWidth: 150,
       cellRenderer: (params: any) => params.value || '-',
     },
     {
