@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import NotificationBell from './NotificationBell'
-import { 
-  LayoutDashboard, 
-  Users, 
-  Settings, 
-  Moon, 
+import {
+  LayoutDashboard,
+  Users,
+  Settings,
+  Moon,
   Sun,
   ChevronLeft,
   CalendarRange,
@@ -41,18 +41,18 @@ const Layout = ({ children }: LayoutProps) => {
   }
 
   const navigation = [
-    { 
-      name: 'Dashboard', 
-      href: '/dashboard', 
+    {
+      name: 'Dashboard',
+      href: '/dashboard',
       icon: LayoutDashboard,
       hasSubmenu: true,
       submenu: [
         { name: 'Lançamento de Horas', href: '/time-entries', icon: Clock }
       ]
     },
-    { 
-      name: 'Funcionários', 
-      href: '/employees', 
+    {
+      name: 'Funcionários',
+      href: '/employees',
       icon: Users,
       hasSubmenu: true,
       submenu: [
@@ -63,9 +63,9 @@ const Layout = ({ children }: LayoutProps) => {
     },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },
     { name: 'Alocações', href: '/allocations', icon: CalendarRange },
-    { 
-      name: 'Configurações', 
-      href: '/settings', 
+    {
+      name: 'Configurações',
+      href: '/settings',
       icon: Settings,
       hasSubmenu: true,
       submenu: [
@@ -79,16 +79,15 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <div className={`bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${
-        sidebarCollapsed ? 'w-16' : 'w-64'
-      }`}>
+      <div className={`bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'
+        }`}>
         <div className="flex items-center justify-between plogo border-b border-gray-200 dark:border-gray-700 py-2">
           <div className="flex items-center">
-              <img 
-                src="./img/logo.png" 
-                className="h-9 w-auto"
-              />
-                        {!sidebarCollapsed && (
+            <img
+              src="./img/logo.png"
+              className="h-9 w-auto"
+            />
+            {!sidebarCollapsed && (
               <span className="ml-3 font-semibold text-lg text-gray-600 dark:text-gray-100">
                 ViaEKIP
               </span>
@@ -106,7 +105,7 @@ const Layout = ({ children }: LayoutProps) => {
           {navigation.map((item) => {
             const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/')
             const isSubmenuActive = item.submenu?.some(sub => location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')) || false
-            
+
             return (
               <div key={item.name}>
                 {/* Menu principal */}
@@ -114,11 +113,10 @@ const Layout = ({ children }: LayoutProps) => {
                   <div className="flex items-center">
                     <Link
                       to={item.href}
-                      className={`flex items-center flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                        isActive || isSubmenuActive
+                      className={`flex items-center flex-1 px-4 py-3 text-sm font-medium transition-colors ${isActive || isSubmenuActive
                           ? 'bg-primary-50 dark:bg-gray-700 text-primary-600 dark:text-primary-400'
                           : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                        }`}
                     >
                       <item.icon className="w-5 h-5" />
                       {!sidebarCollapsed && <span className="ml-3">{item.name}</span>}
@@ -134,30 +132,27 @@ const Layout = ({ children }: LayoutProps) => {
                             setSettingsExpanded(!settingsExpanded)
                           }
                         }}
-                        className={`px-3 py-3 text-sm transition-colors ${
-                          isActive || isSubmenuActive
+                        className={`px-3 py-3 text-sm transition-colors ${isActive || isSubmenuActive
                             ? 'bg-primary-50 dark:bg-gray-700 text-primary-600 dark:text-primary-400'
                             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
+                          }`}
                       >
-                        <ChevronDown className={`w-4 h-4 transition-transform ${
-                          (item.name === 'Dashboard' && dashboardExpanded) || 
-                          (item.name === 'Funcionários' && employeesExpanded) ||
-                          (item.name === 'Configurações' && settingsExpanded)
-                            ? 'rotate-180' 
+                        <ChevronDown className={`w-4 h-4 transition-transform ${(item.name === 'Dashboard' && dashboardExpanded) ||
+                            (item.name === 'Funcionários' && employeesExpanded) ||
+                            (item.name === 'Configurações' && settingsExpanded)
+                            ? 'rotate-180'
                             : ''
-                        }`} />
+                          }`} />
                       </button>
                     )}
                   </div>
                 ) : (
                   <Link
                     to={item.href}
-                    className={`flex items-center px-4 py-3 text-sm font-medium transition-colors ${
-                      isActive
+                    className={`flex items-center px-4 py-3 text-sm font-medium transition-colors ${isActive
                         ? 'bg-primary-50 dark:bg-gray-700 text-primary-600 dark:text-primary-400'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
+                      }`}
                   >
                     <item.icon className="w-5 h-5" />
                     {!sidebarCollapsed && <span className="ml-3">{item.name}</span>}
@@ -165,30 +160,29 @@ const Layout = ({ children }: LayoutProps) => {
                 )}
 
                 {/* Submenu */}
-                {item.hasSubmenu && item.submenu && !sidebarCollapsed && 
-                  ((item.name === 'Dashboard' && dashboardExpanded) || 
-                   (item.name === 'Funcionários' && employeesExpanded) ||
-                   (item.name === 'Configurações' && settingsExpanded)) && (
-                  <div className="bg-gray-50 dark:bg-gray-900">
-                    {item.submenu.map((subItem) => {
-                      const isSubActive = location.pathname === subItem.href || location.pathname.startsWith(subItem.href + '/')
-                      return (
-                        <Link
-                          key={subItem.name}
-                          to={subItem.href}
-                          className={`flex items-center pl-12 pr-4 py-2 text-sm transition-colors ${
-                            isSubActive
-                              ? 'bg-primary-100 dark:bg-gray-700 text-primary-600 dark:text-primary-400 font-medium'
-                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          <subItem.icon className="w-4 h-4" />
-                          <span className="ml-2">{subItem.name}</span>
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
+                {item.hasSubmenu && item.submenu && !sidebarCollapsed &&
+                  ((item.name === 'Dashboard' && dashboardExpanded) ||
+                    (item.name === 'Funcionários' && employeesExpanded) ||
+                    (item.name === 'Configurações' && settingsExpanded)) && (
+                    <div className="bg-gray-50 dark:bg-gray-900">
+                      {item.submenu.map((subItem) => {
+                        const isSubActive = location.pathname === subItem.href || location.pathname.startsWith(subItem.href + '/')
+                        return (
+                          <Link
+                            key={subItem.name}
+                            to={subItem.href}
+                            className={`flex items-center pl-12 pr-4 py-2 text-sm transition-colors ${isSubActive
+                                ? 'bg-primary-100 dark:bg-gray-700 text-primary-600 dark:text-primary-400 font-medium'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                              }`}
+                          >
+                            <subItem.icon className="w-4 h-4" />
+                            <span className="ml-2">{subItem.name}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
               </div>
             )
           })}
@@ -205,7 +199,7 @@ const Layout = ({ children }: LayoutProps) => {
                 {/* Dashboard */}
               </h1>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <button
                 onClick={toggleDarkMode}
@@ -213,11 +207,11 @@ const Layout = ({ children }: LayoutProps) => {
               >
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
-              
+
               <NotificationBell />
-              
+
               <div className="border-l border-gray-200 dark:border-gray-700 h-8"></div>
-              
+
               <div className="relative">
                 <button
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
@@ -227,12 +221,12 @@ const Layout = ({ children }: LayoutProps) => {
                     {user?.name}
                   </span>
                   <img
-                    src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}`}
+                    src={user?.avatar_large_url || user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}`}
                     alt="User"
-                    className="w-8 h-8 rounded-full"
+                    className="w-8 h-8 rounded-full object-cover"
                   />
                 </button>
-                
+
                 {profileDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50">
                     <Link
@@ -269,4 +263,4 @@ const Layout = ({ children }: LayoutProps) => {
   )
 }
 
-export default Layout 
+export default Layout

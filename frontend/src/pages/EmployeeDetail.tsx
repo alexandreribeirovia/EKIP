@@ -9,7 +9,9 @@ import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata } from '.
 import { supabase } from '../lib/supabaseClient'
 import FeedbackModal from '../components/FeedbackModal'
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal'
+import EvaluationsOverallRating from '../components/EvaluationsOverallRating'
 import PDIModal from '../components/PDIModal'
+import HtmlCellRenderer from '../components/HtmlCellRenderer'
 import '../styles/main.css'
 
 const EmployeeDetail = () => {
@@ -609,7 +611,29 @@ const EmployeeDetail = () => {
         setFeedbacks([]);
         return;
       }
-      setFeedbacks(data || []);
+
+      // Buscar PDIs vinculados aos feedbacks
+      const feedbackIds = (data || []).map(f => f.id);
+      let pdiMap = new Map();
+      if (feedbackIds.length > 0) {
+        const { data: pdiData, error: pdiError } = await supabase
+          .from('pdi')
+          .select('feedback_id')
+          .in('feedback_id', feedbackIds)
+          .not('feedback_id', 'is', null);
+        
+        if (!pdiError && pdiData) {
+          pdiData.forEach((pdi) => {
+            pdiMap.set(pdi.feedback_id, true);
+          });
+        }
+      }
+
+      const formattedData = (data || []).map(f => ({
+        ...f,
+        has_pdi: pdiMap.has(f.id)
+      }));
+      setFeedbacks(formattedData);
     } catch (error) {
       console.error('Erro ao carregar feedbacks:', error);
       setFeedbacks([]);
@@ -773,7 +797,13 @@ const EmployeeDetail = () => {
     try {
         const { data, error } = await supabase
             .from('evaluations')
-            .select('*')
+            .select(`
+              *,
+              evaluations_questions_reply (
+                score,
+                weight
+              )
+            `)
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
@@ -796,10 +826,52 @@ const EmployeeDetail = () => {
             }
         }
 
-        const formattedData = (data || []).map(e => ({
-            ...e,
-            status_name: statusMap.get(e.status_id) || 'N/A'
-        }));
+        // Buscar PDIs vinculados às avaliações
+        const evaluationIds = (data || []).map(e => e.id);
+        let pdiMap = new Map();
+        if (evaluationIds.length > 0) {
+          const { data: pdiData, error: pdiError } = await supabase
+            .from('pdi')
+            .select('evaluation_id')
+            .in('evaluation_id', evaluationIds)
+            .not('evaluation_id', 'is', null);
+          
+          if (!pdiError && pdiData) {
+            pdiData.forEach((pdi) => {
+              pdiMap.set(pdi.evaluation_id, true);
+            });
+          }
+        }
+
+        const formattedData = (data || []).map(e => {
+            // Calcular média ponderada dos scores
+            let averageScore = null;
+            const replies = e.evaluations_questions_reply || [];
+            
+            if (replies.length > 0) {
+              const validReplies = replies.filter((r: any) => r.score !== null && r.weight !== null);
+              
+              if (validReplies.length > 0) {
+                const totalWeightedScore = validReplies.reduce(
+                  (sum: number, r: any) => sum + (r.score * r.weight),
+                  0
+                );
+                const totalWeight = validReplies.reduce(
+                  (sum: number, r: any) => sum + r.weight,
+                  0
+                );
+                
+                averageScore = totalWeight > 0 ? totalWeightedScore / totalWeight : null;
+              }
+            }
+
+            return {
+                ...e,
+                status_name: statusMap.get(e.status_id) || 'N/A',
+                has_pdi: pdiMap.has(e.id),
+                average_score: averageScore
+            };
+        });
         setEvaluations(formattedData);
     } catch (error) {
         console.error('Erro ao carregar avaliações:', error);
@@ -1521,11 +1593,36 @@ const EmployeeDetail = () => {
       },
     },
     {
+      headerName: 'PDI',
+      field: 'has_pdi',
+      flex: 0.7,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const hasPDI = params.data.has_pdi || false;
+        
+        let text = 'Não';
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        
+        if (hasPDI) {
+          text = 'Sim';
+          colorClass = 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+        }
+        
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+              {text}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
       headerName: 'Comentário',
       field: 'public_comment',
       flex: 3,
       minWidth: 300,
-      cellRenderer: (params: any) => params.value || '-',
+      cellRenderer: HtmlCellRenderer,
     },
     {
       headerName: 'Ações',
@@ -1582,6 +1679,38 @@ const EmployeeDetail = () => {
         const end = new Date(params.data.period_end).toLocaleDateString('pt-BR');
         return `${start} - ${end}`;
       }
+    },
+    {
+      headerName: 'PDI',
+      field: 'has_pdi',
+      flex: 0.7,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const hasPDI = params.data.has_pdi || false;
+        
+        let text = 'Não';
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        
+        if (hasPDI) {
+          text = 'Sim';
+          colorClass = 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+        }
+        
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+              {text}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Nota Geral',
+      field: 'average_score',
+      flex: 1,
+      minWidth: 120,
+      cellRenderer: (params: any) => <EvaluationsOverallRating score={params.value} />,
     },
     { 
       headerName: 'Status', 
@@ -1666,6 +1795,35 @@ const EmployeeDetail = () => {
           <div className="flex items-center justify-left h-full">
             <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
               {count} {count === 1 ? 'competência' : 'competências'}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Vínculo',
+      field: 'link_type',
+      flex: 0.8,
+      minWidth: 110,
+      cellRenderer: (params: any) => {
+        const hasEvaluation = params.data.evaluation_id;
+        const hasFeedback = params.data.feedback_id;
+        
+        let text = 'Não';
+        let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        
+        if (hasEvaluation) {
+          text = 'Avaliação';
+          colorClass = 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+        } else if (hasFeedback) {
+          text = 'Feedback';
+          colorClass = 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300';
+        }
+        
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+              {text}
             </span>
           </div>
         );
@@ -2218,19 +2376,13 @@ const EmployeeDetail = () => {
       {!isFullScreen && (
         <>
           {/* Header com botão voltar - fora do card */}
-          <div className="flex items-center gap-4 mb-2 mt-0">
-            <button
-              onClick={() => navigate('/employees')}
-              className="flex items-center gap-2 px-4 py-0 text-gray-600 dark:text-gray-300 hover:text-orange-500 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Voltar
-            </button>
-            {/* <div className="h-6 border-l border-gray-300 dark:border-gray-600"></div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              Detalhes do Funcionário
-            </h1> */}
-          </div>
+          <button
+            onClick={() => navigate('/employees')}
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors pb-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar
+          </button>
 
           {/* Card com informações básicas do funcionário */}
           <div className="card p-2 pl-6 mb-4">

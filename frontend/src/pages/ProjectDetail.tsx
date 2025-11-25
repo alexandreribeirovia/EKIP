@@ -1675,15 +1675,13 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         />
       )}
       
-      <div className="flex items-center gap-4 mb-2">
-        <button
-           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-0 text-gray-600 dark:text-gray-300 hover:text-orange-500 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Voltar
-        </button>
-      </div>
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors pb-2"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Voltar
+      </button>
       
       {!isFullScreen && (
         <div className="card px-6 pt-2 pb-4 mb-3">

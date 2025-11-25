@@ -38,7 +38,7 @@ const Users = () => {
     try {
       // Get latest token from store to prevent using a stale one from component state
       const token = useAuthStore.getState().session?.access_token
-      
+
       if (!token) {
         console.error('Usuário não autenticado')
         setIsLoading(false)
@@ -59,7 +59,7 @@ const Users = () => {
       }
 
       const result = await response.json()
-      
+
       if (result.success && result.data.users) {
         setUsers(result.data.users)
         applyFilters(result.data.users, searchText, filterRole, filterStatus)
@@ -194,9 +194,8 @@ const Users = () => {
         }
         return (
           <span
-            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-              roleColors[params.value] || roleColors.user
-            }`}
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${roleColors[params.value] || roleColors.user
+              }`}
           >
             {roleLabels[params.value] || params.value}
           </span>
@@ -212,11 +211,10 @@ const Users = () => {
         const isActive = params.value === 'active'
         return (
           <span
-            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-              isActive
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${isActive
                 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                 : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-            }`}
+              }`}
           >
             {isActive ? 'Ativo' : 'Inativo'}
           </span>

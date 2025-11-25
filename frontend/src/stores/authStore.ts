@@ -10,6 +10,7 @@ interface User {
   email: string
   role: string
   avatar?: string
+  avatar_large_url?: string
 }
 
 interface AuthState {
@@ -22,6 +23,7 @@ interface AuthState {
   updateUser: (user: Partial<User>) => void
   initializeAuth: () => Promise<void>
   setSession: (session: Session | null, supabaseUser: SupabaseUser | null) => void
+  fetchUserProfile: (userId: string) => Promise<void>
 }
 
 /**
@@ -40,7 +42,7 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       session: null,
       isAuthenticated: false,
@@ -48,6 +50,7 @@ export const useAuthStore = create<AuthState>()(
 
       login: (user: User, session: Session) => {
         set({ user, session, isAuthenticated: true, loading: false });
+        void get().fetchUserProfile(user.id);
       },
 
       /**
@@ -60,17 +63,66 @@ export const useAuthStore = create<AuthState>()(
 
           if (session?.user) {
             const user = mapSupabaseUser(session.user)
-            set({ 
-              user, 
-              session, 
-              isAuthenticated: true, 
+            set({
+              user,
+              session,
+              isAuthenticated: true,
             })
+            void get().fetchUserProfile(user.id)
           }
         } catch (error) {
           console.error('Erro ao inicializar autenticação:', error)
         } finally {
           // Garante que o estado de loading seja finalizado
           set({ loading: false })
+        }
+      },
+
+      /**
+       * Busca dados adicionais do perfil do usuário na tabela users
+       */
+      fetchUserProfile: async (userId: string) => {
+        try {
+          console.log('Fetching user profile for:', userId);
+
+          // Tenta buscar primeiro pelo user_id
+          const { data: dataByUserId } = await supabase
+            .from('users')
+            .select('avatar_large_url')
+            .eq('user_id', userId)
+            .maybeSingle()
+
+          if (dataByUserId?.avatar_large_url) {
+            console.log('Found avatar by user_id:', dataByUserId.avatar_large_url);
+            set((state) => ({
+              user: state.user ? { ...state.user, avatar_large_url: dataByUserId.avatar_large_url || undefined } : null,
+            }))
+            return;
+          }
+
+          // Se não encontrar por user_id, tenta pelo email
+          const currentUserEmail = get().user?.email;
+          if (currentUserEmail) {
+            console.log('Fetching user profile by email:', currentUserEmail);
+            const { data: dataByEmail } = await supabase
+              .from('users')
+              .select('avatar_large_url')
+              .eq('email', currentUserEmail)
+              .maybeSingle()
+
+            if (dataByEmail?.avatar_large_url) {
+              console.log('Found avatar by email:', dataByEmail.avatar_large_url);
+              set((state) => ({
+                user: state.user ? { ...state.user, avatar_large_url: dataByEmail.avatar_large_url || undefined } : null,
+              }))
+              return;
+            }
+          }
+
+          console.log('No avatar found in users table');
+
+        } catch (error) {
+          console.error('Erro ao buscar perfil do usuário:', error)
         }
       },
 
@@ -110,16 +162,17 @@ export const useAuthStore = create<AuthState>()(
       setSession: (session: Session | null, supabaseUser: SupabaseUser | null) => {
         if (session && supabaseUser) {
           const user = mapSupabaseUser(supabaseUser)
-          set({ 
-            user, 
-            session, 
-            isAuthenticated: true 
+          set({
+            user,
+            session,
+            isAuthenticated: true
           })
+          void get().fetchUserProfile(user.id)
         } else {
-          set({ 
-            user: null, 
-            session: null, 
-            isAuthenticated: false 
+          set({
+            user: null,
+            session: null,
+            isAuthenticated: false
           })
         }
       },
@@ -138,7 +191,7 @@ export const useAuthStore = create<AuthState>()(
 // Listener para mudanças de autenticação
 supabase.auth.onAuthStateChange((event, session) => {
   const store = useAuthStore.getState()
-  
+
   if (event === 'SIGNED_IN' && session) {
     store.setSession(session, session.user)
   } else if (event === 'SIGNED_OUT') {

@@ -6,6 +6,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit } from 'lucide-react';
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal';
+import EvaluationsOverallRating from '../components/EvaluationsOverallRating';
 import { EmployeeEvaluationData } from '../types';
 import '../styles/main.css';
 
@@ -169,6 +170,10 @@ const Evaluations = () => {
           is_pdi,
           evaluations_projects (
             project_id
+          ),
+          evaluations_questions_reply (
+            score,
+            weight
           )
         `)
         .gte('updated_at', dateRange.start)
@@ -243,10 +248,32 @@ const Evaluations = () => {
           project_name: projectsMap.get(ep.project_id)?.name || 'Projeto não encontrado',
         }));
 
+        // Calcular média ponderada dos scores
+        let averageScore = null;
+        const replies = evaluation.evaluations_questions_reply || [];
+        
+        if (replies.length > 0) {
+          const validReplies = replies.filter((r: any) => r.score !== null && r.weight !== null);
+          
+          if (validReplies.length > 0) {
+            const totalWeightedScore = validReplies.reduce(
+              (sum: number, r: any) => sum + (r.score * r.weight),
+              0
+            );
+            const totalWeight = validReplies.reduce(
+              (sum: number, r: any) => sum + r.weight,
+              0
+            );
+            
+            averageScore = totalWeight > 0 ? totalWeightedScore / totalWeight : null;
+          }
+        }
+
         return {
           ...evaluation,
           status: evaluation.status_id ? statusMap.get(evaluation.status_id) : null,
           evaluations_projects: projectsWithNames,
+          average_score: averageScore,
         };
       });
 
@@ -411,6 +438,13 @@ const Evaluations = () => {
       },
     },
     {
+      headerName: 'Nota Geral',
+      field: 'average_score',
+      flex: 1,
+      minWidth: 120,
+      cellRenderer: (params: any) => <EvaluationsOverallRating score={params.value} />,
+    },
+    {
       headerName: 'Status',
       field: 'status',
       flex: 1,
@@ -445,6 +479,7 @@ const Evaluations = () => {
         );
       },
     },
+    
     {
       headerName: 'Ações',
       field: 'id',

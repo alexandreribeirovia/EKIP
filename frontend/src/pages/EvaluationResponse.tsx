@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target, Maximize } from 'lucide-react';
 import { EvaluationInfo, CategoryData, EvaluationQuestionData, QuestionResponse } from '../types';
 import PDIModal from '../components/PDIModal';
+import EvaluationsOverallRating from '../components/EvaluationsOverallRating';
 
 const NotificationToast = ({ type, message, onClose }: { 
   type: 'success' | 'error', 
@@ -164,6 +165,35 @@ const EvaluationResponse = () => {
   // Modo Apresentação
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const presentationRef = useRef<HTMLDivElement>(null);
+
+  // Nota Geral
+  const [averageScore, setAverageScore] = useState<number | null>(null);
+
+  // Calcular nota geral (média ponderada dos scores)
+  const calculateAverageScore = () => {
+    if (questions.length === 0) return null;
+
+    const scoredQuestions = questions.filter(q => {
+      const replyType = q.reply_type.toLowerCase();
+      return replyType.includes('escala');
+    });
+
+    if (scoredQuestions.length === 0) return null;
+
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+
+    scoredQuestions.forEach((question) => {
+      const response = responses.get(question.question_id);
+      if (response && response.score !== null && response.score !== undefined && response.score > 0) {
+        const weight = question.weight || 1;
+        totalWeightedScore += response.score * weight;
+        totalWeight += weight;
+      }
+    });
+
+    return totalWeight > 0 ? totalWeightedScore / totalWeight : null;
+  };
 
   // Calcular progresso de preenchimento (somente perguntas obrigatórias)
   const calculateProgress = () => {
@@ -483,6 +513,12 @@ const EvaluationResponse = () => {
       void loadQuestions();
     }
   }, [evaluation]);
+
+  // Atualizar nota geral quando responses ou questions mudarem
+  useEffect(() => {
+    const score = calculateAverageScore();
+    setAverageScore(score);
+  }, [responses, questions]);
 
   // Toggle categoria expandida/colapsada
   const toggleCategory = (categoryId: number) => {
@@ -965,7 +1001,7 @@ const EvaluationResponse = () => {
   }
 
   return (
-    <div ref={presentationRef} className="h-full flex flex-col space-y-2 bg-white dark:bg-gray-900 p-2">
+    <div ref={presentationRef} className="h-full flex flex-col space-y-2 dark:bg-gray-900 pt-0">
       {/* Notificação de Sucesso */}
       {successMessage && (
         <NotificationToast
@@ -1073,7 +1109,7 @@ const EvaluationResponse = () => {
         </div>
 
         {/* Linha 2: Demais informações */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6 items-center">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Avaliador</p>
             <p className="text-md font-medium text-gray-900 dark:text-gray-100">
@@ -1127,6 +1163,12 @@ const EvaluationResponse = () => {
                   Sem status
                 </span>
               )}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Nota Geral</p>
+            <p className="text-md font-medium text-gray-900 dark:text-gray-100">
+              <EvaluationsOverallRating score={averageScore} />
             </p>
           </div>
           <div>
