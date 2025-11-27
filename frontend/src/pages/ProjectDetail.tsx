@@ -4,15 +4,16 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
-import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize, Copy } from 'lucide-react';
 import Select from 'react-select';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea } from 'recharts';
 import { supabase } from '../lib/supabaseClient';
-import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase } from '../types';
+import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase, DbAccessPlatform, DbAccessPlatformGrouped } from '../types';
 import AssigneeCellRenderer from '../components/AssigneeCellRenderer.tsx';
 import ProjectOwnerRenderer from '../components/ProjectOwnerRenderer.tsx';
 import ProjectProgressModal from '../components/ProjectProgressModal.tsx';
 import RiskModal from '../components/RiskModal.tsx';
+import AccessModal from '../components/AccessModal.tsx';
 import HtmlCellRenderer from '../components/HtmlCellRenderer.tsx';
 
 interface SelectOption {
@@ -338,6 +339,9 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [risks, setRisks] = useState<DbRisk[]>([]);
   const [isLoadingRisks, setIsLoadingRisks] = useState(true);
+  const [accesses, setAccesses] = useState<DbAccessPlatform[]>([]);
+  const [isLoadingAccesses, setIsLoadingAccesses] = useState(true);
+  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
   const [domains, setDomains] = useState<DbDomain[]>([]);
   const [projectOwners, setProjectOwners] = useState<DbProjectOwner[]>([]);
   const [isLoadingProjectOwners, setIsLoadingProjectOwners] = useState(true);
@@ -353,6 +357,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const hasLoadedTimeWorked = useRef(false);
   const hasLoadedPhases = useRef(false);
   const hasLoadedRisks = useRef(false);
+  const hasLoadedAccesses = useRef(false);
   const hasLoadedDomains = useRef(false);
   const hasLoadedOwners = useRef(false);
   const [taskSearchTerm, setTaskSearchTerm] = useState('');
@@ -368,6 +373,11 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [isRiskModalOpen, setIsRiskModalOpen] = useState(false);
   const [selectedRisk, setSelectedRisk] = useState<DbRisk | null>(null);
   
+  // Estados para o modal de acesso
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [selectedAccess, setSelectedAccess] = useState<DbAccessPlatform | null>(null);
+  const [isCloneMode, setIsCloneMode] = useState(false);
+  
   // Estados para filtros da aba acompanhamento
   const [trackingPeriodFilter, setTrackingPeriodFilter] = useState<'all' | 'current_week' | 'current_month' | 'last_3_months' | 'current_year'>('all');
   const [trackingStatusFilter, setTrackingStatusFilter] = useState<'open' | 'closed' | 'all'>('all');
@@ -380,6 +390,10 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   // Estados para modal de confirmação de exclusão de riscos
   const [isDeleteRiskConfirmModalOpen, setIsDeleteRiskConfirmModalOpen] = useState(false);
   const [riskToDelete, setRiskToDelete] = useState<DbRisk | null>(null);
+  
+  // Estados para modal de confirmação de exclusão de acessos
+  const [isDeleteAccessConfirmModalOpen, setIsDeleteAccessConfirmModalOpen] = useState(false);
+  const [accessToDelete, setAccessToDelete] = useState<DbAccessPlatform | null>(null);
 
   // Função para calcular datas baseado no período selecionado
   const getDateRange = useCallback((period: typeof trackingPeriodFilter) => {
@@ -791,6 +805,97 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
 
+  // Carregar acessos do projeto
+  useEffect(() => {
+    if (!hasLoadedAccesses.current && domains.length > 0) {
+      hasLoadedAccesses.current = true;
+      
+      void (async () => {
+        if (!project.project_id || domains.length === 0) return;
+        setIsLoadingAccesses(true);
+
+        // Buscar client_name do projeto
+        const { data: projectData, error: projectError } = await supabase
+          .from('projects')
+          .select('client_name')
+          .eq('project_id', project.project_id)
+          .single();
+
+        if (projectError || !projectData) {
+          console.error('Erro ao buscar dados do projeto:', projectError);
+          setAccesses([]);
+          setIsLoadingAccesses(false);
+          return;
+        }
+
+        // Buscar client_id baseado no client_name
+        const { data: clientData, error: clientError } = await supabase
+          .from('clients')
+          .select('client_id')
+          .eq('name', projectData.client_name)
+          .single();
+
+        if (clientError || !clientData) {
+          console.error('Erro ao buscar client_id:', clientError);
+          setAccesses([]);
+          setIsLoadingAccesses(false);
+          return;
+        }
+
+        // Buscar acessos do cliente com nome do funcionário
+        const { data, error } = await supabase
+          .from('access_platforms')
+          .select('*, users!access_platforms_user_id_fkey(name)')
+          .eq('client_id', clientData.client_id)
+          .eq('is_active', true)
+          .order('platform_name');
+
+        if (error) {
+          console.error('Erro ao buscar acessos:', error);
+          setAccesses([]);
+        } else {
+          // Buscar detalhes de acesso para cada acesso
+          const accessIds = (data || []).map((a: any) => a.id);
+          console.log('Access IDs encontrados:', accessIds);
+          
+          let accessDetails: any[] = [];
+          if (accessIds.length > 0) {
+            const { data: detailsData, error: detailsError } = await supabase
+              .from('access_platforms_details')
+              .select('*')
+              .in('access_platform_id', accessIds);
+            
+            console.log('Detalhes de acesso encontrados:', detailsData);
+            console.log('Erro ao buscar detalhes:', detailsError);
+            
+            if (!detailsError) {
+              accessDetails = detailsData || [];
+            }
+          }
+
+          // Mapear dados para incluir user_name e detalhes (políticas e tipos de dados)
+          const accessesWithUserName = (data || []).map((access: any) => {
+            const details = accessDetails.filter((d: any) => d.access_platform_id === access.id);
+            const policies = details.filter((d: any) => d.domain_type === 'access_policy').map((d: any) => d.domain_value);
+            const dataTypes = details.filter((d: any) => d.domain_type === 'access_data_type').map((d: any) => d.domain_value);
+            
+            console.log(`Access ID ${access.id} - Policies:`, policies, 'DataTypes:', dataTypes);
+            
+            return {
+              ...access,
+              user_name: access.users?.name || 'Funcionário não encontrado',
+              access_policies: policies,
+              data_types: dataTypes,
+            };
+          });
+          setAccesses(accessesWithUserName as DbAccessPlatform[] || []);
+        }
+        setIsLoadingAccesses(false);
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.project_id, domains]);
+
   const typeOptions = useMemo(() => {
     if (!tasks) return [];
     const types = new Set(tasks.map(task => task.type_name).filter(Boolean));
@@ -851,6 +956,43 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
   const showSuccessNotification = useCallback((message: string) => {
     setSuccessNotification(message);
+  }, []);
+
+  // Função para agrupar acessos por plataforma
+  const groupedAccesses = useMemo(() => {
+    const grouped = new Map<string, DbAccessPlatform[]>();
+    
+    accesses.forEach(access => {
+      const platform = access.platform_name;
+      if (!grouped.has(platform)) {
+        grouped.set(platform, []);
+      }
+      grouped.get(platform)!.push(access);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([platform_name, accessList]) => ({
+        platform_name,
+        platform_id: accessList[0].platform_id,
+        accesses: accessList,
+      } as DbAccessPlatformGrouped))
+      .sort((a, b) => a.platform_name.localeCompare(b.platform_name));
+  }, [accesses]);
+
+  useEffect(() => {
+    console.log('Grouped Accesses:', groupedAccesses);
+  }, [groupedAccesses]);
+
+  const togglePlatformExpansion = useCallback((platformName: string) => {
+    setExpandedPlatforms(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(platformName)) {
+        newSet.delete(platformName);
+      } else {
+        newSet.add(platformName);
+      }
+      return newSet;
+    });
   }, []);
 
   // Função para abrir modal de adição de risco
@@ -939,6 +1081,134 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     }
   }, [riskToDelete, showErrorNotification, showSuccessNotification]);
 
+  // Funções para modal de acesso
+  const openAddAccessModal = useCallback(() => {
+    setSelectedAccess(null);
+    setIsCloneMode(false);
+    setIsAccessModalOpen(true);
+  }, []);
+
+  const openEditAccessModal = useCallback((accessId: number) => {
+    const access = accesses.find(a => a.id === accessId);
+    if (access) {
+      setSelectedAccess(access);
+      setIsCloneMode(false);
+      setIsAccessModalOpen(true);
+    }
+  }, [accesses]);
+
+  // Função para clonar acesso
+  const openCloneAccessModal = useCallback((accessId: number) => {
+    const access = accesses.find(a => a.id === accessId);
+    if (access) {
+      setSelectedAccess(access);
+      setIsCloneMode(true);
+      setIsAccessModalOpen(true);
+    }
+  }, [accesses]);
+
+  const reloadAccesses = useCallback(async () => {
+    // Buscar client_name do projeto
+    const { data: projectData, error: projectError } = await supabase
+      .from('projects')
+      .select('client_name')
+      .eq('project_id', project.project_id)
+      .single();
+
+    if (projectError || !projectData) {
+      console.error('Erro ao buscar dados do projeto:', projectError);
+      return;
+    }
+
+    // Buscar client_id baseado no client_name
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('client_id')
+      .eq('name', projectData.client_name)
+      .single();
+
+    if (clientError || !clientData) {
+      console.error('Erro ao buscar client_id:', clientError);
+      return;
+    }
+
+    const { data, error: fetchError } = await supabase
+      .from('access_platforms')
+      .select('*, users!access_platforms_user_id_fkey(name)')
+      .eq('client_id', clientData.client_id)
+      .eq('is_active', true)
+      .order('platform_name');
+
+    if (!fetchError) {
+      // Buscar detalhes de acesso para cada acesso
+      const accessIds = (data || []).map((a: any) => a.id);
+      
+      let accessDetails: any[] = [];
+      if (accessIds.length > 0) {
+        const { data: detailsData, error: detailsError } = await supabase
+          .from('access_platforms_details')
+          .select('*')
+          .in('access_platform_id', accessIds);
+        
+        if (!detailsError) {
+          accessDetails = detailsData || [];
+        }
+      }
+
+      // Mapear dados para incluir user_name e detalhes (políticas e tipos de dados)
+      const accessesWithUserName = (data || []).map((access: any) => {
+        const details = accessDetails.filter((d: any) => d.access_platform_id === access.id);
+        const policies = details.filter((d: any) => d.domain_type === 'access_policy').map((d: any) => d.domain_value);
+        const dataTypes = details.filter((d: any) => d.domain_type === 'access_data_type').map((d: any) => d.domain_value);
+        
+        return {
+          ...access,
+          user_name: access.users?.name || 'Funcionário não encontrado',
+          access_policies: policies,
+          data_types: dataTypes,
+        };
+      });
+      setAccesses(accessesWithUserName as DbAccessPlatform[] || []);
+      showSuccessNotification('Acesso salvo com sucesso!');
+    }
+  }, [project.project_id, showSuccessNotification]);
+
+  const deleteAccess = useCallback((accessId: number) => {
+    const access = accesses.find(a => a.id === accessId);
+    if (access) {
+      setAccessToDelete(access);
+      setIsDeleteAccessConfirmModalOpen(true);
+    }
+  }, [accesses]);
+
+  const handleConfirmDeleteAccess = useCallback(async () => {
+    if (!accessToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('access_platforms')
+        .delete()
+        .eq('id', accessToDelete.id);
+
+      if (error) {
+        console.error('Erro ao deletar acesso:', error);
+        showErrorNotification('Erro ao excluir acesso. Tente novamente.');
+        setIsDeleteAccessConfirmModalOpen(false);
+        setAccessToDelete(null);
+        return;
+      }
+
+      setAccesses(prev => prev.filter(access => access.id !== accessToDelete.id));
+      showSuccessNotification('Acesso excluído com sucesso!');
+      setIsDeleteAccessConfirmModalOpen(false);
+      setAccessToDelete(null);
+    } catch (error) {
+      console.error('Erro ao deletar acesso:', error);
+      showErrorNotification('Erro ao excluir acesso. Tente novamente.');
+      setIsDeleteAccessConfirmModalOpen(false);
+      setAccessToDelete(null);
+    }
+  }, [accessToDelete, showErrorNotification, showSuccessNotification]);
 
 
   const filteredRisks = useMemo(() => {
@@ -1057,6 +1327,128 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       resizable: false,
     },
   ], [deleteRisk, openEditRiskModal]);
+
+  const accessDetailColumnDefs: ColDef[] = useMemo(() => [
+    {
+      headerName: 'Funcionário',
+      field: 'user_name',
+      flex: 1.5,
+      minWidth: 150,
+    },
+    {
+      headerName: 'Ambiente',
+      field: 'environment_name',
+      flex: 1,
+      minWidth: 120,
+    },
+    {
+      headerName: 'Função',
+      field: 'role_name',
+      flex: 1,
+      minWidth: 120,
+    },
+    {
+      headerName: 'Nível de Risco',
+      field: 'risk_name',
+      flex: 1,
+      minWidth: 120,
+    },
+    {
+      headerName: 'Política de Acesso',
+      field: 'access_policies',
+      flex: 1.5,
+      minWidth: 150,
+      autoHeight: true,
+      wrapText: true,
+      cellRenderer: (params: any) => {
+        const policies = params.value as string[] || [];
+        if (policies.length === 0) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+        return (
+          <div className="flex flex-wrap gap-1 py-2">
+            {policies.map((policy, index) => (
+              <span 
+                key={index} 
+                className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+              >
+                {policy}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Tipo de Dados',
+      field: 'data_types',
+      flex: 1.5,
+      minWidth: 150,
+      autoHeight: true,
+      wrapText: true,
+      cellRenderer: (params: any) => {
+        const dataTypes = params.value as string[] || [];
+        if (dataTypes.length === 0) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+        return (
+          <div className="flex flex-wrap gap-1 py-2">
+            {dataTypes.map((dataType, index) => (
+              <span 
+                key={index} 
+                className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+              >
+                {dataType}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Descrição',
+      field: 'description',
+      flex: 2,
+      minWidth: 200,
+      cellRenderer: HtmlCellRenderer,
+    },
+    {
+      headerName: 'Data de Expiração',
+      field: 'expiration_date',
+      flex: 1,
+      minWidth: 140,
+      valueFormatter: params => formatDate(params.value),
+    },
+    {
+      headerName: 'Ações',
+      field: 'actions',
+      width: 140,
+      cellRenderer: (params: any) => (
+        <div className="flex items-center justify-center gap-1 h-full">
+          <button
+            onClick={() => openEditAccessModal(params.data.id)}
+            className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
+            title="Editar acesso"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => openCloneAccessModal(params.data.id)}
+            className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
+            title="Clonar acesso"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => deleteAccess(params.data.id)}
+            className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
+            title="Excluir acesso"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+      sortable: false,
+      filter: false,
+      resizable: false,
+    },
+  ], [openEditAccessModal, openCloneAccessModal, deleteAccess]);
 
   const defaultRiskColDef = useMemo<ColDef>(() => ({
     sortable: true,
@@ -1776,15 +2168,27 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
               >
                 Riscos/Ações
               </button>
+             
               <button
                 onClick={() => setActiveTab('status-report')}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
                   activeTab === 'status-report'
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
                 }`}
               >
                 Status Report
+              </button>
+
+              <button
+                onClick={() => setActiveTab('access')}
+                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'access'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
+                }`}
+              >
+                Acesso
               </button>
             </div>
             
@@ -2006,6 +2410,104 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                         '<span class="text-gray-500 dark:text-gray-400">Nenhum risco encontrado para esse projeto.</span>'
                       }
                     />
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {activeTab === 'access' && (
+          <>
+            {isLoadingAccesses ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+                <p className="ml-4 text-gray-600 dark:text-gray-400">Carregando acessos...</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col h-full overflow-hidden">
+                  <div className="px-6 pt-4 pb-3 flex items-center justify-between text-sm text-gray-600 flex-shrink-0">
+                    <div className="flex items-center gap-6">
+                      <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{groupedAccesses.length} Plataformas</span></span>
+                      <span className="text-gray-400">|</span>
+                      <span><span className="font-bold text-gray-800 dark:text-gray-200">{accesses.length}</span> Acessos</span>
+                    </div>
+                    <button
+                      onClick={openAddAccessModal}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+                      title="Adicionar novo acesso"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Adicionar Acesso
+                    </button>
+                  </div>
+
+                  {/* Tabela de plataformas com detalhes expandidos inline */}
+                  <div className="px-6 pb-6 flex-1 overflow-y-auto">
+                    {/* Cabeçalho da tabela */}
+                    <div className="grid grid-cols-[auto_1fr_200px] gap-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 rounded-t-lg">
+                      <div className="w-8"></div>
+                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        Plataforma
+                      </div>
+                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide text-center">
+                        Total de Acessos
+                      </div>
+                    </div>
+
+                    {groupedAccesses.length === 0 ? (
+                      <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                        Nenhum acesso encontrado para este cliente.
+                      </div>
+                    ) : (
+                      groupedAccesses.map((group) => {
+                        const isExpanded = expandedPlatforms.has(group.platform_name);
+                        return (
+                          <div key={group.platform_name}>
+                            {/* Linha da plataforma */}
+                            <div 
+                              className="grid grid-cols-[auto_1fr_200px] gap-4 py-3 px-4 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                              onClick={() => togglePlatformExpansion(group.platform_name)}
+                            >
+                              <div className="flex items-center">
+                                <ChevronDown 
+                                  className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                                />
+                              </div>
+                              <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                {group.platform_name}
+                              </div>
+                              <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                                {group.accesses.length}
+                              </div>
+                            </div>
+
+                            {/* Detalhes expandidos - logo abaixo da linha da plataforma */}
+                            {isExpanded && (
+                              <div className="border-b border-gray-200 dark:border-gray-700">
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 ml-4 mr-0">
+                                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                    <span>Acessos para {group.platform_name}</span>
+                                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">({group.accesses.length} acessos)</span>
+                                  </h4>
+                                  <div className="ag-theme-alpine">
+                                    <AgGridReact
+                                      columnDefs={accessDetailColumnDefs}
+                                      rowData={group.accesses}
+                                      defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                                      animateRows={true}
+                                      headerHeight={48}
+                                      domLayout="autoHeight"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </>
@@ -2650,6 +3152,20 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         riskData={selectedRisk}
       />
 
+      {/* Modal de Acesso */}
+      <AccessModal
+        isOpen={isAccessModalOpen}
+        onClose={() => {
+          setIsAccessModalOpen(false);
+          setSelectedAccess(null);
+          setIsCloneMode(false);
+        }}
+        onSuccess={reloadAccesses}
+        projectId={project.project_id}
+        accessData={selectedAccess}
+        isCloneMode={isCloneMode}
+      />
+
       {/* Modal de Confirmação de Exclusão de Risco */}
       {isDeleteRiskConfirmModalOpen && riskToDelete && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -2703,6 +3219,68 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
               >
                 <Trash2 className="w-4 h-4" />
                 Deletar Risco
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Acesso */}
+      {isDeleteAccessConfirmModalOpen && accessToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-2xl flex items-center gap-3">
+              <Trash2 className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Confirmar Exclusão</h2>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Deletar Acesso
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Tem certeza que deseja deletar o acesso:
+                </p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">
+                    Plataforma: {accessToDelete.platform_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Ambiente: {accessToDelete.environment_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Função: {accessToDelete.role_name}
+                  </p>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Esta ação não pode ser desfeita
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-2xl flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  setIsDeleteAccessConfirmModalOpen(false);
+                  setAccessToDelete(null);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmDeleteAccess}
+                className="px-4 py-2 text-sm text-white font-semibold bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deletar Acesso
               </button>
             </div>
           </div>

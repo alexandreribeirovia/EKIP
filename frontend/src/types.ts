@@ -437,3 +437,66 @@ export interface CreateNotificationParams {
   source_type?: string | null;
   source_id?: string | null;
 }
+
+// Access Platform Types
+export interface DbAccessPlatform {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  client_id: number;
+  client_name: string;
+  user_id: string;
+  user_name?: string; // Nome do funcionário via join
+  platform_id: number;
+  platform_name: string;
+  environment_id: number;
+  environment_name: string;
+  role_id: number;
+  role_name: string;
+  risk_id: number;
+  risk_name: string;
+  description: string | null;
+  expiration_date: string | null;
+  is_active: boolean;
+  repositories?: DbAccessRepository[]; // Para plataforma GitHub
+  access_policies?: string[]; // Políticas de acesso (valores desnormalizados)
+  data_types?: string[]; // Tipos de dados (valores desnormalizados)
+}
+
+export interface DbAccessRepository {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  client_id: number;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+}
+
+export interface DbAccessRepositoryPlatform {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  plataform_id: number;
+  repository_id: number | null;
+}
+
+// Access Platform Details Types (vinculado com domains)
+export interface DbAccessPlatformDetail {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  access_platform_id: number;
+  domain_id: number;
+  domain_value: string;
+  domain_tag: string | null;
+  domain_type: string; // 'access_policy' | 'access_data_type'
+}
+
+// Access Platform Grouped Types
+export interface DbAccessPlatformGrouped {
+  platform_name: string;
+  platform_id: number;
+  accesses: DbAccessPlatform[];
+  expanded?: boolean;
+}
