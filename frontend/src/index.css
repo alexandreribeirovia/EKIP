@@ -198,6 +198,12 @@
   border-radius: 0 0 8px 8px;
 }
 
+/* Smaller description editor for AccessModal */
+.access-description-small .ql-editor {
+  min-height: 40px;
+  max-height: 120px;
+}
+
 .quill-editor .ql-editor.ql-blank::before,
 .feedback-wysiwyg .ql-editor.ql-blank::before {
   color: #9ca3af;

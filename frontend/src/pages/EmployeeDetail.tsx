@@ -2,17 +2,25 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata } from '../types'
+import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform } from '../types'
 import { supabase } from '../lib/supabaseClient'
 import FeedbackModal from '../components/FeedbackModal'
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal'
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating'
 import PDIModal from '../components/PDIModal'
 import HtmlCellRenderer from '../components/HtmlCellRenderer'
+import AccessModal from '../components/AccessModal'
 import '../styles/main.css'
+
+// Interface para acessos agrupados por cliente
+interface DbAccessClientGrouped {
+  client_name: string;
+  client_id: number;
+  accesses: DbAccessPlatform[];
+}
 
 const EmployeeDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -21,7 +29,7 @@ const EmployeeDetail = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento'>('tarefas')
+  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos'>('tarefas')
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -77,6 +85,17 @@ const EmployeeDetail = () => {
   const [isLoadingClientHistory, setIsLoadingClientHistory] = useState(false)
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
+  // Estados para acessos do funcionário
+  const [accesses, setAccesses] = useState<DbAccessPlatform[]>([])
+  const [isLoadingAccesses, setIsLoadingAccesses] = useState(false)
+  const [expandedAccessClients, setExpandedAccessClients] = useState<Set<string>>(new Set())
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false)
+  const [selectedAccess, setSelectedAccess] = useState<DbAccessPlatform | null>(null)
+  const [isCloneMode, setIsCloneMode] = useState(false)
+  const [isDeleteAccessConfirmModalOpen, setIsDeleteAccessConfirmModalOpen] = useState(false)
+  const [accessToDelete, setAccessToDelete] = useState<DbAccessPlatform | null>(null)
+  const [selectedProjectIdForAccess, setSelectedProjectIdForAccess] = useState<number | null>(null)
+
   const containerRef = useRef<HTMLDivElement>(null)
   const rightPanelRef = useRef<HTMLDivElement>(null);
   
@@ -88,6 +107,7 @@ const EmployeeDetail = () => {
   // Caches para evitar chamadas duplicadas ao banco
   const offDaysCache = useRef<Map<string, Set<string>>>(new Map())
   const timeWorkedCache = useRef<Map<string, any[]>>(new Map())
+  const hasLoadedAccesses = useRef(false)
 
   // Funções auxiliares (copiadas do EmployeeModal)
   const getInitials = (name: string): string => {
@@ -949,6 +969,257 @@ const EmployeeDetail = () => {
       setClientTimeHistory([]);
     } finally {
       setIsLoadingClientHistory(false);
+    }
+  };
+
+  // Função para carregar acessos do funcionário
+  const loadEmployeeAccesses = async (userId: string) => {
+    setIsLoadingAccesses(true);
+    console.log('Carregando acessos para user_id:', userId);
+    
+    try {
+      // Buscar acessos do funcionário usando o user_id
+      const { data, error } = await supabase
+        .from('access_platforms')
+        .select('*, clients(name)')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('platform_name');
+
+      console.log('Resultado da busca de acessos:', { data, error });
+
+      if (error) {
+        console.error('Erro ao buscar acessos do funcionário:', error);
+        setAccesses([]);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('Nenhum acesso encontrado para o funcionário');
+        setAccesses([]);
+        return;
+      }
+
+      // Buscar detalhes de acesso para cada acesso
+      const accessIds = (data || []).map((a: any) => a.id);
+      console.log('Access IDs encontrados:', accessIds);
+      
+      let accessDetails: any[] = [];
+      if (accessIds.length > 0) {
+        const { data: detailsData, error: detailsError } = await supabase
+          .from('access_platforms_details')
+          .select('*')
+          .in('access_platform_id', accessIds);
+        
+        console.log('Detalhes de acesso:', { detailsData, detailsError });
+        
+        if (!detailsError) {
+          accessDetails = detailsData || [];
+        }
+      }
+
+      // Mapear dados para incluir detalhes (políticas e tipos de dados)
+      const accessesWithDetails = (data || []).map((access: any) => {
+        const details = accessDetails.filter((d: any) => d.access_platform_id === access.id);
+        const policies = details.filter((d: any) => d.domain_type === 'access_policy').map((d: any) => d.domain_value);
+        const dataTypes = details.filter((d: any) => d.domain_type === 'access_data_type').map((d: any) => d.domain_value);
+        
+        return {
+          ...access,
+          client_name: access.clients?.name || 'Cliente não encontrado',
+          access_policies: policies,
+          data_types: dataTypes,
+        };
+      });
+      
+      setAccesses(accessesWithDetails as DbAccessPlatform[] || []);
+    } catch (error) {
+      console.error('Erro ao carregar acessos do funcionário:', error);
+      setAccesses([]);
+    } finally {
+      setIsLoadingAccesses(false);
+    }
+  };
+
+  // Função para recarregar acessos após edição/exclusão
+  const reloadAccesses = async () => {
+    if (employee?.user_id) {
+      await loadEmployeeAccesses(employee.user_id);
+    }
+  };
+
+  // Função para agrupar acessos por cliente
+  const groupedAccessesByClient = useMemo(() => {
+    const grouped = new Map<string, DbAccessPlatform[]>();
+    
+    accesses.forEach(access => {
+      const client = access.client_name;
+      if (!grouped.has(client)) {
+        grouped.set(client, []);
+      }
+      grouped.get(client)!.push(access);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([client_name, accessList]) => ({
+        client_name,
+        client_id: accessList[0].client_id,
+        accesses: accessList,
+      } as DbAccessClientGrouped))
+      .sort((a, b) => a.client_name.localeCompare(b.client_name));
+  }, [accesses]);
+
+  // Função para alternar expansão de cliente na aba acessos
+  const toggleAccessClientExpansion = (clientName: string) => {
+    setExpandedAccessClients(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(clientName)) {
+        newSet.delete(clientName);
+      } else {
+        newSet.add(clientName);
+      }
+      return newSet;
+    });
+  };
+
+  // Funções para modal de acesso
+  const openAddAccessModal = async () => {
+    setSelectedAccess(null);
+    setIsCloneMode(false);
+    
+    // Buscar um projeto onde o funcionário está alocado para usar no modal
+    try {
+      // Primeiro, tentar encontrar um projeto baseado nos acessos existentes
+      if (accesses.length > 0) {
+        const firstAccess = accesses[0];
+        await findProjectIdForClient(firstAccess.client_id);
+        setIsAccessModalOpen(true);
+        return;
+      }
+
+      // Se não houver acessos, buscar um projeto onde o funcionário está alocado
+      const { data: allocations, error: allocError } = await supabase
+        .from('allocations')
+        .select('project_id')
+        .eq('employee_id', id)
+        .limit(1);
+
+      if (allocError || !allocations || allocations.length === 0) {
+        // Se não houver alocações, buscar qualquer projeto ativo
+        const { data: projects, error: projError } = await supabase
+          .from('projects')
+          .select('project_id')
+          .eq('is_active', true)
+          .limit(1);
+
+        if (projError || !projects || projects.length === 0) {
+          console.error('Nenhum projeto disponível para adicionar acesso');
+          return;
+        }
+        setSelectedProjectIdForAccess(projects[0].project_id);
+      } else {
+        setSelectedProjectIdForAccess(allocations[0].project_id);
+      }
+      
+      setIsAccessModalOpen(true);
+    } catch (error) {
+      console.error('Erro ao buscar projeto para adicionar acesso:', error);
+    }
+  };
+
+  const openEditAccessModal = async (accessId: number) => {
+    const access = accesses.find(a => a.id === accessId);
+    if (access) {
+      setSelectedAccess(access);
+      setIsCloneMode(false);
+      // Buscar um project_id do cliente para usar no modal e aguardar
+      await findProjectIdForClient(access.client_id);
+      setIsAccessModalOpen(true);
+    }
+  };
+
+  const openCloneAccessModal = async (accessId: number) => {
+    const access = accesses.find(a => a.id === accessId);
+    if (access) {
+      setSelectedAccess(access);
+      setIsCloneMode(true);
+      await findProjectIdForClient(access.client_id);
+      setIsAccessModalOpen(true);
+    }
+  };
+
+  const deleteAccess = (accessId: number) => {
+    const access = accesses.find(a => a.id === accessId);
+    if (access) {
+      setAccessToDelete(access);
+      setIsDeleteAccessConfirmModalOpen(true);
+    }
+  };
+
+  const handleConfirmDeleteAccess = async () => {
+    if (!accessToDelete) return;
+
+    try {
+      // Primeiro deletar os detalhes do acesso
+      await supabase
+        .from('access_platforms_details')
+        .delete()
+        .eq('access_platform_id', accessToDelete.id);
+
+      // Depois marcar o acesso como inativo
+      const { error } = await supabase
+        .from('access_platforms')
+        .update({ is_active: false })
+        .eq('id', accessToDelete.id);
+
+      if (error) {
+        console.error('Erro ao deletar acesso:', error);
+        return;
+      }
+
+      // Recarregar acessos
+      await reloadAccesses();
+      setIsDeleteAccessConfirmModalOpen(false);
+      setAccessToDelete(null);
+    } catch (error) {
+      console.error('Erro ao deletar acesso:', error);
+    }
+  };
+
+  // Função para encontrar um project_id de um cliente (necessário para o AccessModal)
+  const findProjectIdForClient = async (clientId: number) => {
+    try {
+      // Buscar o nome do cliente primeiro
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('name')
+        .eq('client_id', clientId)
+        .single();
+
+      if (clientError || !clientData) {
+        console.error('Erro ao buscar cliente:', clientError);
+        setSelectedProjectIdForAccess(null);
+        return;
+      }
+
+      // Buscar um projeto desse cliente
+      const { data, error } = await supabase
+        .from('projects')
+        .select('project_id')
+        .eq('client_name', clientData.name)
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        console.error('Erro ao buscar projeto do cliente:', error);
+        setSelectedProjectIdForAccess(null);
+        return;
+      }
+
+      setSelectedProjectIdForAccess(data.project_id);
+    } catch (error) {
+      console.error('Erro ao buscar projeto do cliente:', error);
+      setSelectedProjectIdForAccess(null);
     }
   };
 
@@ -1899,6 +2170,126 @@ const EmployeeDetail = () => {
     },
   ];
 
+  // Configuração das colunas do AG-Grid para detalhes de acessos (por cliente)
+  const accessDetailColumnDefs: ColDef[] = useMemo(() => [
+    {
+      headerName: 'Plataforma',
+      field: 'platform_name',
+      flex: 1.5,
+      minWidth: 150,
+    },
+    {
+      headerName: 'Ambiente',
+      field: 'environment_name',
+      flex: 1,
+      minWidth: 120,
+    },
+    {
+      headerName: 'Função',
+      field: 'role_name',
+      flex: 1,
+      minWidth: 120,
+    },
+    {
+      headerName: 'Risco',
+      field: 'risk_name',
+      flex: 1,
+      minWidth: 120,
+    },
+    {
+      headerName: 'Política de Acesso',
+      field: 'access_policies',
+      flex: 1.5,
+      minWidth: 150,
+      autoHeight: true,
+      wrapText: true,
+      cellRenderer: (params: any) => {
+        const policies = params.value as string[] || [];
+        if (policies.length === 0) return '-';
+        return (
+          <div className="flex flex-wrap gap-1 py-1">
+            {policies.map((policy, index) => (
+              <span key={index} className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                {policy}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Tipo de Dados',
+      field: 'data_types',
+      flex: 1.5,
+      minWidth: 150,
+      autoHeight: true,
+      wrapText: true,
+      cellRenderer: (params: any) => {
+        const dataTypes = params.value as string[] || [];
+        if (dataTypes.length === 0) return '-';
+        return (
+          <div className="flex flex-wrap gap-1 py-1">
+            {dataTypes.map((type, index) => (
+              <span key={index} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                {type}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Descrição',
+      field: 'description',
+      flex: 2,
+      minWidth: 200,
+      cellRenderer: HtmlCellRenderer,
+    },
+    // {
+    //   headerName: 'Data de Expiração',
+    //   field: 'expiration_date',
+    //   flex: 1,
+    //   minWidth: 140,
+    //   valueFormatter: (params: any) => {
+    //     if (!params.value) return '-';
+    //     return new Date(params.value).toLocaleDateString('pt-BR');
+    //   },
+    // },
+    {
+      headerName: 'Ações',
+      field: 'actions',
+      width: 140,
+      cellRenderer: (params: any) => (
+        <div className="flex items-center justify-center gap-1 h-full">
+          <button
+            onClick={() => void openEditAccessModal(params.data.id)}
+            className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
+            title="Editar acesso"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => void openCloneAccessModal(params.data.id)}
+            className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
+            title="Clonar acesso"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => deleteAccess(params.data.id)}
+            className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
+            title="Excluir acesso"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+      sortable: false,
+      filter: false,
+      resizable: false,
+    },
+  ], [accesses, openEditAccessModal, openCloneAccessModal, deleteAccess]);
+
   const menuPortalTarget = (containerRef.current ?? document.body) as HTMLElement;
 
   // Componente Select hierárquico para habilidades
@@ -2241,6 +2632,7 @@ const EmployeeDetail = () => {
     if (previousIdRef.current !== undefined && previousIdRef.current !== id) {
       hasLoadedEmployee.current = false;
       hasLoadedEmployeeData.current = false;
+      hasLoadedAccesses.current = false;
       loadedTimeRecordsKeys.current.clear();
       offDaysCache.current.clear();
       timeWorkedCache.current.clear();
@@ -2339,6 +2731,12 @@ const EmployeeDetail = () => {
         if (evaluationData.length === 0) void loadEvaluationData(employee.user_id);
         if (feedbacks.length === 0) void loadFeedbacks(employee.user_id);
         if (clientTimeHistory.length === 0) void loadClientTimeHistory(employee.user_id);
+        break;
+      case 'acessos':
+        if (!hasLoadedAccesses.current) {
+          hasLoadedAccesses.current = true;
+          void loadEmployeeAccesses(employee.user_id);
+        }
         break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2634,6 +3032,16 @@ const EmployeeDetail = () => {
                     >
                       Registro de Horas
                     </button>
+                      <button
+                      onClick={() => setActiveTab('acompanhamento')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+                        activeTab === 'acompanhamento'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Acompanhamento
+                    </button>
                     <button
                       onClick={() => setActiveTab('feedbacks')}
                       className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
@@ -2644,6 +3052,7 @@ const EmployeeDetail = () => {
                     >
                       Feedbacks
                     </button>
+                    
                     <button
                       onClick={() => setActiveTab('avaliacoes')}
                       className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
@@ -2664,15 +3073,16 @@ const EmployeeDetail = () => {
                     >
                       PDI
                     </button>
+                  
                     <button
-                      onClick={() => setActiveTab('acompanhamento')}
+                      onClick={() => setActiveTab('acessos')}
                       className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'acompanhamento'
+                        activeTab === 'acessos'
                           ? 'border-primary-500 text-primary-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
-                      Acompanhamento
+                      Acessos
                     </button>
                   </div>
                   <button
@@ -3234,6 +3644,103 @@ const EmployeeDetail = () => {
                   </div>
                 </div>
               )}
+
+              {activeTab === 'acessos' && (
+                <>
+                  {isLoadingAccesses ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+                      <p className="ml-4 text-gray-600 dark:text-gray-400">Carregando acessos...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col h-full overflow-hidden">
+                        <div className="px-6 pt-4 pb-3 flex items-center justify-between text-sm text-gray-600 flex-shrink-0">
+                          <div className="flex items-center gap-6">
+                            <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{groupedAccessesByClient.length} Clientes</span></span>
+                            <span className="text-gray-400">|</span>
+                            <span><span className="font-bold text-gray-800 dark:text-gray-200">{accesses.length}</span> Acessos</span>
+                          </div>
+                          <button
+                            onClick={() => void openAddAccessModal()}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Adicionar Acesso
+                          </button>
+                        </div>
+
+                        {/* Tabela de clientes com detalhes expandidos inline */}
+                        <div className="px-6 pb-6 flex-1 overflow-y-auto">
+                          {/* Cabeçalho da tabela */}
+                          <div className="grid grid-cols-[auto_1fr_200px] gap-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 rounded-t-lg">
+                            <div className="w-8"></div>
+                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                              Cliente
+                            </div>
+                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide text-center">
+                              Total de Acessos
+                            </div>
+                          </div>
+
+                          {groupedAccessesByClient.length === 0 ? (
+                            <div className="py-40 text-center text-sm text-gray-500 dark:text-gray-400">
+                              Nenhum acesso encontrado para este funcionário.
+                            </div>
+                          ) : (
+                            groupedAccessesByClient.map((group) => {
+                              const isExpanded = expandedAccessClients.has(group.client_name);
+                              return (
+                                <div key={group.client_name}>
+                                  {/* Linha do cliente */}
+                                  <div 
+                                    className="grid grid-cols-[auto_1fr_200px] gap-4 py-3 px-4 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                                    onClick={() => toggleAccessClientExpansion(group.client_name)}
+                                  >
+                                    <div className="flex items-center">
+                                      <ChevronDown 
+                                        className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                                      />
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                      {group.client_name}
+                                    </div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                                      {group.accesses.length}
+                                    </div>
+                                  </div>
+
+                                  {/* Detalhes expandidos - logo abaixo da linha do cliente */}
+                                  {isExpanded && (
+                                    <div className="border-b border-gray-200 dark:border-gray-700">
+                                      <div className="bg-gray-50 dark:bg-gray-700 p-4 ml-4 mr-0">
+                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                          <span>Acessos para {group.client_name}</span>
+                                          <span className="text-xs font-normal text-gray-500 dark:text-gray-400">({group.accesses.length} acessos)</span>
+                                        </h4>
+                                        <div className="ag-theme-alpine">
+                                          <AgGridReact
+                                            columnDefs={accessDetailColumnDefs}
+                                            rowData={group.accesses}
+                                            defaultColDef={{ sortable: true, filter: true, resizable: true }}
+                                            animateRows={true}
+                                            headerHeight={48}
+                                            domLayout="autoHeight"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
       </div>
@@ -3460,6 +3967,90 @@ const EmployeeDetail = () => {
               >
                 <Trash2 className="w-4 h-4" />
                 Deletar Avaliação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Acesso */}
+      {selectedProjectIdForAccess && (
+        <AccessModal
+          isOpen={isAccessModalOpen}
+          onClose={() => {
+            setIsAccessModalOpen(false);
+            setSelectedAccess(null);
+            setIsCloneMode(false);
+            setSelectedProjectIdForAccess(null);
+          }}
+          onSuccess={reloadAccesses}
+          projectId={selectedProjectIdForAccess}
+          accessData={selectedAccess}
+          isCloneMode={isCloneMode}
+          preSelectedEmployee={employee?.user_id ? { id: employee.user_id, name: employee.name } : null}
+          preSelectClientFromProject={false}
+        />
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Acesso */}
+      {isDeleteAccessConfirmModalOpen && accessToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-2xl flex items-center gap-3">
+              <Trash2 className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Confirmar Exclusão</h2>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                  <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Deletar Acesso
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Tem certeza que deseja deletar o acesso:
+                </p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">
+                    Plataforma: {accessToDelete.platform_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Cliente: {accessToDelete.client_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Ambiente: {accessToDelete.environment_name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Função: {accessToDelete.role_name}
+                  </p>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Esta ação não pode ser desfeita
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-2xl flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  setIsDeleteAccessConfirmModalOpen(false);
+                  setAccessToDelete(null);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmDeleteAccess}
+                className="px-4 py-2 text-sm text-white font-semibold bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deletar Acesso
               </button>
             </div>
           </div>

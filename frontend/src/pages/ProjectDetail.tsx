@@ -1348,7 +1348,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       minWidth: 120,
     },
     {
-      headerName: 'Nível de Risco',
+      headerName: 'Risco',
       field: 'risk_name',
       flex: 1,
       minWidth: 120,
@@ -1409,7 +1409,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       cellRenderer: HtmlCellRenderer,
     },
     {
-      headerName: 'Data de Expiração',
+      headerName: 'Expiração',
       field: 'expiration_date',
       flex: 1,
       minWidth: 140,

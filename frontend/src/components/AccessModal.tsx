@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { DbAccessPlatform, DbDomain } from '../types';
@@ -13,6 +14,8 @@ interface AccessModalProps {
   projectId: number;
   accessData?: DbAccessPlatform | null;
   isCloneMode?: boolean;
+  preSelectedEmployee?: { id: string; name: string } | null;
+  preSelectClientFromProject?: boolean;
 }
 
 interface SelectOption {
@@ -20,7 +23,7 @@ interface SelectOption {
   label: string;
 }
 
-const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null, isCloneMode = false }: AccessModalProps) => {
+const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null, isCloneMode = false, preSelectedEmployee = null, preSelectClientFromProject = true }: AccessModalProps) => {
   const [platform, setPlatform] = useState<SelectOption | null>(null);
   const [environment, setEnvironment] = useState<SelectOption | null>(null);
   const [role, setRole] = useState<SelectOption | null>(null);
@@ -44,6 +47,9 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
   const [accessPolicyOptions, setAccessPolicyOptions] = useState<SelectOption[]>([]);
   const [dataTypeOptions, setDataTypeOptions] = useState<SelectOption[]>([]);
   const [domains, setDomains] = useState<DbDomain[]>([]);
+  const [clientOptions, setClientOptions] = useState<SelectOption[]>([]);
+  const [selectedClient, setSelectedClient] = useState<SelectOption | null>(null);
+  const [isCreatingRepository, setIsCreatingRepository] = useState(false);
   
   // Cliente fixo do projeto
   const [clientId, setClientId] = useState<number | null>(null);
@@ -53,8 +59,28 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
   useEffect(() => {
     if (isOpen && projectId) {
       void loadProjectData();
+      void loadClients();
     }
   }, [isOpen, projectId]);
+
+  const loadClients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('client_id, name')
+        .order('name');
+
+      if (error) {
+        console.error('Erro ao carregar clientes:', error);
+        return;
+      }
+
+      const options = (data || []).map(c => ({ value: c.client_id, label: c.name }));
+      setClientOptions(options);
+    } catch (err) {
+      console.error('Erro ao carregar clientes:', err);
+    }
+  };
 
   const loadProjectData = async () => {
     try {
@@ -85,6 +111,10 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
 
         if (clientData) {
           setClientId(clientData.client_id);
+          // Pré-selecionar o cliente no select apenas se preSelectClientFromProject for true
+          if (preSelectClientFromProject) {
+            setSelectedClient({ value: clientData.client_id, label: data.client_name });
+          }
         }
       }
     } catch (err) {
@@ -100,6 +130,17 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
       void loadEmployees();
     }
   }, [isOpen, clientId]);
+
+  // Atualizar clientId e clientName quando selectedClient mudar
+  useEffect(() => {
+    if (selectedClient) {
+      setClientId(selectedClient.value as number);
+      setClientName(selectedClient.label);
+    } else {
+      setClientId(null);
+      setClientName('');
+    }
+  }, [selectedClient]);
 
   const loadDomains = async () => {
     try {
@@ -174,6 +215,44 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
     }
   };
 
+  // Função para criar novo repositório
+  const handleCreateRepository = async (inputValue: string) => {
+    if (!clientId) {
+      setError('Selecione um cliente antes de adicionar repositórios');
+      return;
+    }
+
+    setIsCreatingRepository(true);
+    try {
+      const { data, error } = await supabase
+        .from('access_repository')
+        .insert({
+          client_id: clientId,
+          name: inputValue.trim(),
+          is_active: true,
+        })
+        .select('id, name')
+        .single();
+
+      if (error) {
+        console.error('Erro ao criar repositório:', error);
+        setError('Erro ao criar repositório. Tente novamente.');
+        return;
+      }
+
+      if (data) {
+        const newOption = { value: data.id, label: data.name };
+        setRepositoryOptions(prev => [...prev, newOption].sort((a, b) => a.label.localeCompare(b.label)));
+        setRepositories(prev => [...prev, newOption]);
+      }
+    } catch (err) {
+      console.error('Erro ao criar repositório:', err);
+      setError('Erro ao criar repositório. Tente novamente.');
+    } finally {
+      setIsCreatingRepository(false);
+    }
+  };
+
   const loadEmployees = async () => {
     try {
       const { data, error } = await supabase
@@ -189,6 +268,14 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
 
       const empOpts = (data || []).map(u => ({ value: u.user_id, label: u.name }));
       setEmployeeOptions(empOpts);
+      
+      // Se há um funcionário pré-selecionado e não é edição, pré-selecionar
+      if (preSelectedEmployee && !accessData) {
+        const preSelected = empOpts.find(opt => opt.value === preSelectedEmployee.id);
+        if (preSelected) {
+          setEmployees([preSelected]);
+        }
+      }
     } catch (err) {
       console.error('Erro ao carregar funcionários:', err);
     }
@@ -203,6 +290,14 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
       setRisk(riskOptions.find(opt => opt.value === accessData.risk_id) || null);
       setDescription(accessData.description || '');
       setExpirationDate(accessData.expiration_date || '');
+
+      // Preencher cliente em modo de edição
+      if (accessData.client_id && clientOptions.length > 0) {
+        const clientOpt = clientOptions.find(opt => opt.value === accessData.client_id);
+        if (clientOpt) {
+          setSelectedClient(clientOpt);
+        }
+      }
 
       // Preencher funcionário apenas em modo de edição (não em modo clone)
       if (accessData.user_id && !isCloneMode) {
@@ -223,7 +318,7 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
     } else if (!isOpen) {
       resetForm();
     }
-  }, [isOpen, accessData, platformOptions, environmentOptions, roleOptions, riskOptions, employeeOptions, accessPolicyOptions, dataTypeOptions, isCloneMode]);
+  }, [isOpen, accessData, platformOptions, environmentOptions, roleOptions, riskOptions, employeeOptions, accessPolicyOptions, dataTypeOptions, isCloneMode, clientOptions]);
 
   const loadAccessRepositories = async (accessId: number) => {
     try {
@@ -391,8 +486,8 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
       return;
     }
 
-    if (!clientId) {
-      setError('Cliente não identificado. Recarregue a página.');
+    if (!clientId || !selectedClient) {
+      setError('Selecione o cliente');
       return;
     }
 
@@ -650,7 +745,7 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-3">
           {/* Erro */}
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
@@ -658,17 +753,29 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
             </div>
           )}
 
-          {/* Cliente (read-only) */}
+          {/* Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Cliente:
+              Cliente: *
             </label>
-            <input
-              type="text"
-              value={clientName}
-              disabled
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+            <Select
+              options={clientOptions}
+              value={selectedClient}
+              onChange={(option) => setSelectedClient(option)}
+              placeholder="Selecione o cliente"
+              className="react-select-container"
+              classNamePrefix="react-select"
+              isClearable
+              isDisabled={!!accessData && !isCloneMode}
+              menuPlacement="auto"
+              menuPortalTarget={document.body}
+              styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
             />
+            {accessData && !isCloneMode && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Não é possível alterar o cliente em modo de edição.
+              </p>
+            )}
           </div>
 
           {/* Funcionários */}
@@ -685,6 +792,9 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
               placeholder="Selecione os funcionários"
               className="react-select-container"
               classNamePrefix="react-select"
+              menuPlacement="auto"
+              menuPortalTarget={document.body}
+              styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
             />
             {accessData && !isCloneMode && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -698,7 +808,7 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
             )}
           </div>
 
-          {/* Plataforma, Ambiente, Função e Risco - Grid 2x2 */}
+          {/* Plataforma e Ambiente - Grid 2 colunas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Plataforma */}
             <div>
@@ -713,6 +823,9 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 className="react-select-container"
                 classNamePrefix="react-select"
                 isClearable
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
 
@@ -729,9 +842,50 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 className="react-select-container"
                 classNamePrefix="react-select"
                 isClearable
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
+          </div>
 
+
+          {/* Repositórios (condicional para GitHub) */}
+          {showRepositories && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Repositórios: *
+              </label>
+              <CreatableSelect
+                isMulti
+                options={repositoryOptions}
+                value={repositories}
+                onChange={(options) => setRepositories(options as SelectOption[])}
+                onCreateOption={handleCreateRepository}
+                isLoading={isCreatingRepository}
+                isDisabled={isCreatingRepository}
+                placeholder="Selecione ou digite para adicionar um repositório"
+                noOptionsMessage={() => "Nenhum repositório encontrado. Digite para adicionar."}
+                formatCreateLabel={(inputValue) => (
+                  <span className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Adicionar "{inputValue}"
+                  </span>
+                )}
+                className="react-select-container"
+                classNamePrefix="react-select"
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Digite o nome de um repositório e pressione Enter para adicioná-lo.
+              </p>
+            </div>
+          )}
+
+          {/* Função, Nível de Risco e Data de Expiração - Grid 3 colunas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Função */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -745,6 +899,9 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 className="react-select-container"
                 classNamePrefix="react-select"
                 isClearable
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
 
@@ -757,31 +914,31 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 options={riskOptions}
                 value={risk}
                 onChange={(option) => setRisk(option)}
-                placeholder="Selecione o nível de risco"
+                placeholder="Selecione o risco"
                 className="react-select-container"
                 classNamePrefix="react-select"
                 isClearable
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+              />
+            </div>
+
+            {/* Data de Expiração */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Data de Expiração:
+              </label>
+              <input
+                type="date"
+                value={expirationDate}
+                onChange={(e) => setExpirationDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
           </div>
 
-          {/* Repositórios (condicional para GitHub) */}
-          {showRepositories && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Repositórios: *
-              </label>
-              <Select
-                isMulti
-                options={repositoryOptions}
-                value={repositories}
-                onChange={(options) => setRepositories(options as SelectOption[])}
-                placeholder="Selecione os repositórios"
-                className="react-select-container"
-                classNamePrefix="react-select"
-              />
-            </div>
-          )}
+          
 
           {/* Política de Acesso e Tipo de Dados - Grid 2 colunas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -798,6 +955,9 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 placeholder="Selecione as políticas"
                 className="react-select-container"
                 classNamePrefix="react-select"
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
 
@@ -814,21 +974,11 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 placeholder="Selecione os tipos de dados"
                 className="react-select-container"
                 classNamePrefix="react-select"
+                menuPlacement="auto"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
-          </div>
-
-          {/* Data de Expiração */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Data de Expiração:
-            </label>
-            <input
-              type="date"
-              value={expirationDate}
-              onChange={(e) => setExpirationDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
-            />
           </div>
 
           {/* Descrição */}
@@ -842,13 +992,11 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
                 value={description}
                 onChange={setDescription}
                 placeholder="Descreva detalhes adicionais sobre o acesso..."
-                className="feedback-wysiwyg"
+                className="feedback-wysiwyg access-description-small"
                 modules={{
                   toolbar: [
-                    [{ 'header': [1, 2, 3, false] }],
-                    ['bold', 'italic', 'underline', 'strike'],
+                    ['bold', 'italic', 'underline'],
                     [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    [{ 'color': [] }, { 'background': [] }],
                     ['link'],
                     ['clean']
                   ],
