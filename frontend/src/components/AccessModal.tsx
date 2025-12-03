@@ -36,6 +36,7 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
   const [dataTypes, setDataTypes] = useState<SelectOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [addMoreAccesses, setAddMoreAccesses] = useState(false);
   
   // Estados para as opções carregadas do banco
   const [platformOptions, setPlatformOptions] = useState<SelectOption[]>([]);
@@ -712,8 +713,14 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
 
       // Sucesso
       onSuccess();
-      onClose();
-      resetForm();
+      
+      // Se "Adicionar mais Acessos" estiver marcado, manter modal aberto com todos os campos
+      if (addMoreAccesses && !accessData) {
+        setError('');
+      } else {
+        onClose();
+        resetForm();
+      }
     } catch (err: any) {
       console.error('Erro ao salvar acesso:', err);
       setError(err.message || 'Erro ao salvar acesso. Tente novamente.');
@@ -1006,29 +1013,47 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
           </div>
 
           {/* Footer Buttons */}
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                isCloneMode ? 'Clonar Acesso' : accessData ? 'Atualizar Acesso' : 'Adicionar Acesso'
-              )}
-            </button>
+          <div className="flex justify-between items-center pt-4">
+            {/* Checkbox Adicionar mais Acessos */}
+            {!accessData && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addMoreAccesses}
+                  onChange={(e) => setAddMoreAccesses(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Adicionar mais Acessos
+                </span>
+              </label>
+            )}
+            {accessData && <div />}
+            
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  isCloneMode ? 'Clonar Acesso' : accessData ? 'Atualizar Acesso' : 'Adicionar Acesso'
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

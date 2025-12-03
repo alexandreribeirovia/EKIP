@@ -2,13 +2,12 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Clock, CheckCircle, Zap, TrendingUp, TrendingDown, Plus, Minus, Scale, Percent } from 'lucide-react';
-import { TimeEntryData, DailyTimeEntry, TimesheetReportRow, ConsultantOption } from '../types';
+import { TimeEntryData, DailyTimeEntry, ConsultantOption } from '../types';
 import '../styles/main.css';
 
 const TimeEntries = () => {
   const [timeEntries, setTimeEntries] = useState<TimeEntryData[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
-  const [allUsers, setAllUsers] = useState<Array<{ user_id: string; name: string; is_active: boolean }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   
   // useRef para controlar se já foi carregado (não causa re-render)
@@ -67,165 +66,20 @@ const TimeEntries = () => {
     };
   };
 
-  // Função para calcular dias úteis (excluindo sábados e domingos)
-  const getBusinessDays = (startDate: string, endDate: string): number => {
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T23:59:59`);
-    let count = 0;
-    const current = new Date(start);
-
-    while (current <= end) {
-      const dayOfWeek = current.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Domingo, 6 = Sábado
-        count++;
-      }
-      current.setDate(current.getDate() + 1);
-    }
-
-    return count;
-  };
-
-  // Função para obter lista de dias úteis no período
-  const getBusinessDaysList = (startDate: string, endDate: string, holidays: string[]): Date[] => {
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T23:59:59`);
-    const businessDays: Date[] = [];
-    const current = new Date(start);
-
-    while (current <= end) {
-      const dayOfWeek = current.getDay();
-      const dateStr = current.toISOString().split('T')[0];
-      
-      // Verificar se não é fim de semana e não é feriado
-      if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidays.includes(dateStr)) {
-        businessDays.push(new Date(current));
-      }
-      current.setDate(current.getDate() + 1);
-    }
-
-    return businessDays;
-  };
-
-  // State para armazenar todos os dados de time_worked do período
-  const [allTimeWorkedData, setAllTimeWorkedData] = useState<Map<string, Map<string, number>>>(new Map());
-  
-  // Cache para feriados (off_days) para evitar múltiplas chamadas
-  const [holidaysCache, setHolidaysCache] = useState<Map<string, string[]>>(new Map());
-
-  // Função para buscar horas trabalhadas por dia de um consultor (agora usa cache)
-  const fetchDailyTimeEntries = async (userId: string) => {
-    // Verifica se já temos os dados em cache
-    if (allTimeWorkedData.has(userId)) {
-      return allTimeWorkedData.get(userId)!;
-    }
-    
-    // Se não tiver, retorna um mapa vazio
-    return new Map<string, number>();
-  };
-
-  // Função para alternar expansão do consultor
-  const toggleConsultantExpansion = async (userId: string) => {
+  // Função para alternar expansão do consultor (agora usa dados já carregados)
+  const toggleConsultantExpansion = (userId: string) => {
     setExpandedConsultants(prev => {
       const newSet = new Set(prev);
       if (newSet.has(userId)) {
         newSet.delete(userId);
       } else {
         newSet.add(userId);
-        // Buscar dados diários quando expandir
-        loadDailyDataForConsultant(userId);
       }
       return newSet;
     });
   };
 
-  // Função para carregar dados diários de um consultor
-  const loadDailyDataForConsultant = async (userId: string) => {
-    const dateRange = getDateRange();
-    let endDate = dateRange.end;
-    
-    // Se for mês atual, limitar até ontem
-    if (periodType === 'current_month') {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
-      if (yesterdayStr < endDate) {
-        endDate = yesterdayStr;
-      }
-    }
-
-    const holidays = await getHolidays(dateRange.start, endDate);
-    const businessDays = getBusinessDaysList(dateRange.start, endDate, holidays);
-    const hoursMap = await fetchDailyTimeEntries(userId);
-
-    const dailyData: DailyTimeEntry[] = businessDays.map(date => {
-      const dateStr = date.toISOString().split('T')[0];
-      const workedHours = hoursMap.get(dateStr) || 0;
-      const expectedHours = 8; // 8 horas por dia útil
-      
-      // Dia é insuficiente se não tiver lançamento OU se lançou menos que o esperado
-      const isInsufficient = workedHours === 0 || workedHours < expectedHours;
-
-      const isMoresufficient = workedHours === 0 || workedHours > expectedHours;
-
-      const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-      const dayOfWeek = dayNames[date.getDay()];
-
-      return {
-        date: dateStr,
-        dayOfWeek,
-        expected_hours: expectedHours,
-        worked_hours: workedHours,
-        isInsufficient,
-        isMoresufficient
-      };
-    });
-
-    setDailyTimeEntries(prev => {
-      const newMap = new Map(prev);
-      newMap.set(userId, dailyData);
-      return newMap;
-    });
-  };
-
-  // Função para buscar feriados do Supabase (se existir tabela off_days) com cache
-  const getHolidays = async (startDate: string, endDate: string): Promise<string[]> => {
-    const cacheKey = `${startDate}|${endDate}`;
-    
-    // Verificar se já temos no cache
-    if (holidaysCache.has(cacheKey)) {
-      return holidaysCache.get(cacheKey)!;
-    }
-    
-    try {
-      const { data, error } = await supabase
-        .from('off_days')
-        .select('day')
-        .gte('day', startDate)
-        .lte('day', endDate);
-
-      if (error) {
-        console.error('Erro ao buscar feriados:', error);
-        return [];
-      }
-
-      const holidays = (data || []).map(d => d.day);
-      
-      // Armazenar no cache
-      setHolidaysCache(prev => {
-        const newCache = new Map(prev);
-        newCache.set(cacheKey, holidays);
-        return newCache;
-      });
-      
-      return holidays;
-    } catch (err) {
-      console.error('Erro ao buscar feriados:', err);
-      return [];
-    }
-  };
-
-  // Buscar consultores uma única vez (para dropdown e dados)
+  // Buscar consultores uma única vez (para dropdown)
   const fetchConsultants = async () => {
     try {
       const { data, error } = await supabase
@@ -236,12 +90,8 @@ const TimeEntries = () => {
 
       if (error) {
         console.error('Erro ao buscar consultores:', error);
-        setAllUsers([]);
         return;
       }
-
-      // Armazenar todos os usuários
-      setAllUsers(data || []);
 
       const options = (data || []).map(user => ({
         value: user.user_id,
@@ -254,146 +104,70 @@ const TimeEntries = () => {
     }
   };
 
-  // Buscar dados de lançamento de horas
+  // Buscar dados de lançamento de horas - VERSÃO OTIMIZADA usando timesheet_detail_report
   const fetchTimeEntries = async () => {
-    // Evitar múltiplas chamadas simultâneas
-    if (isLoading) {
-      return;
-    }
-    
-    // Aguardar usuários serem carregados
-    if (allUsers.length === 0) {
-      return;
-    }
-    
+    if (isLoading) return;
     setIsLoading(true);
     
     try {
       const dateRange = getDateRange();
       
-      // Chamar a função timesheet_report do banco de dados
-      const { data: reportData, error: reportError } = await supabase
-        .rpc('timesheet_report', {
-          start_date: dateRange.start,
-          end_date: dateRange.end
-        });
+      // Preparar IDs de usuários selecionados (ou null para todos)
+      const userIds = selectedConsultants.length > 0 
+        ? selectedConsultants.map(c => c.value) 
+        : null;
 
-      if (reportError) {
-        console.error('Erro ao buscar relatório de horas:', reportError);
+      // UMA ÚNICA CHAMADA ao banco!
+      const { data, error } = await supabase.rpc('timesheet_detail_report', {
+        p_start_date: dateRange.start,
+        p_end_date: dateRange.end,
+        p_user_ids: userIds,
+        p_status: statusFilter
+      });
+
+      if (error) {
+        console.error('Erro ao buscar relatório:', error);
         setTimeEntries([]);
+        setDailyTimeEntries(new Map());
         return;
       }
 
-      // Filtrar por status
-      let filteredUsers = allUsers;
-      
-      if (statusFilter === 'active') {
-        filteredUsers = filteredUsers.filter(u => u.is_active);
-      } else if (statusFilter === 'inactive') {
-        filteredUsers = filteredUsers.filter(u => !u.is_active);
-      }
-
-      // Filtrar por consultores selecionados
-      if (selectedConsultants.length > 0) {
-        const selectedIds = selectedConsultants.map(c => c.value);
-        filteredUsers = filteredUsers.filter(u => selectedIds.includes(u.user_id));
-      }
-
-      // Criar mapa dos dados do relatório por nome de usuário
-      const reportDataMap = new Map<string, TimesheetReportRow>(
-        (reportData || []).map((row: TimesheetReportRow) => [row.user_name, row])
-      );
-
-      // Buscar time_worked para popular o cache (para detalhamento diário)
-      const { data: allTimeWorked, error: timeError } = await supabase
-        .from('time_worked')
-        .select('user_id, time_worked_date, time')
-        .gte('time_worked_date', dateRange.start)
-        .lte('time_worked_date', dateRange.end);
-
-      if (timeError) {
-        console.error('Erro ao buscar horas trabalhadas:', timeError);
-      }
-
-      // Agrupar dados por usuário e por data no frontend (para o detalhamento diário)
-      const timeWorkedByUser = new Map<string, Map<string, number>>();
-
-      (allTimeWorked || []).forEach(record => {
-        const { user_id, time_worked_date, time } = record;
-        const hours = (time || 0) / 3600; // Converter segundos para horas
-
-        // Atualizar mapa de horas por data por usuário
-        if (!timeWorkedByUser.has(user_id)) {
-          timeWorkedByUser.set(user_id, new Map<string, number>());
-        }
-        const userDateMap = timeWorkedByUser.get(user_id)!;
-        const currentHours = userDateMap.get(time_worked_date) || 0;
-        userDateMap.set(time_worked_date, currentHours + hours);
-      });
-
-      // Armazenar dados em cache para uso posterior (quando expandir)
-      setAllTimeWorkedData(timeWorkedByUser);
-
-      // Buscar feriados para cálculo de horas esperadas
-      const holidays = await getHolidays(dateRange.start, dateRange.end);
-      
-      // Calcular horas esperadas usando os feriados já buscados
-      const businessDays = getBusinessDays(dateRange.start, dateRange.end);
-      const holidaysInBusinessDays = holidays.filter(holiday => {
-        const date = new Date(`${holiday}T00:00:00`);
-        const dayOfWeek = date.getDay();
-        return dayOfWeek !== 0 && dayOfWeek !== 6;
-      }).length;
-      const workingDays = businessDays - holidaysInBusinessDays;
-      const expectedHours = workingDays * 8;
-
-      let expectedHoursUntilYesterday = 0;
-      if (periodType === 'current_month') {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const yesterday = new Date();
-        yesterday.setDate(now.getDate() - 1);
-
-        if (now.getDate() > 1) {
-          const startDate = startOfMonth.toISOString().split('T')[0];
-          const endDate = yesterday.toISOString().split('T')[0];
-          
-          // Reusar os feriados já buscados (filtrando apenas os que estão no período "até ontem")
-          const businessDaysUntilYesterday = getBusinessDays(startDate, endDate);
-          const holidaysUntilYesterday = holidays.filter(holiday => {
-            const holidayDate = new Date(`${holiday}T00:00:00`);
-            const start = new Date(`${startDate}T00:00:00`);
-            const end = new Date(`${endDate}T23:59:59`);
-            const dayOfWeek = holidayDate.getDay();
-            return holidayDate >= start && holidayDate <= end && dayOfWeek !== 0 && dayOfWeek !== 6;
-          }).length;
-          const workingDaysUntilYesterday = businessDaysUntilYesterday - holidaysUntilYesterday;
-          expectedHoursUntilYesterday = workingDaysUntilYesterday * 8;
-        }
-      }
-      
-      // Montar dados de entrada usando os dados do relatório
-      const entriesData: TimeEntryData[] = filteredUsers.map((user) => {
-        const reportRow = reportDataMap.get(user.name);
-
-        return {
-          user_id: user.user_id,
-          user_name: user.name,
-          expected_hours: expectedHours,
-          worked_hours: reportRow ? Number(reportRow.hours_worked_in_period) : 0,
-          expected_hours_until_yesterday: expectedHoursUntilYesterday,
-          overtime_hours_in_period: reportRow ? Number(reportRow.overtime_hours_in_period) : 0,
-          positive_comp_hours_in_period: reportRow ? Number(reportRow.positive_comp_hours_in_period) : 0,
-          negative_comp_hours_in_period: reportRow ? Number(reportRow.negative_comp_hours_in_period) : 0,
-          total_positive_comp_hours: reportRow ? Number(reportRow.total_positive_comp_hours) : 0,
-          total_negative_comp_hours: reportRow ? Number(reportRow.total_negative_comp_hours) : 0,
-          time_balance: reportRow ? Number(reportRow.time_balance) : 0
-        };
-      });
+      // Dados já vêm prontos do banco! (colunas têm prefixo out_)
+      const entriesData: TimeEntryData[] = (data || []).map((row: any) => ({
+        user_id: row.out_user_id,
+        user_name: row.out_user_name,
+        expected_hours: Number(row.out_expected_hours) || 0,
+        worked_hours: Number(row.out_worked_hours) || 0,
+        expected_hours_until_yesterday: Number(row.out_expected_hours_until_yesterday) || 0,
+        overtime_hours_in_period: Number(row.out_overtime_hours_in_period) || 0,
+        positive_comp_hours_in_period: Number(row.out_positive_comp_hours_in_period) || 0,
+        negative_comp_hours_in_period: Number(row.out_negative_comp_hours_in_period) || 0,
+        total_positive_comp_hours: Number(row.out_total_positive_comp_hours) || 0,
+        total_negative_comp_hours: Number(row.out_total_negative_comp_hours) || 0,
+        time_balance: Number(row.out_time_balance) || 0
+      }));
 
       setTimeEntries(entriesData);
+
+      // Armazenar detalhes diários em cache (já vem do banco!)
+      const newDailyEntries = new Map<string, DailyTimeEntry[]>();
+      (data || []).forEach((row: any) => {
+        const dailyData: DailyTimeEntry[] = (row.out_daily_details || []).map((day: any) => ({
+          date: day.date,
+          dayOfWeek: day.day_of_week || day.dayOfWeek,
+          expected_hours: Number(day.expected_hours) || 8,
+          worked_hours: Number(day.worked_hours) || 0,
+          comp_positive: Number(day.comp_positive) || 0,
+          comp_negative: Number(day.comp_negative) || 0,
+          isInsufficient: day.is_insufficient ?? (Number(day.worked_hours) || 0) < 8,
+          isMoresufficient: (Number(day.worked_hours) || 0) > 8
+        }));
+        newDailyEntries.set(row.out_user_id, dailyData);
+      });
+      setDailyTimeEntries(newDailyEntries);
+
     } catch (err) {
-      console.error('Erro ao buscar dados de lançamento:', err);
+      console.error('Erro ao buscar dados:', err);
     } finally {
       setIsLoading(false);
     }
@@ -408,31 +182,20 @@ const TimeEntries = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // UseEffect unificado para carregar/recarregar dados
+  // UseEffect para carregar/recarregar dados quando filtros mudam
   useEffect(() => {
-    // Aguardar usuários serem carregados primeiro
-    if (allUsers.length === 0) {
-      return;
-    }
-    
     // Evitar chamada se já está carregando
-    if (isLoading) {
-      return;
-    }
+    if (isLoading) return;
     
     // Para período customizado, só buscar quando ambas as datas estiverem preenchidas
-    if (periodType === 'custom' && (!startDate || !endDate)) {
-      return;
-    }
+    if (periodType === 'custom' && (!startDate || !endDate)) return;
     
-    // Limpar caches quando o período mudar
-    setHolidaysCache(new Map());
-    setAllTimeWorkedData(new Map());
-    setDailyTimeEntries(new Map());
+    // Limpar expansões quando o período mudar
+    setExpandedConsultants(new Set());
     
     void fetchTimeEntries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allUsers, periodType, startDate, endDate, selectedConsultants, statusFilter]);
+  }, [periodType, startDate, endDate, selectedConsultants, statusFilter]);
 
   // Função para alternar ordenação
   const handleSort = (column: 'user_name' | 'expected_hours' | 'worked_hours' | 'overtime_hours_in_period' | 'positive_comp_hours_in_period' | 'negative_comp_hours_in_period' | 'total_positive_comp_hours' | 'total_negative_comp_hours' | 'time_balance' | 'percentage') => {
@@ -797,7 +560,11 @@ const TimeEntries = () => {
           </div>
 
           {/* Linhas da tabela */}
-          {sortedTimeEntries.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">Carregando...</p>
+            </div>
+          ) : sortedTimeEntries.length > 0 ? (
             <div className="space-y-1">
               {sortedTimeEntries.map((entry) => {
                 const percentage = entry.expected_hours > 0 
@@ -891,7 +658,7 @@ const TimeEntries = () => {
                     {isExpanded && dailyData.length > 0 && (
                       <div className="ml-6 mt-1 mb-2 bg-gray-50 dark:bg-gray-800 rounded-md p-3">
                         {/* Cabeçalho do detalhamento */}
-                        <div className="grid grid-cols-4 gap-2 pb-2 border-b border-gray-300 dark:border-gray-600 mb-2">
+                        <div className="grid grid-cols-6 gap-2 pb-2 border-b border-gray-300 dark:border-gray-600 mb-2">
                           <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">
                             Data
                           </div>
@@ -904,6 +671,12 @@ const TimeEntries = () => {
                           <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 text-center">
                             Hrs Lançadas
                           </div>
+                          <div className="text-xs font-semibold text-teal-600 dark:text-teal-400 text-center">
+                            Comp +
+                          </div>
+                          <div className="text-xs font-semibold text-orange-600 dark:text-orange-400 text-center">
+                            Comp -
+                          </div>
                         </div>
 
                         {/* Linhas dos dias */}
@@ -911,11 +684,11 @@ const TimeEntries = () => {
                           {dailyData.map((day, index) => (
                             <div 
                               key={`${entry.user_id}-${day.date}-${index}`}
-                              className={`grid grid-cols-4 gap-2 py-1 px-2 rounded text-xs ${
+                              className={`grid grid-cols-6 gap-2 py-1 px-2 rounded text-xs ${
                                 day.isInsufficient 
                                   ? 'bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-200' 
                                   : day.isMoresufficient
-                                      ? 'bg-blue-100 dark:bg-blue-900/30 dark:bg-blue-900 dark:dark:bg-blue-200' 
+                                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200' 
                                       : 'text-gray-700 dark:text-gray-300'
                               }`}
                             >
@@ -930,6 +703,12 @@ const TimeEntries = () => {
                               </div>
                               <div className="text-center font-medium">
                                 {day.worked_hours.toFixed(2)}h
+                              </div>
+                              <div className="text-center font-medium text-teal-600 dark:text-teal-400">
+                                {day.comp_positive > 0 ? `${day.comp_positive.toFixed(2)}h` : '-'}
+                              </div>
+                              <div className="text-center font-medium text-orange-600 dark:text-orange-400">
+                                {day.comp_negative > 0 ? `${day.comp_negative.toFixed(2)}h` : '-'}
                               </div>
                             </div>
                           ))}

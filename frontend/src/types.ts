@@ -239,6 +239,8 @@ export interface DailyTimeEntry {
   dayOfWeek: string;
   expected_hours: number;
   worked_hours: number;
+  comp_positive: number;
+  comp_negative: number;
   isInsufficient: boolean;
   isMoresufficient: boolean;
 }

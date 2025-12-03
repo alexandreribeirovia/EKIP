@@ -583,8 +583,19 @@ const EmployeeDetail = () => {
     setIsLoadingRecords(true);
     try {
       const [month, year] = monthYear.split('/');
+      const monthNum = Number(month);
+      const yearNum = Number(year);
+      
       const startDate = `${year}-${month.padStart(2, '0')}-01`;
-      const endDate = `${year}-${(Number(month) + 1).toString().padStart(2, '0')}-01`;
+      
+      // Calcular corretamente o primeiro dia do próximo mês
+      let endYear = yearNum;
+      let endMonth = monthNum + 1;
+      if (endMonth > 12) {
+        endMonth = 1;
+        endYear = yearNum + 1;
+      }
+      const endDate = `${endYear}-${endMonth.toString().padStart(2, '0')}-01`;
 
       const { data, error } = await supabase
         .from('time_worked')
