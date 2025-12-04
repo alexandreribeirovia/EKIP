@@ -6,7 +6,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
 import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize, Copy } from 'lucide-react';
 import Select from 'react-select';
-import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea } from 'recharts';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea, BarChart, Bar, LabelList } from 'recharts';
 import { supabase } from '../lib/supabaseClient';
 import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase, DbAccessPlatform, DbAccessPlatformGrouped } from '../types';
 import AssigneeCellRenderer from '../components/AssigneeCellRenderer.tsx';
@@ -684,10 +684,37 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
+    // Calcular contagem de tarefas por consultor
+    const consultorTaskCountMap = new Map<string, { name: string; task_count: number }>();
+    
+    filteredTasks.forEach(task => {
+      if (task.assignments) {
+        task.assignments.forEach(assignment => {
+          if (assignment.users) {
+            const userId = assignment.users.user_id;
+            const userName = assignment.users.name;
+            const current = consultorTaskCountMap.get(userId) || { name: userName, task_count: 0 };
+            current.task_count += 1;
+            consultorTaskCountMap.set(userId, current);
+          }
+        });
+      }
+    });
+    
+    // Converter para array
+    const consultorTaskCountList = Array.from(consultorTaskCountMap.entries())
+      .map(([user_id, data]) => ({
+        user_id: parseInt(user_id),
+        name: data.name,
+        task_count: data.task_count
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     return {
       taskTypeHours: typeHoursList,
       taskStatusCounts: statusCountsList,
-      consultors: consultorsList
+      consultors: consultorsList,
+      consultorTaskCounts: consultorTaskCountList
     };
   }, [tasks, getFilteredTasks]);
 
@@ -2523,7 +2550,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                 <p className="ml-4 text-gray-600 dark:text-gray-400">Carregando acompanhamento...</p>
               </div>
             ) : (
-              <>
+              <div className="flex-1 overflow-y-auto">
                 {/* Filtros */}
                 <div className="px-4 pt-4 pb-2 flex flex-col md:flex-row gap-4">
                   <div className="w-full md:w-48">
@@ -2555,46 +2582,111 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
                 <div className="p-6 pt-2 h-full">
                   <div className="flex gap-6">
-                  {/* Card de Tarefas por Status */}
+                  {/* Card de Tarefas por Status - Gráfico de Barras Horizontal */}
                   <div className="w-1/4">
                     <div className="card p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <BarChart3 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                          Tarefas por Status
-                        </h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                            Tarefas por Status
+                          </h3>
+                        </div>
+                        {filteredTrackingData.taskStatusCounts.length > 0 && (
+                          <span className="text-sm font-bold text-primary-600 dark:text-primary-400">
+                            {filteredTrackingData.taskStatusCounts.reduce((total, status) => total + status.count, 0)} tarefas
+                          </span>
+                        )}
                       </div>
-                      <div className="space-y-4">
+                      <div>
                         {filteredTrackingData.taskStatusCounts.length > 0 ? (
-                          <div className="overflow-hidden">
-                            {/* Cabeçalho da tabela */}
-                            <div className="grid grid-cols-[3fr_1fr] gap-4 pb-3 border-b border-gray-200 dark:border-gray-600 mb-3">
-                              <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                                Status
-                              </div>
-                              <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide text-center">
-                                Qtd
-                              </div>
-                            </div>
-                            
-                            {/* Container com scroll para as linhas */}
-                            <div className="max-h-[320px] overflow-y-auto">
-                              <div className="space-y-1">
-                                {filteredTrackingData.taskStatusCounts.map((statusData, index) => (
-                                  <div 
-                                    key={`status-${statusData.status || index}`} 
-                                    className="grid grid-cols-[3fr_1fr] gap-4 py-1 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                                  >
-                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {statusData.status}
-                                    </div>
-                                    <div className="text-sm font-bold text-primary-600 dark:text-primary-400 text-center">
-                                      {statusData.count}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
+                          <div className="h-[340px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                data={(() => {
+                                  // Função para obter a ordem do status
+                                  const getStatusOrder = (status: string) => {
+                                    const statusLower = status?.toLowerCase() || '';
+                                    if (statusLower.includes('backlog')) return 1;
+                                    if (statusLower.includes('a fazer') || statusLower.includes('to do')) return 2;
+                                    if (statusLower.includes('fazendo') || statusLower.includes('doing') || statusLower.includes('em andamento') || statusLower.includes('in progress')) return 3;
+                                    if (statusLower.includes('entregue') || statusLower.includes('done') || statusLower.includes('concluído') || statusLower.includes('concluido')) return 4;
+                                    return 5; // outros status ficam no final
+                                  };
+                                  
+                                  return [...filteredTrackingData.taskStatusCounts].sort((a, b) => 
+                                    getStatusOrder(a.status) - getStatusOrder(b.status)
+                                  );
+                                })()}
+                                margin={{ top: 15, right: 5, left: -15, bottom: 15 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                <XAxis 
+                                  type="category" 
+                                  dataKey="status"
+                                  tick={{ fontSize: 9 }}
+                                  angle={-35}
+                                  textAnchor="end"
+                                  interval={0}
+                                  height={50}
+                                />
+                                <YAxis 
+                                  type="number" 
+                                  tick={{ fontSize: 10 }}
+                                  allowDecimals={false}
+                                  width={30}
+                                />
+                                <Tooltip 
+                                  formatter={(value: number) => [value, 'Quantidade']}
+                                  labelStyle={{ color: '#374151' }}
+                                  contentStyle={{ 
+                                    backgroundColor: '#f9fafb', 
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px'
+                                  }}
+                                />
+                                <Bar 
+                                  dataKey="count" 
+                                  radius={[4, 4, 0, 0]}
+                                  maxBarSize={45}
+                                >
+                                  {(() => {
+                                    const getStatusOrder = (status: string) => {
+                                      const statusLower = status?.toLowerCase() || '';
+                                      if (statusLower.includes('backlog')) return 1;
+                                      if (statusLower.includes('a fazer') || statusLower.includes('to do')) return 2;
+                                      if (statusLower.includes('fazendo') || statusLower.includes('doing') || statusLower.includes('em andamento') || statusLower.includes('in progress')) return 3;
+                                      if (statusLower.includes('entregue') || statusLower.includes('done') || statusLower.includes('concluído') || statusLower.includes('concluido')) return 4;
+                                      return 5;
+                                    };
+                                    
+                                    return [...filteredTrackingData.taskStatusCounts]
+                                      .sort((a, b) => getStatusOrder(a.status) - getStatusOrder(b.status))
+                                      .map((entry, index) => {
+                                        const statusLower = entry.status?.toLowerCase() || '';
+                                        let color = '#9ca3af'; // cinza padrão
+                                        
+                                        if (statusLower.includes('backlog')) {
+                                          color = '#6b7280'; // cinza escuro
+                                        } else if (statusLower.includes('a fazer') || statusLower.includes('to do')) {
+                                          color = '#3b82f6'; // azul
+                                        } else if (statusLower.includes('fazendo') || statusLower.includes('doing') || statusLower.includes('em andamento') || statusLower.includes('in progress')) {
+                                          color = '#f97316'; // laranja
+                                        } else if (statusLower.includes('entregue') || statusLower.includes('done') || statusLower.includes('concluído') || statusLower.includes('concluido')) {
+                                          color = '#22c55e'; // verde
+                                        }
+                                        
+                                        return <Cell key={`cell-${index}`} fill={color} />;
+                                      });
+                                  })()}
+                                  <LabelList 
+                                    dataKey="count" 
+                                    position="top" 
+                                    style={{ fontSize: 10, fontWeight: 'bold', fill: '#374151' }}
+                                  />
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
                           </div>
                         ) : (
                           <div className="text-center py-8">
@@ -2604,23 +2696,178 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                           </div>
                         )}
                       </div>
-                      {filteredTrackingData.taskStatusCounts.length > 0 && (
-                        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                          <div className="grid grid-cols-[3fr_1fr] gap-4">
-                            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                              Total:
-                            </div>
-                            <div className="text-sm font-bold text-gray-900 dark:text-gray-100 text-center">
-                              {filteredTrackingData.taskStatusCounts.reduce((total, status) => total + status.count, 0)}
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  {/* Card de Horas por Tipo de Tarefa */}
+                  {/* Card de Tarefas por Consultor - Gráfico de Barras Horizontal */}
                   <div className="w-2/5">
+                    <div className="card p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                            Tarefas por Consultor
+                          </h3>
+                        </div>
+                        {filteredTrackingData.consultorTaskCounts.length > 0 && (
+                          <span className="text-sm font-bold text-primary-600 dark:text-primary-400">
+                            {filteredTrackingData.consultorTaskCounts.reduce((total, consultor) => total + consultor.task_count, 0)} tarefas
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        {filteredTrackingData.consultorTaskCounts.length > 0 ? (
+                          <div className="h-[340px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                layout="vertical"
+                                data={[...filteredTrackingData.consultorTaskCounts].sort((a, b) => b.task_count - a.task_count)}
+                                margin={{ top: 5, right: 30, left: -40, bottom: -10 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} />
+                                <XAxis 
+                                  type="number" 
+                                  tick={{ fontSize: 10 }}
+                                  allowDecimals={false}
+                                />
+                                <YAxis 
+                                  type="category" 
+                                  dataKey="name"
+                                  tick={{ fontSize: 11, textAnchor: 'end' }}
+                                  width={200}
+                                  interval={0}
+                                />
+                                <Tooltip 
+                                  formatter={(value: number) => [value, 'Tarefas']}
+                                  labelStyle={{ color: '#374151' }}
+                                  contentStyle={{ 
+                                    backgroundColor: '#f9fafb', 
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px'
+                                  }}
+                                />
+                                <Bar 
+                                  dataKey="task_count" 
+                                  fill="#10b981"
+                                  radius={[0, 4, 4, 0]}
+                                  maxBarSize={15}
+                                >
+                                  {[...filteredTrackingData.consultorTaskCounts]
+                                    .sort((a, b) => b.task_count - a.task_count)
+                                    .map((_, index) => {
+                                      // Gradiente de cores do mais escuro para mais claro (verde)
+                                      const colors = ['#047857', '#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'];
+                                      const color = colors[Math.min(index, colors.length - 1)];
+                                      return <Cell key={`cell-${index}`} fill={color} />;
+                                    })}
+                                  <LabelList 
+                                    dataKey="task_count" 
+                                    position="right" 
+                                    style={{ fontSize: 10, fontWeight: 'bold', fill: '#374151' }}
+                                  />
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                              Nenhum consultor encontrado para este projeto
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card de Consultores - Gráfico de Barras Horizontal */}
+                  <div className="w-1/3">
+                    <div className="card p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                            Horas lançadas
+                          </h3>
+                        </div>
+                        {timeWorkedData.length > 0 && (
+                          <span className="text-sm font-bold text-primary-600 dark:text-primary-400">
+                            {formatSecondsToHM(timeWorkedData.reduce((total, consultor) => total + consultor.total_hours, 0) * 3600)}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        {timeWorkedData.length > 0 ? (
+                          <div className="h-[340px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                layout="vertical"
+                                data={[...timeWorkedData].sort((a, b) => b.total_hours - a.total_hours)}
+                                margin={{ top: 5, right: 50, left: -40, bottom: -10 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} />
+                                <XAxis 
+                                  type="number" 
+                                  tick={{ fontSize: 10 }}
+                                  allowDecimals={false}
+                                  tickFormatter={(value) => `${Math.floor(value)}h`}
+                                />
+                                <YAxis 
+                                  type="category" 
+                                  dataKey="name"
+                                  tick={{ fontSize: 11, textAnchor: 'end' }}
+                                  width={200}
+                                  interval={0}
+                                />
+                                <Tooltip 
+                                  formatter={(value: number) => [formatSecondsToHM(value * 3600), 'Horas']}
+                                  labelStyle={{ color: '#374151' }}
+                                  contentStyle={{ 
+                                    backgroundColor: '#f9fafb', 
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px'
+                                  }}
+                                />
+                                <Bar 
+                                  dataKey="total_hours" 
+                                  fill="#3b82f6"
+                                  radius={[0, 4, 4, 0]}
+                                  maxBarSize={15}
+                                >
+                                  {[...timeWorkedData]
+                                    .sort((a, b) => b.total_hours - a.total_hours)
+                                    .map((_, index) => {
+                                      // Gradiente de cores do mais escuro para mais claro
+                                      const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+                                      const color = colors[Math.min(index, colors.length - 1)];
+                                      return <Cell key={`cell-${index}`} fill={color} />;
+                                    })}
+                                  <LabelList 
+                                    dataKey="total_hours" 
+                                    position="right" 
+                                    formatter={(value: number) => formatSecondsToHM(value * 3600)}
+                                    style={{ fontSize: 10, fontWeight: 'bold', fill: '#374151' }}
+                                  />
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                              Nenhum consultor encontrado para este projeto
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+
+                  {/* Segunda linha de cards */}
+                  <div className="flex gap-6 mt-6">
+                  {/* Card de Horas por Tipo de Tarefa */}
+                  <div className="w-1/2">
                     <div className="card p-6 max-h-[calc(100vh-400px)] overflow-y-auto">
                       <div className="flex items-center gap-2 mb-4">
                         <BarChart3 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
@@ -2728,73 +2975,9 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       )}
                     </div>
                   </div>
-
-                  {/* Card de Consultores */}
-                  <div className="w-1/3">
-                    <div className="card p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Clock className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                          Horas lançadas
-                        </h3>
-                      </div>
-                    <div className="space-y-4">
-                      {timeWorkedData.length > 0 ? (
-                        <div className="overflow-hidden">
-                          {/* Cabeçalho da tabela - fixo */}
-                          <div className="grid grid-cols-[3fr_1fr] gap-4 pb-3 border-b border-gray-200 dark:border-gray-600 mb-3 bg-white dark:bg-gray-800 sticky top-0 z-10">
-                            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                              Consultor
-                            </div>
-                            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide text-center">
-                              Horas
-                            </div>
-                          </div>
-                          
-                          {/* Container com scroll para as linhas */}
-                          <div className="max-h-[320px] overflow-y-auto">
-                            <div className="space-y-1">
-                              {timeWorkedData.map((consultor, index) => (
-                                <div 
-                                  key={`consultor-${consultor.user_id || index}`} 
-                                  className="grid grid-cols-[3fr_1fr] gap-4 py-1 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                                >
-                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {consultor.name}
-                                  </div>
-                                  <div className="text-sm font-bold text-primary-600 dark:text-primary-400 text-center">
-                                    {formatSecondsToHM(consultor.total_hours * 3600)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <p className="text-gray-500 dark:text-gray-400 text-sm">
-                            Nenhum consultor encontrado para este projeto
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    {timeWorkedData.length > 0 && (
-                      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <div className="grid grid-cols-[3fr_1fr] gap-4">
-                          <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                            Total de Horas:
-                          </div>
-                          <div className="text-sm font-bold text-gray-900 dark:text-gray-100 text-center">
-                            {formatSecondsToHM(timeWorkedData.reduce((total, consultor) => total + consultor.total_hours, 0) * 3600)}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    </div>
-                  </div>
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </>
         )}
