@@ -379,7 +379,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [isCloneMode, setIsCloneMode] = useState(false);
   
   // Estados para filtros da aba acompanhamento
-  const [trackingPeriodFilter, setTrackingPeriodFilter] = useState<'all' | 'current_week' | 'current_month' | 'last_3_months' | 'current_year'>('all');
+  const [trackingPeriodFilter, setTrackingPeriodFilter] = useState<'all' | 'current_week' | 'current_month' | 'last_month' | 'last_3_months' | 'current_year'>('all');
   const [trackingStatusFilter, setTrackingStatusFilter] = useState<'open' | 'closed' | 'all'>('all');
   
   // Estado para o componente ProjectProgressModal
@@ -399,6 +399,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const getDateRange = useCallback((period: typeof trackingPeriodFilter) => {
     const now = new Date();
     let startDate: Date;
+    let endDate: Date = new Date(); // Por padrão, até agora
     
     switch (period) {
       case 'all':
@@ -415,6 +416,11 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       case 'current_month':
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         break;
+      case 'last_month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        // endDate é o último dia do mês anterior (dia 0 do mês atual)
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        break;
       case 'last_3_months':
         startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
         break;
@@ -425,7 +431,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         startDate = new Date(2020, 0, 1);
     }
     
-    return { startDate, endDate: new Date() };
+    return { startDate, endDate };
   }, []);
 
   // Função para filtrar tarefas baseado nos filtros ativos
@@ -433,11 +439,11 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     let filtered = [...tasks];
     
     // Filtro por período (baseado em created_at)
-    const { startDate } = getDateRange(trackingPeriodFilter);
+    const { startDate, endDate } = getDateRange(trackingPeriodFilter);
     filtered = filtered.filter(task => {
       if (!task.created_at) return true;
       const taskDate = new Date(task.created_at);
-      return taskDate >= startDate;
+      return taskDate >= startDate && taskDate <= endDate;
     });
     
     // Filtro por status (baseado em is_closed)
@@ -2562,6 +2568,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       <option value="all">Todos os períodos</option>
                       <option value="current_week">Semana atual</option>
                       <option value="current_month">Mês atual</option>
+                      <option value="last_month">Mês anterior</option>
                       <option value="last_3_months">Últimos 3 meses</option>
                       <option value="current_year">Ano atual</option>
                     </select>
@@ -2790,19 +2797,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                             Horas lançadas
                           </h3>
                         </div>
-                        {timeWorkedData.length > 0 && (
+                        {filteredTrackingData.consultors.length > 0 && (
                           <span className="text-sm font-bold text-primary-600 dark:text-primary-400">
-                            {formatSecondsToHM(timeWorkedData.reduce((total, consultor) => total + consultor.total_hours, 0) * 3600)}
+                            {formatSecondsToHM(filteredTrackingData.consultors.reduce((total, consultor) => total + consultor.total_hours, 0) * 3600)}
                           </span>
                         )}
                       </div>
                       <div>
-                        {timeWorkedData.length > 0 ? (
+                        {filteredTrackingData.consultors.length > 0 ? (
                           <div className="h-[340px]">
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart
                                 layout="vertical"
-                                data={[...timeWorkedData].sort((a, b) => b.total_hours - a.total_hours)}
+                                data={[...filteredTrackingData.consultors].sort((a, b) => b.total_hours - a.total_hours)}
                                 margin={{ top: 5, right: 50, left: -40, bottom: -10 }}
                               >
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} />
@@ -2834,7 +2841,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                                   radius={[0, 4, 4, 0]}
                                   maxBarSize={15}
                                 >
-                                  {[...timeWorkedData]
+                                  {[...filteredTrackingData.consultors]
                                     .sort((a, b) => b.total_hours - a.total_hours)
                                     .map((_, index) => {
                                       // Gradiente de cores do mais escuro para mais claro
