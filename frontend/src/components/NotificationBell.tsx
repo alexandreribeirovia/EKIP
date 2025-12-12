@@ -12,35 +12,21 @@ const NotificationBell = () => {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   
-  const { user } = useAuthStore()
+  const { user, isAuthenticated, sessionId } = useAuthStore()
   const {
     notifications,
     unreadCount,
     isLoading,
-    fetchNotifications,
     markAsRead,
     markAllAsRead,
-    deleteNotification,
-    subscribeToNotifications,
-    unsubscribeFromNotifications
+    deleteNotification
   } = useNotificationStore()
 
-  // Buscar notificações ao montar e inscrever no Realtime
-  useEffect(() => {
-    const setupNotifications = async () => {
-      if (!user?.id) return
-
-      // Buscar notificações e inscrever no Realtime
-      void fetchNotifications()
-      subscribeToNotifications(user.id)
-    }
-
-    void setupNotifications()
-
-    return () => {
-      unsubscribeFromNotifications()
-    }
-  }, [user?.id])
+  // O subscribe do authStore no notificationStore já cuida de:
+  // - connectSocket() ao autenticar
+  // - fetchNotifications() ao autenticar  
+  // - disconnectSocket() ao deslogar
+  // Não precisamos chamar aqui novamente para evitar duplicação
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {

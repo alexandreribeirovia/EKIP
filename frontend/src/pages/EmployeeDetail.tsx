@@ -6,13 +6,13 @@ import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, Exter
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform } from '../types'
-import { supabase } from '../lib/supabaseClient'
 import FeedbackModal from '../components/FeedbackModal'
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal'
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating'
 import PDIModal from '../components/PDIModal'
 import HtmlCellRenderer from '../components/HtmlCellRenderer'
 import AccessModal from '../components/AccessModal'
+import apiClient from '../lib/apiClient'
 import '../styles/main.css'
 
 // Interface para acessos agrupados por cliente
@@ -209,41 +209,37 @@ const EmployeeDetail = () => {
     const startDate = `${startYear}-${startMonth.toString().padStart(2, '0')}-01`;
     const endDate = `${endYear}-${(endMonth + 1).toString().padStart(2, '0')}-01`;
     
-    const { data, error } = await supabase
-      .from('off_days')
-      .select('day')
-      .gte('day', startDate)
-      .lt('day', endDate);
-
-    if (error) {
-      console.error("Erro ao buscar feriados:", error);
-      return;
-    }
-    
-    // Agrupa os feriados por mês e armazena no cache
-    data.forEach(record => {
-      const date = new Date(record.day);
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
-      const cacheKey = `${year}-${month}`;
+    try {
+      const result = await apiClient.get<Array<{day: string}>>(`/api/employee-detail/off-days?startDate=${startDate}&endDate=${endDate}`);
+      const data = result.data || [];
       
-      if (!offDaysCache.current.has(cacheKey)) {
-        offDaysCache.current.set(cacheKey, new Set());
+      // Agrupa os feriados por mês e armazena no cache
+      data.forEach((record: { day: string }) => {
+        const date = new Date(record.day);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const cacheKey = `${year}-${month}`;
+        
+        if (!offDaysCache.current.has(cacheKey)) {
+          offDaysCache.current.set(cacheKey, new Set());
+        }
+        offDaysCache.current.get(cacheKey)!.add(record.day);
+      });
+      
+      // Para meses sem feriados, cria Set vazio no cache
+      let currentDate = new Date(startYear, startMonth - 1, 1);
+      const end = new Date(endYear, endMonth, 1);
+      while (currentDate < end) {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+        const cacheKey = `${year}-${month}`;
+        if (!offDaysCache.current.has(cacheKey)) {
+          offDaysCache.current.set(cacheKey, new Set());
+        }
+        currentDate.setMonth(currentDate.getMonth() + 1);
       }
-      offDaysCache.current.get(cacheKey)!.add(record.day);
-    });
-    
-    // Para meses sem feriados, cria Set vazio no cache
-    let currentDate = new Date(startYear, startMonth - 1, 1);
-    const end = new Date(endYear, endMonth, 1);
-    while (currentDate < end) {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const cacheKey = `${year}-${month}`;
-      if (!offDaysCache.current.has(cacheKey)) {
-        offDaysCache.current.set(cacheKey, new Set());
-      }
-      currentDate.setMonth(currentDate.getMonth() + 1);
+    } catch (error) {
+      console.error("Erro ao buscar feriados:", error);
     }
   };
 
@@ -257,22 +253,20 @@ const EmployeeDetail = () => {
     }
     
     // Se não está no cache, busca individualmente (fallback)
-    const { data, error } = await supabase
-      .from('off_days')
-      .select('day')
-      .gte('day', `${year}-${month.toString().padStart(2, '0')}-01`)
-      .lt('day', `${year}-${(month + 1).toString().padStart(2, '0')}-01`);
-
-    if (error) {
+    try {
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      const endDate = `${year}-${(month + 1).toString().padStart(2, '0')}-01`;
+      const result = await apiClient.get<Array<{day: string}>>(`/api/employee-detail/off-days?startDate=${startDate}&endDate=${endDate}`);
+      const holidays = new Set<string>((result.data || []).map((d) => d.day));
+      
+      // Armazena no cache
+      offDaysCache.current.set(cacheKey, holidays);
+      
+      return holidays;
+    } catch (error) {
       console.error("Erro ao buscar feriados:", error);
-      return new Set();
+      return new Set<string>();
     }
-    const holidays = new Set(data.map(d => d.day));
-    
-    // Armazena no cache
-    offDaysCache.current.set(cacheKey, holidays);
-    
-    return holidays;
   };
 
   // Calcula dias úteis no mês (exclui sábados, domingos e feriados)
@@ -384,9 +378,6 @@ const EmployeeDetail = () => {
     // Calcula o range de datas para buscar todos os meses de uma vez
     const startMonth = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1);
     const endMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    
-    const startDate = `${startMonth.getFullYear()}-${(startMonth.getMonth() + 1).toString().padStart(2, '0')}-01`;
-    const endDate = `${endMonth.getFullYear()}-${(endMonth.getMonth() + 1).toString().padStart(2, '0')}-01`;
 
     // Pré-carrega todos os feriados do período de uma vez
     await preloadHolidays(
@@ -396,16 +387,13 @@ const EmployeeDetail = () => {
       endMonth.getMonth()
     );
 
-    // Busca todos os registros de time_worked de uma vez
-    const { data: allTimeWorked, error } = await supabase
-      .from('time_worked')
-      .select('time, time_worked_date')
-      .eq('user_id', userId)
-      .gte('time_worked_date', startDate)
-      .lt('time_worked_date', endDate)
-      .order('time_worked_date', { ascending: true });
-
-    if (error) {
+    // Busca todos os registros de time_worked de uma vez via API
+    let allTimeWorked: Array<{ time: number; time_worked_date: string }> = [];
+    try {
+      const startMonth_num = startMonth.getMonth() + 1;
+      const result_api = await apiClient.get<Array<{time: number; time_worked_date: string}>>(`/api/employee-detail/${userId}/time-worked?month=${startMonth_num}&year=${startMonth.getFullYear()}`);
+      allTimeWorked = result_api.data || [];
+    } catch (error) {
       console.error("Erro ao buscar horas:", error);
       return result;
     }
@@ -475,36 +463,21 @@ const EmployeeDetail = () => {
     </div>
   );
 
-  // Carrega dados do funcionário
+  // Carrega dados do funcionário via Backend API
   const fetchEmployee = async () => {
     if (!id) return;
     
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          *,
-          users_skill (
-            id,
-            skills (
-              id,
-              area,
-              category,
-              skill
-            )
-          )
-        `)
-        .eq('user_id', id)
-        .single();
+      const result = await apiClient.get<DbUser>(`/api/employees/${id}`);
 
-      if (error) {
-        console.error('Erro ao buscar funcionário:', error);
+      if (!result.success) {
+        console.error('Erro ao buscar funcionário:', result.error);
         navigate('/employees');
         return;
       }
 
-      setEmployee(data);
+      setEmployee(result.data || null);
     } catch (error) {
       console.error('Erro ao carregar funcionário:', error);
       navigate('/employees');
@@ -586,9 +559,18 @@ const EmployeeDetail = () => {
       const monthNum = Number(month);
       const yearNum = Number(year);
       
-      const startDate = `${year}-${month.padStart(2, '0')}-01`;
+      const result = await apiClient.get<Array<{ time_worked_date: string }>>(`/api/employee-detail/${userId}/time-worked?month=${monthNum}&year=${yearNum}`);
       
-      // Calcular corretamente o primeiro dia do próximo mês
+      if (!result.success) {
+        console.error('Erro ao carregar registros');
+        setTimeRecords([]);
+        return;
+      }
+      
+      const data = result.data || [];
+      
+      // Filtra novamente no frontend para garantir que apenas registros do mês correto sejam exibidos
+      const startDate = `${year}-${month.padStart(2, '0')}-01`;
       let endYear = yearNum;
       let endMonth = monthNum + 1;
       if (endMonth > 12) {
@@ -596,25 +578,9 @@ const EmployeeDetail = () => {
         endYear = yearNum + 1;
       }
       const endDate = `${endYear}-${endMonth.toString().padStart(2, '0')}-01`;
-
-      const { data, error } = await supabase
-        .from('time_worked')
-        .select('*, task_title, project_name')
-        .eq('user_id', userId)
-        .gte('time_worked_date', startDate)
-        .lt('time_worked_date', endDate)
-        .gt('time', 0)
-        .order('time_worked_date', { ascending: true });
-
-      if (error) {
-        console.error('Erro ao carregar registros:', error);
-        setTimeRecords([]);
-        return;
-      }
       
-      // Filtra novamente no frontend para garantir que apenas registros do mês correto sejam exibidos
-      const filteredData = (data || []).filter(record => {
-        const recordDate = record.time_worked_date.split('T')[0]; // Extrai apenas YYYY-MM-DD
+      const filteredData = data.filter((record: { time_worked_date: string }) => {
+        const recordDate = record.time_worked_date.split('T')[0];
         return recordDate >= startDate && recordDate < endDate;
       });
       
@@ -631,40 +597,15 @@ const EmployeeDetail = () => {
   const loadFeedbacks = async (userId: string) => {
     setIsLoadingFeedbacks(true);
     try {
-      const { data, error } = await supabase
-        .from('feedbacks')
-        .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment')
-        .eq('feedback_user_id', userId)
-        .order('feedback_date', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao carregar feedbacks:', error);
+      const result = await apiClient.get<Array<unknown>>(`/api/employee-detail/${userId}/feedbacks`);
+      
+      if (!result.success) {
+        console.error('Erro ao carregar feedbacks');
         setFeedbacks([]);
         return;
       }
 
-      // Buscar PDIs vinculados aos feedbacks
-      const feedbackIds = (data || []).map(f => f.id);
-      let pdiMap = new Map();
-      if (feedbackIds.length > 0) {
-        const { data: pdiData, error: pdiError } = await supabase
-          .from('pdi')
-          .select('feedback_id')
-          .in('feedback_id', feedbackIds)
-          .not('feedback_id', 'is', null);
-        
-        if (!pdiError && pdiData) {
-          pdiData.forEach((pdi) => {
-            pdiMap.set(pdi.feedback_id, true);
-          });
-        }
-      }
-
-      const formattedData = (data || []).map(f => ({
-        ...f,
-        has_pdi: pdiMap.has(f.id)
-      }));
-      setFeedbacks(formattedData);
+      setFeedbacks(result.data || []);
     } catch (error) {
       console.error('Erro ao carregar feedbacks:', error);
       setFeedbacks([]);
@@ -677,40 +618,16 @@ const EmployeeDetail = () => {
   const loadEvaluationData = async (userId: string) => {
     setIsLoadingEvaluations(true);
     try {
-      // Busca dados das respostas do usuário com join na tabela evaluations
-      const { data, error } = await supabase
-        .from('evaluations_questions_reply')
-        .select(`
-          evaluation_id,
-          subcategory,
-          score,
-          weight,
-          evaluations!inner (
-            id,
-            name,
-            updated_at
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('reply_type', 'Escala (1-5)')
-        .order('evaluations(updated_at)', { ascending: true });
-
-      if (error) {
-        console.error('Erro ao carregar dados das avaliações:', error);
+      const result = await apiClient.get<{ userData: Array<unknown>; teamData: Array<unknown> }>(`/api/employee-detail/${userId}/evaluations/data`);
+      
+      if (!result.success) {
+        console.error('Erro ao carregar dados das avaliações');
         setEvaluationData([]);
         setEvaluationMetadata([]);
         return;
       }
 
-      // Busca dados de TODOS os usuários para calcular média do time
-      const { data: teamData, error: teamError } = await supabase
-        .from('evaluations_questions_reply')
-        .select('subcategory, score, weight')
-        .eq('reply_type', 'Escala (1-5)');
-
-      if (teamError) {
-        console.error('Erro ao carregar dados do time:', teamError);
-      }
+      const { userData: data, teamData } = result.data || { userData: [], teamData: [] };
 
       if (!data || data.length === 0) {
         setEvaluationData([]);
@@ -826,84 +743,15 @@ const EmployeeDetail = () => {
   const loadEvaluations = async (userId: string) => {
     setIsLoadingEvaluationsList(true);
     try {
-        const { data, error } = await supabase
-            .from('evaluations')
-            .select(`
-              *,
-              evaluations_questions_reply (
-                score,
-                weight
-              )
-            `)
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Erro ao carregar avaliações:', error);
+        const result = await apiClient.get<Array<unknown>>(`/api/employee-detail/${userId}/evaluations`);
+        
+        if (!result.success) {
+            console.error('Erro ao carregar avaliações');
             setEvaluations([]);
             return;
         }
 
-        const statusIds = (data || []).map(e => e.status_id).filter(Boolean);
-        let statusMap = new Map();
-        if (statusIds.length > 0) {
-            const { data: statuses, error: statusError } = await supabase
-                .from('domains')
-                .select('id, value')
-                .in('id', statusIds)
-                .eq('type', 'evaluation_status');
-            if (!statusError) {
-                statusMap = new Map(statuses.map(s => [s.id, s.value]));
-            }
-        }
-
-        // Buscar PDIs vinculados às avaliações
-        const evaluationIds = (data || []).map(e => e.id);
-        let pdiMap = new Map();
-        if (evaluationIds.length > 0) {
-          const { data: pdiData, error: pdiError } = await supabase
-            .from('pdi')
-            .select('evaluation_id')
-            .in('evaluation_id', evaluationIds)
-            .not('evaluation_id', 'is', null);
-          
-          if (!pdiError && pdiData) {
-            pdiData.forEach((pdi) => {
-              pdiMap.set(pdi.evaluation_id, true);
-            });
-          }
-        }
-
-        const formattedData = (data || []).map(e => {
-            // Calcular média ponderada dos scores
-            let averageScore = null;
-            const replies = e.evaluations_questions_reply || [];
-            
-            if (replies.length > 0) {
-              const validReplies = replies.filter((r: any) => r.score !== null && r.weight !== null);
-              
-              if (validReplies.length > 0) {
-                const totalWeightedScore = validReplies.reduce(
-                  (sum: number, r: any) => sum + (r.score * r.weight),
-                  0
-                );
-                const totalWeight = validReplies.reduce(
-                  (sum: number, r: any) => sum + r.weight,
-                  0
-                );
-                
-                averageScore = totalWeight > 0 ? totalWeightedScore / totalWeight : null;
-              }
-            }
-
-            return {
-                ...e,
-                status_name: statusMap.get(e.status_id) || 'N/A',
-                has_pdi: pdiMap.has(e.id),
-                average_score: averageScore
-            };
-        });
-        setEvaluations(formattedData);
+        setEvaluations(result.data || []);
     } catch (error) {
         console.error('Erro ao carregar avaliações:', error);
         setEvaluations([]);
@@ -916,65 +764,15 @@ const EmployeeDetail = () => {
   const loadClientTimeHistory = async (userId: string) => {
     setIsLoadingClientHistory(true);
     try {
-      const { data, error } = await supabase
-        .from('time_worked')
-        .select('client_name, project_name, time')
-        .eq('user_id', userId);
-
-      if (error) {
-        console.error('Erro ao carregar histórico de horas por cliente:', error);
+      const result = await apiClient.get<Array<unknown>>(`/api/employee-detail/${userId}/time-worked/client-history`);
+      
+      if (!result.success) {
+        console.error('Erro ao carregar histórico de horas por cliente');
         setClientTimeHistory([]);
         return;
       }
 
-      // Agrupa por client_name e depois por project_name
-      const clientMap = new Map<string, { 
-        total_seconds: number; 
-        projects: Map<string, number> 
-      }>();
-      
-      (data || []).forEach(record => {
-        const clientName = record.client_name || 'Sem cliente';
-        const projectName = record.project_name || 'Sem projeto';
-        const time = record.time || 0;
-        
-        if (!clientMap.has(clientName)) {
-          clientMap.set(clientName, { 
-            total_seconds: 0, 
-            projects: new Map() 
-          });
-        }
-        
-        const client = clientMap.get(clientName)!;
-        client.total_seconds += time;
-        
-        const currentProjectTime = client.projects.get(projectName) || 0;
-        client.projects.set(projectName, currentProjectTime + time);
-      });
-
-      // Converte para array e calcula horas
-      const history = Array.from(clientMap.entries()).map(([client_name, data]) => {
-        // Converte os projetos para array e ordena por horas
-        const projects = Array.from(data.projects.entries())
-          .map(([project_name, total_seconds]) => ({
-            project_name,
-            total_hours: total_seconds / 3600,
-            total_seconds
-          }))
-          .sort((a, b) => b.total_hours - a.total_hours);
-
-        return {
-          client_name,
-          total_hours: data.total_seconds / 3600,
-          total_seconds: data.total_seconds,
-          projects
-        };
-      });
-
-      // Ordena por total de horas (decrescente)
-      history.sort((a, b) => b.total_hours - a.total_hours);
-
-      setClientTimeHistory(history);
+      setClientTimeHistory(result.data as typeof clientTimeHistory || []);
     } catch (error) {
       console.error('Erro ao carregar histórico de horas por cliente:', error);
       setClientTimeHistory([]);
@@ -989,61 +787,23 @@ const EmployeeDetail = () => {
     console.log('Carregando acessos para user_id:', userId);
     
     try {
-      // Buscar acessos do funcionário usando o user_id
-      const { data, error } = await supabase
-        .from('access_platforms')
-        .select('*, clients(name)')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .order('platform_name');
-
-      console.log('Resultado da busca de acessos:', { data, error });
-
-      if (error) {
-        console.error('Erro ao buscar acessos do funcionário:', error);
+      const result = await apiClient.get<DbAccessPlatform[]>(`/api/employee-detail/${userId}/accesses`);
+      
+      if (!result.success) {
+        console.error('Erro ao buscar acessos do funcionário');
         setAccesses([]);
         return;
       }
 
-      if (!data || data.length === 0) {
+      const data = result.data || [];
+      
+      if (data.length === 0) {
         console.log('Nenhum acesso encontrado para o funcionário');
         setAccesses([]);
         return;
       }
-
-      // Buscar detalhes de acesso para cada acesso
-      const accessIds = (data || []).map((a: any) => a.id);
-      console.log('Access IDs encontrados:', accessIds);
       
-      let accessDetails: any[] = [];
-      if (accessIds.length > 0) {
-        const { data: detailsData, error: detailsError } = await supabase
-          .from('access_platforms_details')
-          .select('*')
-          .in('access_platform_id', accessIds);
-        
-        console.log('Detalhes de acesso:', { detailsData, detailsError });
-        
-        if (!detailsError) {
-          accessDetails = detailsData || [];
-        }
-      }
-
-      // Mapear dados para incluir detalhes (políticas e tipos de dados)
-      const accessesWithDetails = (data || []).map((access: any) => {
-        const details = accessDetails.filter((d: any) => d.access_platform_id === access.id);
-        const policies = details.filter((d: any) => d.domain_type === 'access_policy').map((d: any) => d.domain_value);
-        const dataTypes = details.filter((d: any) => d.domain_type === 'access_data_type').map((d: any) => d.domain_value);
-        
-        return {
-          ...access,
-          client_name: access.clients?.name || 'Cliente não encontrado',
-          access_policies: policies,
-          data_types: dataTypes,
-        };
-      });
-      
-      setAccesses(accessesWithDetails as DbAccessPlatform[] || []);
+      setAccesses(data as DbAccessPlatform[]);
     } catch (error) {
       console.error('Erro ao carregar acessos do funcionário:', error);
       setAccesses([]);
@@ -1108,28 +868,30 @@ const EmployeeDetail = () => {
         return;
       }
 
-      // Se não houver acessos, buscar um projeto onde o funcionário está alocado
-      const { data: allocations, error: allocError } = await supabase
-        .from('allocations')
-        .select('project_id')
-        .eq('employee_id', id)
-        .limit(1);
-
-      if (allocError || !allocations || allocations.length === 0) {
+      // Se não houver acessos, buscar um projeto onde o funcionário está alocado via API
+      try {
+        const allocResult = await apiClient.get<Array<{project_id: number}>>(`/api/employee-detail/${id}/allocations`);
+        const allocations = allocResult.data || [];
+        
+        if (allocations.length > 0) {
+          setSelectedProjectIdForAccess(allocations[0].project_id);
+          setIsAccessModalOpen(true);
+          return;
+        }
+        
         // Se não houver alocações, buscar qualquer projeto ativo
-        const { data: projects, error: projError } = await supabase
-          .from('projects')
-          .select('project_id')
-          .eq('is_active', true)
-          .limit(1);
-
-        if (projError || !projects || projects.length === 0) {
+        const projResult = await apiClient.get<Array<{project_id: number}>>(`/api/employee-detail/projects/active`);
+        const projects = projResult.data || [];
+        
+        if (projects.length > 0) {
+          setSelectedProjectIdForAccess(projects[0].project_id);
+        } else {
           console.error('Nenhum projeto disponível para adicionar acesso');
           return;
         }
-        setSelectedProjectIdForAccess(projects[0].project_id);
-      } else {
-        setSelectedProjectIdForAccess(allocations[0].project_id);
+      } catch (error) {
+        console.error('Erro ao buscar projeto para adicionar acesso:', error);
+        return;
       }
       
       setIsAccessModalOpen(true);
@@ -1171,22 +933,7 @@ const EmployeeDetail = () => {
     if (!accessToDelete) return;
 
     try {
-      // Primeiro deletar os detalhes do acesso
-      await supabase
-        .from('access_platforms_details')
-        .delete()
-        .eq('access_platform_id', accessToDelete.id);
-
-      // Depois marcar o acesso como inativo
-      const { error } = await supabase
-        .from('access_platforms')
-        .update({ is_active: false })
-        .eq('id', accessToDelete.id);
-
-      if (error) {
-        console.error('Erro ao deletar acesso:', error);
-        return;
-      }
+      await apiClient.delete(`/api/employee-detail/accesses/${accessToDelete.id}`);
 
       // Recarregar acessos
       await reloadAccesses();
@@ -1200,34 +947,12 @@ const EmployeeDetail = () => {
   // Função para encontrar um project_id de um cliente (necessário para o AccessModal)
   const findProjectIdForClient = async (clientId: number) => {
     try {
-      // Buscar o nome do cliente primeiro
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('name')
-        .eq('client_id', clientId)
-        .single();
-
-      if (clientError || !clientData) {
-        console.error('Erro ao buscar cliente:', clientError);
+      const result = await apiClient.get<{project_id: number} | null>(`/api/employee-detail/projects/by-client/${clientId}`);
+      if (result.data) {
+        setSelectedProjectIdForAccess(result.data.project_id);
+      } else {
         setSelectedProjectIdForAccess(null);
-        return;
       }
-
-      // Buscar um projeto desse cliente
-      const { data, error } = await supabase
-        .from('projects')
-        .select('project_id')
-        .eq('client_name', clientData.name)
-        .limit(1)
-        .single();
-
-      if (error || !data) {
-        console.error('Erro ao buscar projeto do cliente:', error);
-        setSelectedProjectIdForAccess(null);
-        return;
-      }
-
-      setSelectedProjectIdForAccess(data.project_id);
     } catch (error) {
       console.error('Erro ao buscar projeto do cliente:', error);
       setSelectedProjectIdForAccess(null);
@@ -1238,67 +963,14 @@ const EmployeeDetail = () => {
   const loadPDIs = async (userId: string) => {
       setIsLoadingPDIs(true);
       try {
-          const { data: pdiData, error: pdiError } = await supabase
-              .from('pdi')
-              .select('*')
-              .eq('user_id', userId)
-              .order('created_at', { ascending: false });
-
-          if (pdiError) {
-              console.error('Erro ao carregar PDIs:', pdiError);
-              setPDIs([]);
-              setIsLoadingPDIs(false);
-              return;
-          }
-
-          if (!pdiData || pdiData.length === 0) {
-              setPDIs([]);
-              setIsLoadingPDIs(false);
-              return;
-          }
-
-          // Buscar todos os status da tabela domains
-          const { data: statusData, error: statusError } = await supabase
-              .from('domains')
-              .select('id, value')
-              .eq('type', 'pdi_status');
-
-          if (statusError) {
-              console.error('Erro ao buscar status:', statusError);
-          }
-
-          // Criar um mapa de status
-          const statusMap = new Map();
-          if (statusData) {
-              statusData.forEach((status) => {
-                  statusMap.set(status.id, status);
-              });
-          }
-
-          // Buscar a quantidade de competências de cada PDI
-          const pdiIds = pdiData.map(pdi => pdi.id);
-          let competencyCounts = new Map();
+          const result = await apiClient.get<any[]>(`/api/employee-detail/${userId}/pdis`);
+          const pdiData = result.data || [];
           
-          if (pdiIds.length > 0) {
-              const { data: itemsData, error: itemsError } = await supabase
-                  .from('pdi_items')
-                  .select('pdi_id')
-                  .in('pdi_id', pdiIds);
-              
-              if (!itemsError && itemsData) {
-                  // Contar quantos itens cada PDI tem
-                  itemsData.forEach((item) => {
-                      const count = competencyCounts.get(item.pdi_id) || 0;
-                      competencyCounts.set(item.pdi_id, count + 1);
-                  });
-              }
-          }
-
-          // Fazer o join manual entre pdi e domains, e adicionar a quantidade de competências
-          const formattedData = pdiData.map(p => ({
+          // O backend já formata os dados com status_name e items
+          const formattedData = pdiData.map((p: any) => ({
               ...p,
-              status: p.status_id ? statusMap.get(p.status_id) : null,
-              competency_count: competencyCounts.get(p.id) || 0
+              status: p.status_name ? { value: p.status_name, id: p.status_id } : null,
+              competency_count: (p.items || []).length
           }));
           
           setPDIs(formattedData);
@@ -1314,38 +986,8 @@ const EmployeeDetail = () => {
   const loadUserSkills = async (userId: string) => {
     setIsLoadingSkills(true);
     try {
-      const { data, error } = await supabase
-        .from('users_skill')
-        .select(`
-          id,
-          skill_id,
-          skills!inner (
-            id,
-            area,
-            category,
-            skill
-          )
-        `)
-        .eq('user_id', userId);
-
-      if (error) {
-        console.error('Erro ao carregar habilidades do usuário:', error);
-        setUserSkills([]);
-        return;
-      }
-      
-      const formattedSkills = (data || []).map((item: any) => ({
-        id: item.id,
-        skill_id: item.skill_id,
-        skill: {
-          id: item.skills.id,
-          area: item.skills.area,
-          category: item.skills.category,
-          skill: item.skills.skill
-        }
-      }));
-      
-      setUserSkills(formattedSkills);
+      const result = await apiClient.get<UserSkill[]>(`/api/employees/${userId}/skills`);
+      setUserSkills(result.data || []);
     } catch (error) {
       console.error('Erro ao carregar habilidades do usuário:', error);
       setUserSkills([]);
@@ -1357,16 +999,7 @@ const EmployeeDetail = () => {
   // Função para remover habilidade do usuário
   const removeSkillFromUser = async (userSkillId: string) => {
     try {
-      const { error } = await supabase
-        .from('users_skill')
-        .delete()
-        .eq('id', userSkillId);
-
-      if (error) {
-        console.error('Erro ao remover habilidade:', error);
-        return;
-      }
-      
+      await apiClient.delete(`/api/employees/${employee?.user_id}/skills/${userSkillId}`);
       setUserSkills(prev => prev.filter(skill => skill.id !== userSkillId));
     } catch (error) {
       console.error('Erro ao remover habilidade:', error);
@@ -1374,38 +1007,20 @@ const EmployeeDetail = () => {
   };
 
   // Função para formatar o nome da habilidade
-  const formatSkillName = (skill: Skill): string => {
+  const formatSkillName = (skill: Skill | null | undefined): string => {
+    if (!skill) return 'Habilidade não definida';
     const parts = [];
     if (skill.area) parts.push(skill.area);
     if (skill.category) parts.push(skill.category);
     if (skill.skill) parts.push(skill.skill);
-    return parts.join(' > ');
+    return parts.length > 0 ? parts.join(' > ') : 'Habilidade sem nome';
   };
 
   // Função para buscar meses com registros
   const fetchAvailableMonths = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('time_worked')
-        .select('time_worked_date')
-        .eq('user_id', userId)
-        .gt('time', 0)
-        .order('time_worked_date', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao buscar meses disponíveis:', error);
-        setAvailableMonths([]);
-        return;
-      }
-
-      const months = new Set(
-        (data || []).map(record => {
-          const date = new Date(record.time_worked_date);
-          return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-        })
-      );
-
-      const monthsArray = Array.from(months);
+      const result = await apiClient.get<string[]>(`/api/employee-detail/${userId}/time-worked/months`);
+      const monthsArray = result.data || [];
       setAvailableMonths(monthsArray);
       
       if (monthsArray.length > 0) {
@@ -1421,19 +1036,8 @@ const EmployeeDetail = () => {
   const loadAllSkills = async () => {
     setIsLoadingAllSkills(true);
     try {
-      const { data, error } = await supabase
-        .from('skills')
-        .select('*')
-        .order('area')
-        .order('category')
-        .order('skill');
-
-      if (error) {
-        console.error('Erro ao carregar habilidades:', error);
-        setAllSkills([]);
-        return;
-      }
-      setAllSkills(data || []);
+      const result = await apiClient.get<Skill[]>(`/api/employee-detail/skills`);
+      setAllSkills(result.data || []);
     } catch (error) {
       console.error('Erro ao carregar habilidades:', error);
       setAllSkills([]);
@@ -1447,18 +1051,7 @@ const EmployeeDetail = () => {
     if (!employee?.user_id) return;
     
     try {
-      const { error } = await supabase
-        .from('users_skill')
-        .insert({
-          user_id: employee.user_id,
-          skill_id: skillId
-        });
-
-      if (error) {
-        console.error('Erro ao adicionar habilidade:', error);
-        return;
-      }
-      
+      await apiClient.post(`/api/employees/${employee.user_id}/skills`, { skillId });
       await loadUserSkills(employee.user_id);
     } catch (error) {
       console.error('Erro ao adicionar habilidade:', error);
@@ -1478,79 +1071,47 @@ const EmployeeDetail = () => {
     });
   };
 
-  // Função para ativar/desativar funcionário
+  // Função para ativar/desativar funcionário via Backend API
   const toggleEmployeeStatus = async () => {
     if (!employee?.user_id) return;
 
     try {
       const newStatus = !employee.is_active;
       
-      // Primeiro, vamos tentar com user_id
-      let { data, error } = await supabase
-        .from('users')
-        .update({ is_active: newStatus })
-        .eq('user_id', employee.user_id)
-        .select();
+      const result = await apiClient.patch<{success: boolean; error?: string}>(`/api/employees/${employee.user_id}`, {
+        is_active: newStatus
+      });
 
-      // Se não encontrou nenhum registro, tenta com id (caso o schema seja diferente)
-      if (!error && (!data || data.length === 0)) {
-        const response = await supabase
-          .from('users')
-          .update({ is_active: newStatus })
-          .eq('id', employee.user_id)
-          .select();
-        data = response.data;
-        error = response.error;
-      }
-
-      if (error) {
-        console.error('Erro ao atualizar status do funcionário:', error);
+      if (!result.success) {
+        console.error('Erro ao atualizar status do funcionário:', result.error);
         return;
       }
       
-      // Atualiza o estado local apenas se a atualização foi bem-sucedida
-      if (data && data.length > 0) {
-        setEmployee(prev => prev ? { ...prev, is_active: newStatus } : null);
-      }
+      // Atualiza o estado local
+      setEmployee(prev => prev ? { ...prev, is_active: newStatus } : null);
     } catch (error) {
       console.error('Erro ao atualizar status do funcionário:', error);
     }
   };
 
-  // Função para ativar/desativar funcionário
+  // Função para ativar/desativar lançamento de horas via Backend API
   const toggleEmployeeLogHours = async () => {
     if (!employee?.user_id) return;
 
     try {
       const newLogHours = !employee.log_hours;
       
-      // Primeiro, vamos tentar com user_id
-      let { data, error } = await supabase
-        .from('users')
-        .update({ log_hours: newLogHours })
-        .eq('user_id', employee.user_id)
-        .select();
+      const result = await apiClient.patch<{success: boolean; error?: string}>(`/api/employees/${employee.user_id}`, {
+        log_hours: newLogHours
+      });
 
-      // Se não encontrou nenhum registro, tenta com id (caso o schema seja diferente)
-      if (!error && (!data || data.length === 0)) {
-        const response = await supabase
-          .from('users')
-          .update({ log_hours: newLogHours })
-          .eq('id', employee.user_id)
-          .select();
-        data = response.data;
-        error = response.error;
-      }
-
-      if (error) {
-        console.error('Erro ao atualizar lança Horas do funcionário:', error);
+      if (!result.success) {
+        console.error('Erro ao atualizar lança Horas do funcionário:', result.error);
         return;
       }
       
-      // Atualiza o estado local apenas se a atualização foi bem-sucedida
-      if (data && data.length > 0) {
-        setEmployee(prev => prev ? { ...prev, log_hours: newLogHours } : null);
-      }
+      // Atualiza o estado local
+      setEmployee(prev => prev ? { ...prev, log_hours: newLogHours } : null);
     } catch (error) {
       console.error('Erro ao atualizar lança Horas do funcionário:', error);
     }
@@ -1619,13 +1180,10 @@ const EmployeeDetail = () => {
     if (!feedbackToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('feedbacks')
-        .delete()
-        .eq('id', feedbackToDelete.id);
+      const result = await apiClient.delete<{success: boolean; error?: string}>(`/api/feedbacks/${feedbackToDelete.id}`);
 
-      if (error) {
-        console.error('Erro ao deletar feedback:', error);
+      if (!result.success) {
+        console.error('Erro ao deletar feedback:', result.error);
         alert('Erro ao deletar feedback. Tente novamente.');
         return;
       }
@@ -1660,26 +1218,10 @@ const EmployeeDetail = () => {
     if (!pdiToDelete) return;
 
     try {
-      // 1. Deletar os itens na tabela pdi_items
-      const { error: itemsError } = await supabase
-        .from('pdi_items')
-        .delete()
-        .eq('pdi_id', pdiToDelete.id);
+      const result = await apiClient.delete<{success: boolean; error?: string}>(`/api/pdis/${pdiToDelete.id}`);
 
-      if (itemsError) {
-        console.error('Erro ao deletar itens do PDI:', itemsError);
-        alert('Erro ao deletar itens do PDI. Tente novamente.');
-        return;
-      }
-
-      // 2. Deletar o PDI principal
-      const { error } = await supabase
-        .from('pdi')
-        .delete()
-        .eq('id', pdiToDelete.id);
-
-      if (error) {
-        console.error('Erro ao deletar PDI:', error);
+      if (!result.success) {
+        console.error('Erro ao deletar PDI:', result.error);
         alert('Erro ao deletar PDI. Tente novamente.');
         return;
       }
@@ -1709,38 +1251,10 @@ const EmployeeDetail = () => {
     if (!evaluationToDelete) return;
 
     try {
-      // 1. Deletar as respostas da avaliação
-      const { error: repliesError } = await supabase
-        .from('evaluations_questions_reply')
-        .delete()
-        .eq('evaluation_id', evaluationToDelete.id);
+      const result = await apiClient.delete<{success: boolean; error?: string}>(`/api/evaluations/${evaluationToDelete.id}`);
 
-      if (repliesError) {
-        console.error('Erro ao deletar respostas da avaliação:', repliesError);
-        alert('Erro ao deletar respostas da avaliação. Tente novamente.');
-        return;
-      }
-
-      // 2. Deletar os vínculos com projetos
-      const { error: projectsError } = await supabase
-        .from('evaluations_projects')
-        .delete()
-        .eq('evaluation_id', evaluationToDelete.id);
-
-      if (projectsError) {
-        console.error('Erro ao deletar vínculos de projetos:', projectsError);
-        alert('Erro ao deletar vínculos de projetos. Tente novamente.');
-        return;
-      }
-
-      // 3. Deletar a avaliação principal
-      const { error } = await supabase
-        .from('evaluations')
-        .delete()
-        .eq('id', evaluationToDelete.id);
-
-      if (error) {
-        console.error('Erro ao deletar avaliação:', error);
+      if (!result.success) {
+        console.error('Erro ao deletar avaliação:', result.error);
         alert('Erro ao deletar avaliação. Tente novamente.');
         return;
       }
@@ -2668,21 +2182,11 @@ const EmployeeDetail = () => {
       setIsLoadingHours(true);
       setIsLoadingSkills(true);
       
-      // Carrega tarefas
+      // Carrega tarefas via API
       (async () => {
         try {
-          const { data, error } = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('responsible_id', employee.user_id)
-            .order('created_at', { ascending: false });
-
-          if (error) {
-            console.error('Erro ao carregar tarefas:', error);
-            setTasks([]);
-            return;
-          }
-          setTasks(data || []);
+          const result = await apiClient.get<DbTask[]>(`/api/employee-detail/${employee.user_id}/tasks`);
+          setTasks(result.data || []);
         } catch (error) {
           console.error('Erro ao carregar tarefas:', error);
           setTasks([]);

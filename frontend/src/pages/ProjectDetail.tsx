@@ -7,7 +7,7 @@ import { ColDef, RowClickedEvent } from 'ag-grid-community';
 import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize, Copy } from 'lucide-react';
 import Select from 'react-select';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea, BarChart, Bar, LabelList } from 'recharts';
-import { supabase } from '../lib/supabaseClient';
+import * as apiClient from '../lib/apiClient';
 import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase, DbAccessPlatform, DbAccessPlatformGrouped } from '../types';
 import AssigneeCellRenderer from '../components/AssigneeCellRenderer.tsx';
 import ProjectOwnerRenderer from '../components/ProjectOwnerRenderer.tsx';
@@ -367,7 +367,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [selectedRiskStatuses, setSelectedRiskStatuses] = useState<SelectOption[]>([]);
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
   const [successNotification, setSuccessNotification] = useState<string | null>(null);
-  const [timeWorkedData, setTimeWorkedData] = useState<ConsultorHours[]>([]);
+  const [, setTimeWorkedData] = useState<ConsultorHours[]>([]);
   
   // Estados para o modal de risco
   const [isRiskModalOpen, setIsRiskModalOpen] = useState(false);
@@ -469,17 +469,18 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         if (!project.project_id) return;
         setIsLoadingTasks(true);
 
-        const { data, error } = await supabase
-          .rpc('get_tasks_with_assignees', {
-            p_project_id: project.project_id
-          });
+        try {
+          const result = await apiClient.get<DbTask[]>(`/api/projects/${project.project_id}/tasks`);
 
-        if (error) {
-          console.error('Erro ao buscar tarefas do projeto:', error);
+          if (!result.success) {
+            console.error('Erro ao buscar tarefas do projeto:', result.error);
+            setTasks([]);
+          } else {
+            setTasks(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de tarefas:', error);
           setTasks([]);
-        } else {
-          const tasksData = data as DbTask[] || [];
-          setTasks(tasksData);
         }
         setIsLoadingTasks(false);
       })();
@@ -487,7 +488,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
 
-  // Buscar dados de time_worked diretamente do banco
+  // Buscar dados de time_worked via Backend API
   useEffect(() => {
     if (!hasLoadedTimeWorked.current) {
       hasLoadedTimeWorked.current = true;
@@ -495,46 +496,25 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       void (async () => {
         if (!project.project_id) return;
 
-        const { data, error } = await supabase
-          .from('time_worked')
-          .select('user_id, user_name, time')
-          .eq('project_id', project.project_id);
+        try {
+          const result = await apiClient.get<ConsultorHours[]>(`/api/projects/${project.project_id}/time-worked`);
 
-        if (error) {
-          console.error('Erro ao buscar time_worked:', error);
+          if (!result.success) {
+            console.error('Erro ao buscar time_worked:', result.error);
+            setTimeWorkedData([]);
+          } else {
+            setTimeWorkedData(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de time_worked:', error);
           setTimeWorkedData([]);
-        } else {
-          // Agrupar por user_id e somar o time (que está em segundos)
-          const groupedData = new Map<string, { name: string; total_seconds: number }>();
-          
-          (data || []).forEach(record => {
-            const userId = record.user_id;
-            const userName = record.user_name;
-            const time = record.time || 0;
-            
-            const current = groupedData.get(userId) || { name: userName, total_seconds: 0 };
-            current.total_seconds += time;
-            groupedData.set(userId, current);
-          });
-
-          // Converter para array e calcular horas
-          const consultorsList: ConsultorHours[] = Array.from(groupedData.entries())
-            .map(([user_id, data]) => ({
-              user_id: parseInt(user_id),
-              name: data.name,
-              total_hours: data.total_seconds / 3600 // Converter segundos para horas
-            }))
-            .filter(c => c.total_hours > 0)
-            .sort((a, b) => b.total_hours - a.total_hours); // Ordenar por total de horas (decrescente)
-
-          setTimeWorkedData(consultorsList);
         }
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
 
-  // Buscar fases do projeto
+  // Buscar fases do projeto via Backend API
   useEffect(() => {
     if (!hasLoadedPhases.current) {
       hasLoadedPhases.current = true;
@@ -543,46 +523,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         if (!project.project_id) return;
         setIsLoadingPhases(true);
 
-        // Buscar todas as fases do projeto para exibição no Status Report
-        // A filtragem por semana é feita apenas no modal através da função loadPhasesForWeek
-        const { data: phasesData, error: phasesError } = await supabase
-          .from('projects_phase')
-          .select('*')
-          .eq('project_id', project.project_id)
-          .order('order', { ascending: true });
+        try {
+          const result = await apiClient.get<DbProjectPhase[]>(`/api/projects/${project.project_id}/phases`);
 
-        if (phasesError) {
-          console.error('Erro ao buscar fases do projeto:', phasesError);
+          if (!result.success) {
+            console.error('Erro ao buscar fases do projeto:', result.error);
+            setProjectPhases([]);
+          } else {
+            setProjectPhases(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de fases:', error);
           setProjectPhases([]);
-          setIsLoadingPhases(false);
-          return;
         }
-
-        // Buscar domínios das fases
-        const { data: domainsData, error: domainsError } = await supabase
-          .from('domains')
-          .select('id, value')
-          .eq('type', 'project_phase')
-          .eq('is_active', true);
-
-        if (domainsError) {
-          console.error('Erro ao buscar domínios das fases:', domainsError);
-          setProjectPhases([]);
-          setIsLoadingPhases(false);
-          return;
-        }
-
-        // Fazer JOIN manual entre fases e domínios
-        const phasesWithNames = (phasesData || []).map(phase => {
-          const domain = domainsData?.find(d => d.id === phase.domains_id);
-          return {
-            ...phase,
-            phase_name: domain?.value || 'Fase desconhecida',
-            domains: domain ? { id: domain.id, value: domain.value } : undefined
-          };
-        });
-
-        setProjectPhases(phasesWithNames as DbProjectPhase[]);
         setIsLoadingPhases(false);
       })();
     }
@@ -725,60 +678,50 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   }, [tasks, getFilteredTasks]);
 
   useEffect(() => {
-    if (!hasLoadedRisks.current && domains.length > 0) {
+    if (!hasLoadedRisks.current) {
       hasLoadedRisks.current = true;
       
       void (async () => {
-        if (!project.project_id || domains.length === 0) return;
+        if (!project.project_id) return;
         setIsLoadingRisks(true);
 
-        const { data, error } = await supabase
-          .from('risks')
-          .select('*')
-          .eq('project_id', project.project_id)
-          .order('description');
+        try {
+          const result = await apiClient.get<DbRisk[]>(`/api/projects/${project.project_id}/risks`);
 
-        if (error) {
-          console.error('Erro ao buscar riscos do projeto:', error);
+          if (!result.success) {
+            console.error('Erro ao buscar riscos do projeto:', result.error);
+            setRisks([]);
+          } else {
+            console.log('Risks loaded with values:', result.data); // Debug
+            setRisks(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de riscos:', error);
           setRisks([]);
-        } else {
-          const risksWithValues = (data || []).map(risk => {
-            // Buscar valores dos domínios baseado nos IDs
-            const typeValue = domains.find(d => d.id === risk.type_id)?.value || '';
-            const priorityValue = domains.find(d => d.id === risk.priority_id)?.value || '';
-            const statusValue = domains.find(d => d.id === risk.status_id)?.value || '';
-            
-            return {
-              ...risk,
-              type: typeValue,
-              priority: priorityValue,
-              status: statusValue,
-            };
-          });
-          console.log('Risks loaded with values:', risksWithValues); // Debug
-          setRisks(risksWithValues as DbRisk[]);
         }
         setIsLoadingRisks(false);
       })();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.project_id, domains]);
+    // eslint-disable-next-line react-hooks-off-deps
+  }, [project.project_id]);
 
   useEffect(() => {
     if (!hasLoadedDomains.current) {
       hasLoadedDomains.current = true;
       
       void (async () => {
-        const { data, error } = await supabase
-          .from('domains')
-          .select('*')
-          .eq('is_active', true);
+        try {
+          const result = await apiClient.get<DbDomain[]>('/api/projects/domains');
 
-        if (error) {
-          console.error('Erro ao buscar domínios:', error);
+          if (!result.success) {
+            console.error('Erro ao buscar domínios:', result.error);
+            setDomains([]);
+          } else {
+            setDomains(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de domínios:', error);
           setDomains([]);
-        } else {
-          setDomains(data as DbDomain[] || []);
         }
       })();
     }
@@ -794,43 +737,18 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         if (!project.project_id) return;
         setIsLoadingProjectOwners(true);
 
-        const { data, error } = await supabase
-          .from('projects_owner')
-          .select(`
-            id,
-            created_at,
-            updated_at,
-            project_id,
-            user_id,
-            users!inner(
-              user_id,
-              name,
-              avatar_large_url
-            )
-          `)
-          .eq('project_id', project.project_id);
+        try {
+          const result = await apiClient.get<DbProjectOwner[]>(`/api/projects/${project.project_id}/owners`);
 
-        if (error) {
-          console.error('Erro ao buscar responsáveis do projeto:', error);
+          if (!result.success) {
+            console.error('Erro ao buscar responsáveis do projeto:', result.error);
+            setProjectOwners([]);
+          } else {
+            setProjectOwners(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de owners:', error);
           setProjectOwners([]);
-        } else {
-          // Transformar os dados para o formato esperado
-          const transformedData: DbProjectOwner[] = (data || []).map(item => {
-            const userData = Array.isArray(item.users) && item.users.length > 0 ? item.users[0] : item.users;
-            return {
-              id: item.id,
-              created_at: item.created_at,
-              updated_at: item.updated_at,
-              project_id: item.project_id,
-              user_id: item.user_id,
-              users: userData && !Array.isArray(userData) ? {
-                user_id: userData.user_id,
-                name: userData.name,
-                avatar_large_url: userData.avatar_large_url
-              } : null
-            };
-          });
-          setProjectOwners(transformedData);
         }
         setIsLoadingProjectOwners(false);
       })();
@@ -838,96 +756,33 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
 
-  // Carregar acessos do projeto
+  // Carregar acessos do projeto via Backend API
   useEffect(() => {
-    if (!hasLoadedAccesses.current && domains.length > 0) {
+    if (!hasLoadedAccesses.current) {
       hasLoadedAccesses.current = true;
       
       void (async () => {
-        if (!project.project_id || domains.length === 0) return;
+        if (!project.project_id) return;
         setIsLoadingAccesses(true);
 
-        // Buscar client_name do projeto
-        const { data: projectData, error: projectError } = await supabase
-          .from('projects')
-          .select('client_name')
-          .eq('project_id', project.project_id)
-          .single();
+        try {
+          const result = await apiClient.get<DbAccessPlatform[]>(`/api/projects/${project.project_id}/accesses`);
 
-        if (projectError || !projectData) {
-          console.error('Erro ao buscar dados do projeto:', projectError);
-          setAccesses([]);
-          setIsLoadingAccesses(false);
-          return;
-        }
-
-        // Buscar client_id baseado no client_name
-        const { data: clientData, error: clientError } = await supabase
-          .from('clients')
-          .select('client_id')
-          .eq('name', projectData.client_name)
-          .single();
-
-        if (clientError || !clientData) {
-          console.error('Erro ao buscar client_id:', clientError);
-          setAccesses([]);
-          setIsLoadingAccesses(false);
-          return;
-        }
-
-        // Buscar acessos do cliente com nome do funcionário
-        const { data, error } = await supabase
-          .from('access_platforms')
-          .select('*, users!access_platforms_user_id_fkey(name)')
-          .eq('client_id', clientData.client_id)
-          .eq('is_active', true)
-          .order('platform_name');
-
-        if (error) {
-          console.error('Erro ao buscar acessos:', error);
-          setAccesses([]);
-        } else {
-          // Buscar detalhes de acesso para cada acesso
-          const accessIds = (data || []).map((a: any) => a.id);
-          console.log('Access IDs encontrados:', accessIds);
-          
-          let accessDetails: any[] = [];
-          if (accessIds.length > 0) {
-            const { data: detailsData, error: detailsError } = await supabase
-              .from('access_platforms_details')
-              .select('*')
-              .in('access_platform_id', accessIds);
-            
-            console.log('Detalhes de acesso encontrados:', detailsData);
-            console.log('Erro ao buscar detalhes:', detailsError);
-            
-            if (!detailsError) {
-              accessDetails = detailsData || [];
-            }
+          if (!result.success) {
+            console.error('Erro ao buscar acessos:', result.error);
+            setAccesses([]);
+          } else {
+            setAccesses(result.data || []);
           }
-
-          // Mapear dados para incluir user_name e detalhes (políticas e tipos de dados)
-          const accessesWithUserName = (data || []).map((access: any) => {
-            const details = accessDetails.filter((d: any) => d.access_platform_id === access.id);
-            const policies = details.filter((d: any) => d.domain_type === 'access_policy').map((d: any) => d.domain_value);
-            const dataTypes = details.filter((d: any) => d.domain_type === 'access_data_type').map((d: any) => d.domain_value);
-            
-            console.log(`Access ID ${access.id} - Policies:`, policies, 'DataTypes:', dataTypes);
-            
-            return {
-              ...access,
-              user_name: access.users?.name || 'Funcionário não encontrado',
-              access_policies: policies,
-              data_types: dataTypes,
-            };
-          });
-          setAccesses(accessesWithUserName as DbAccessPlatform[] || []);
+        } catch (error) {
+          console.error('Erro na requisição de acessos:', error);
+          setAccesses([]);
         }
         setIsLoadingAccesses(false);
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.project_id, domains]);
+  }, [project.project_id]);
 
   const typeOptions = useMemo(() => {
     if (!tasks) return [];
@@ -1043,31 +898,21 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     }
   }, [risks]);
 
-  // Função para recarregar riscos após salvamento
+  // Função para recarregar riscos após salvamento via Backend API
   const reloadRisks = useCallback(async () => {
-    const { data, error: fetchError } = await supabase
-      .from('risks')
-      .select('*')
-      .eq('project_id', project.project_id);
+    try {
+      const result = await apiClient.get<DbRisk[]>(`/api/projects/${project.project_id}/risks`);
 
-    if (!fetchError) {
-      const risksWithOwner = (data || []).map(risk => {
-        // Buscar valores dos domínios baseado nos IDs
-        const typeValue = domains.find(d => d.id === risk.type_id)?.value || '';
-        const priorityValue = domains.find(d => d.id === risk.priority_id)?.value || '';
-        const statusValue = domains.find(d => d.id === risk.status_id)?.value || '';
-        
-        return {
-          ...risk,
-          type: typeValue,
-          priority: priorityValue,
-          status: statusValue,
-        };
-      });
-      setRisks(risksWithOwner as DbRisk[]);
-      showSuccessNotification('Risco salvo com sucesso!');
+      if (result.success) {
+        setRisks(result.data || []);
+        showSuccessNotification('Risco salvo com sucesso!');
+      } else {
+        console.error('Erro ao recarregar riscos:', result.error);
+      }
+    } catch (error) {
+      console.error('Erro na requisição de riscos:', error);
     }
-  }, [project.project_id, domains, showSuccessNotification]);
+  }, [project.project_id, showSuccessNotification]);
 
   // Função para abrir modal de confirmação de exclusão de risco
   const deleteRisk = useCallback((riskId: number) => {
@@ -1078,19 +923,15 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     }
   }, [risks]);
 
-  // Função para confirmar a exclusão do risco
+  // Função para confirmar a exclusão do risco via Backend API
   const handleConfirmDeleteRisk = useCallback(async () => {
     if (!riskToDelete) return;
 
     try {
-      // Deletar o risco diretamente (owner_id, manual_owner e owner_name estão na mesma tabela)
-      const { error } = await supabase
-        .from('risks')
-        .delete()
-        .eq('id', riskToDelete.id);
+      const result = await apiClient.del(`/api/projects/${project.project_id}/risks/${riskToDelete.id}`);
 
-      if (error) {
-        console.error('Erro ao deletar risco:', error);
+      if (!result.success) {
+        console.error('Erro ao deletar risco:', result.error);
         showErrorNotification('Erro ao excluir risco. Tente novamente.');
         setIsDeleteRiskConfirmModalOpen(false);
         setRiskToDelete(null);
@@ -1112,7 +953,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       setIsDeleteRiskConfirmModalOpen(false);
       setRiskToDelete(null);
     }
-  }, [riskToDelete, showErrorNotification, showSuccessNotification]);
+  }, [project.project_id, riskToDelete, showErrorNotification, showSuccessNotification]);
 
   // Funções para modal de acesso
   const openAddAccessModal = useCallback(() => {
@@ -1140,69 +981,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     }
   }, [accesses]);
 
+  // Recarregar acessos via Backend API
   const reloadAccesses = useCallback(async () => {
-    // Buscar client_name do projeto
-    const { data: projectData, error: projectError } = await supabase
-      .from('projects')
-      .select('client_name')
-      .eq('project_id', project.project_id)
-      .single();
+    try {
+      const result = await apiClient.get<DbAccessPlatform[]>(`/api/projects/${project.project_id}/accesses`);
 
-    if (projectError || !projectData) {
-      console.error('Erro ao buscar dados do projeto:', projectError);
-      return;
-    }
-
-    // Buscar client_id baseado no client_name
-    const { data: clientData, error: clientError } = await supabase
-      .from('clients')
-      .select('client_id')
-      .eq('name', projectData.client_name)
-      .single();
-
-    if (clientError || !clientData) {
-      console.error('Erro ao buscar client_id:', clientError);
-      return;
-    }
-
-    const { data, error: fetchError } = await supabase
-      .from('access_platforms')
-      .select('*, users!access_platforms_user_id_fkey(name)')
-      .eq('client_id', clientData.client_id)
-      .eq('is_active', true)
-      .order('platform_name');
-
-    if (!fetchError) {
-      // Buscar detalhes de acesso para cada acesso
-      const accessIds = (data || []).map((a: any) => a.id);
-      
-      let accessDetails: any[] = [];
-      if (accessIds.length > 0) {
-        const { data: detailsData, error: detailsError } = await supabase
-          .from('access_platforms_details')
-          .select('*')
-          .in('access_platform_id', accessIds);
-        
-        if (!detailsError) {
-          accessDetails = detailsData || [];
-        }
+      if (result.success) {
+        setAccesses(result.data || []);
+        showSuccessNotification('Acesso salvo com sucesso!');
+      } else {
+        console.error('Erro ao recarregar acessos:', result.error);
       }
-
-      // Mapear dados para incluir user_name e detalhes (políticas e tipos de dados)
-      const accessesWithUserName = (data || []).map((access: any) => {
-        const details = accessDetails.filter((d: any) => d.access_platform_id === access.id);
-        const policies = details.filter((d: any) => d.domain_type === 'access_policy').map((d: any) => d.domain_value);
-        const dataTypes = details.filter((d: any) => d.domain_type === 'access_data_type').map((d: any) => d.domain_value);
-        
-        return {
-          ...access,
-          user_name: access.users?.name || 'Funcionário não encontrado',
-          access_policies: policies,
-          data_types: dataTypes,
-        };
-      });
-      setAccesses(accessesWithUserName as DbAccessPlatform[] || []);
-      showSuccessNotification('Acesso salvo com sucesso!');
+    } catch (error) {
+      console.error('Erro na requisição de acessos:', error);
     }
   }, [project.project_id, showSuccessNotification]);
 
@@ -1214,17 +1005,15 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     }
   }, [accesses]);
 
+  // Confirmar exclusão de acesso via Backend API
   const handleConfirmDeleteAccess = useCallback(async () => {
     if (!accessToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('access_platforms')
-        .delete()
-        .eq('id', accessToDelete.id);
+      const result = await apiClient.del(`/api/projects/${project.project_id}/accesses/${accessToDelete.id}`);
 
-      if (error) {
-        console.error('Erro ao deletar acesso:', error);
+      if (!result.success) {
+        console.error('Erro ao deletar acesso:', result.error);
         showErrorNotification('Erro ao excluir acesso. Tente novamente.');
         setIsDeleteAccessConfirmModalOpen(false);
         setAccessToDelete(null);
@@ -1241,7 +1030,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       setIsDeleteAccessConfirmModalOpen(false);
       setAccessToDelete(null);
     }
-  }, [accessToDelete, showErrorNotification, showSuccessNotification]);
+  }, [project.project_id, accessToDelete, showErrorNotification, showSuccessNotification]);
 
 
   const filteredRisks = useMemo(() => {

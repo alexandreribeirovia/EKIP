@@ -5,24 +5,15 @@ import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
 import ptBrLocale from '@fullcalendar/core/locales/pt-br';
 import Select from 'react-select';
-import { supabase } from '../lib/supabaseClient';
+import * as apiClient from '../lib/apiClient';
 import { DbUser } from '../types';
+import { FullCalendarResource, SelectOption, UserWithSkills } from '../../../shared/types';
 import EmployeeModal from '../components/EmployeeModal';
 import tippy, { followCursor, Instance as TippyInstance } from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
 import 'tippy.js/themes/light-border.css';
 
-
-
-interface FullCalendarResource {
-  id: string;
-  title: string;
-}
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
+// Tipos movidos para shared/types/index.ts: FullCalendarResource, SelectOption, UserWithSkills
 
 const customPtBrLocale = {
   ...ptBrLocale,
@@ -173,13 +164,13 @@ const Allocations = () => {
 
   const handleResourceClick = async (userId: string) => {
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('user_id', userId).single();
-      if (error) {
-        console.error("Erro ao buscar detalhes do funcionário:", error);
+      const result = await apiClient.get<DbUser>(`/api/employees/${userId}`);
+      if (!result.success) {
+        console.error("Erro ao buscar detalhes do funcionário:", result.error);
         return;
       }
-      if (data) {
-        setSelectedEmployee(data);
+      if (result.data) {
+        setSelectedEmployee(result.data);
         setIsModalOpen(true);
       }
     } catch (err: any) {
@@ -405,13 +396,13 @@ const scrollToNowFallbackDOM = () => {
       
       const fetchUsers = async () => {
         try {
-          const { data, error } = await supabase.from('users').select('*').eq('is_active', true).order('name');
-          if (error) {
-            console.error("Erro ao buscar consultores:", error);
+          const result = await apiClient.get<DbUser[]>('/api/employees?status=active');
+          if (!result.success) {
+            console.error("Erro ao buscar consultores:", result.error);
             setError("Não foi possível carregar os consultores.");
             return;
           }
-          const calendarResources = (data as DbUser[]).map(user => ({
+          const calendarResources = (result.data || []).map(user => ({
             id: user.user_id!.trim(),
             title: user.name || 'Usuário sem nome'
           }));
@@ -432,16 +423,12 @@ const scrollToNowFallbackDOM = () => {
       
       const fetchProjects = async () => {
         try {
-          const { data, error } = await supabase.rpc('get_distinct_projects');
-          if (error) {
-            console.error("Erro ao buscar lista de projetos:", error);
+          const result = await apiClient.get<SelectOption[]>('/api/allocations/projects/distinct');
+          if (!result.success) {
+            console.error("Erro ao buscar lista de projetos:", result.error);
             return;
           }
-          const projectOptions = data.map((p: { project_name: string }) => ({
-            value: p.project_name,
-            label: p.project_name,
-          }));
-          setAvailableProjects(projectOptions);
+          setAvailableProjects(result.data || []);
         } catch (err: any) {
           console.error("Erro ao buscar lista de projetos:", err);
         }
@@ -471,32 +458,18 @@ const scrollToNowFallbackDOM = () => {
       }
 
       try {
-        // Busca todos os usuários com suas skills
-        const { data, error } = await supabase
-          .from('users')
-          .select(`
-            user_id,
-            users_skill (
-              id,
-              skills (
-                id,
-                area,
-                category,
-                skill
-              )
-            )
-          `)
-          .eq('is_active', true);
+        // Busca todos os usuários com suas skills via API segura
+        const result = await apiClient.get<UserWithSkills[]>('/api/employees?status=active');
 
-        if (error) {
-          console.error("Erro ao filtrar recursos por skills:", error);
+        if (!result.success) {
+          console.error("Erro ao filtrar recursos por skills:", result.error);
           setFilteredResourcesBySkills(resources);
           return;
         }
 
         // Filtra usuários que possuem a skill pesquisada
         const filtered = resources.filter(resource => {
-          const user = (data || []).find(u => u.user_id === resource.id);
+          const user = (result.data || []).find((u: UserWithSkills) => u.user_id === resource.id);
           if (!user || !user.users_skill) return false;
           
           const userSkillsText = formatUserSkills(user.users_skill);
@@ -526,25 +499,24 @@ const scrollToNowFallbackDOM = () => {
         const startDate = new Date();
         startDate.setMonth(startDate.getMonth() - 18);
 
+        // Parâmetros para a API (sem prefixo _, o backend converte)
         const params = {
-          _consultant_ids: selectedConsultants,
-          _project_names: selectedProjects,
-          _status: statusFilter === 'Todos' ? null : (statusFilter === 'Fechado'),
-          _start_date: startDate.toISOString()
+          consultantIds: selectedConsultants,
+          projectNames: selectedProjects,
+          status: statusFilter === 'Todos' ? null : (statusFilter === 'Fechado'),
+          startDate: startDate.toISOString()
         };
 
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .rpc('get_filtered_assignments', params)
-          .select('*, tasks(*)'); 
+        const result = await apiClient.post<any[]>('/api/allocations/filtered', params);
 
-        if (assignmentsError) {
-          console.error("Erro ao buscar alocações:", assignmentsError);
+        if (!result.success) {
+          console.error("Erro ao buscar alocações:", result.error);
           setError("Não foi possível carregar as alocações.");
           return;
         }
 
         // Filter for vacation tasks if Férias filter is enabled
-        let filteredAssignments = assignmentsData || [];
+        let filteredAssignments = result.data || [];
         if (isFeriasFilter) {
           filteredAssignments = filteredAssignments.filter((assignment: any) => {
             const task = assignment.tasks;

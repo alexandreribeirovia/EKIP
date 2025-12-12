@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, RowClickedEvent } from 'ag-grid-community'; 
 import { Search, FolderOpen, FolderCheck, Layers } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import * as apiClient from '../lib/apiClient';
 import { DbProject } from '../types';
 import '../styles/main.css';
 import ProjectDetail from './ProjectDetail';
@@ -19,49 +19,19 @@ const Projects = () => {
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);
 
+  // Função para buscar dados via Backend API
   const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select(`
-        *,
-        projects_owner(
-          id,
-          created_at,
-          updated_at,
-          project_id,
-          user_id,
-          users(
-            user_id,
-            name,
-            avatar_large_url
-          )
-        )
-      `)
-      .order('name', { ascending: true });
+    try {
+      const result = await apiClient.get<DbProject[]>('/api/projects');
 
-    if (error) {
-      console.error('Erro ao buscar projetos:', error);
-    } else {
-      // Transformar os dados para incluir owners formatados
-      const projectsWithOwners = (data || []).map(project => ({
-        ...project,
-        owners: (project.projects_owner || []).map((ownerData: any) => {
-          const userData = Array.isArray(ownerData.users) && ownerData.users.length > 0 ? ownerData.users[0] : ownerData.users;
-          return {
-            id: ownerData.id,
-            created_at: ownerData.created_at,
-            updated_at: ownerData.updated_at,
-            project_id: ownerData.project_id,
-            user_id: ownerData.user_id,
-            users: userData && !Array.isArray(userData) ? {
-              user_id: userData.user_id,
-              name: userData.name,
-              avatar_large_url: userData.avatar_large_url
-            } : null
-          };
-        }).filter((owner: any) => owner.users !== null)
-      }));
-      setProjects(projectsWithOwners);
+      if (!result.success) {
+        console.error('Erro ao buscar projetos:', result.error);
+        return;
+      }
+
+      setProjects(result.data || []);
+    } catch (error) {
+      console.error('Erro na requisição:', error);
     }
   };
 

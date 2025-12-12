@@ -143,7 +143,7 @@ const ManagementDashboard = () => {
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const currentWeek = getWeekDateRange(0);
+      // currentWeek is available if needed for future features
 
       // 0. Fetch Domains for filtering (Risks & Evaluations)
       const { data: domainsData, error: domainsError } = await supabase
@@ -190,11 +190,6 @@ const ManagementDashboard = () => {
       const allProjects = projectsRes.data || [];
       const activeProjects = allProjects.filter(p => !p.is_closed);
       const activeConsultants = usersRes.data || [];
-      
-      // Filter Open Risks
-      const openRisksCount = (risksRes.data || []).filter(r => 
-        !closedRiskStatusIds.includes(r.status_id)
-      ).length;
 
       // Filter Pending Evaluations
       const pendingEvaluationsCount = (evaluationsRes.data || []).filter(e => 

@@ -5,7 +5,7 @@ import { Plus, Edit, Database, FolderTree, CheckCircle, XCircle, Copy } from 'lu
 import Select from 'react-select'
 import DomainModal from '@/components/DomainModal'
 import NotificationToast from '@/components/NotificationToast'
-import { supabase } from '@/lib/supabaseClient'
+import * as apiClient from '@/lib/apiClient'
 import { DbDomain } from '@/types'
 
 interface TypeOption {
@@ -31,29 +31,17 @@ const Domains = () => {
     setIsLoading(true)
 
     try {
-      // Buscar todos os domínios
-      const { data: domainsData, error } = await supabase
-        .from('domains')
-        .select('*')
-        .order('type')
-        .order('value')
+      // Buscar todos os domínios via API segura
+      const result = await apiClient.get<DbDomain[]>('/api/domains')
 
-      if (error) {
-        console.error('Erro ao buscar domínios:', error)
+      if (!result.success) {
+        console.error('Erro ao buscar domínios:', result.error)
         return
       }
 
-      // Criar um mapa de domínios por ID para facilitar a busca
-      const domainsMap = new Map(domainsData.map(d => [d.id, d]))
-
-      // Adicionar informações do parent a cada domínio
-      const domainsWithParent = domainsData.map(domain => ({
-        ...domain,
-        parent: domain.parent_id ? domainsMap.get(domain.parent_id) : null
-      }))
-
-      setDomains(domainsWithParent)
-      applyFilters(domainsWithParent, searchText, selectedTypes, filterStatus)
+      // O backend já retorna os domínios com parent preenchido
+      setDomains(result.data || [])
+      applyFilters(result.data || [], searchText, selectedTypes, filterStatus)
     } catch (err) {
       console.error('Erro ao buscar domínios:', err)
     } finally {

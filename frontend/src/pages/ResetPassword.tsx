@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/stores/authStore'
 import { Eye, EyeOff, Lock, AlertCircle, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
@@ -13,15 +12,23 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [, setHasValidSession] = useState(false)
   const navigate = useNavigate()
-  const { session } = useAuthStore()
 
   useEffect(() => {
     // This page should only be accessible during a password recovery flow.
-    if (!session || session.user.aud !== 'authenticated') {
-        // navigate('/login')
+    // Check if there's a valid Supabase recovery session
+    const checkRecoverySession = async () => {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) {
+        // No session - redirect to login
+        navigate('/login')
+      } else {
+        setHasValidSession(true)
+      }
     }
-  }, [session, navigate])
+    void checkRecoverySession()
+  }, [navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

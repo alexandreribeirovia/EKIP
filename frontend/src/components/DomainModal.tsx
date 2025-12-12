@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import * as apiClient from '../lib/apiClient';
 import Select from 'react-select';
 import { DbDomain } from '../types';
 
@@ -39,24 +39,14 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
 
   const loadParentDomains = async () => {
     try {
-      const { data, error } = await supabase
-        .from('domains')
-        .select('id, type, value')
-        .eq('is_active', true)
-        .order('type')
-        .order('value');
+      const result = await apiClient.get<SelectOption[]>('/api/domains/parents');
 
-      if (error) {
-        console.error('Erro ao carregar domínios pais:', error);
+      if (!result.success) {
+        console.error('Erro ao carregar domínios pais:', result.error);
         return;
       }
 
-      const options = (data || []).map(d => ({
-        value: d.id,
-        label: `${d.type} - ${d.value}`
-      }));
-
-      setParentDomainOptions(options);
+      setParentDomainOptions(result.data || []);
     } catch (err) {
       console.error('Erro ao carregar domínios pais:', err);
     }
@@ -165,22 +155,21 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
 
     setIsSubmitting(true);
     try {
-      // Verificar se já existe um domínio com o mesmo type e tag
-      const { data: existingDomain, error: checkError } = await supabase
-        .from('domains')
-        .select('id, type, tag')
-        .eq('type', type.trim())
-        .eq('tag', tag.trim())
-        .maybeSingle();
+      // Verificar se já existe um domínio com o mesmo type e tag via API
+      const checkResult = await apiClient.post<{ exists: boolean; existingDomain: any }>('/api/domains/check-duplicate', {
+        type: type.trim(),
+        tag: tag.trim(),
+        excludeId: domainData?.id
+      });
 
-      if (checkError) {
-        console.error('Erro ao verificar domínio existente:', checkError);
+      if (!checkResult.success) {
+        console.error('Erro ao verificar domínio existente:', checkResult.error);
         setError('Erro ao verificar domínio existente. Tente novamente.');
         return;
       }
 
-      // Se encontrou um domínio e não está editando o mesmo
-      if (existingDomain && existingDomain.id !== domainData?.id) {
+      // Se encontrou um domínio duplicado
+      if (checkResult.data?.exists) {
         setError(`Já existe um domínio com tipo "${type}" e tag "${tag}". Por favor, use uma tag diferente.`);
         return;
       }
@@ -195,24 +184,19 @@ const DomainModal = ({ isOpen, onClose, onSuccess, domainData = null }: DomainMo
       };
 
       if (domainData && domainData.id > 0) {
-        // Atualizar domínio existente
-        const { error: updateError } = await supabase
-          .from('domains')
-          .update(domainPayload)
-          .eq('id', domainData.id);
+        // Atualizar domínio existente via API
+        const updateResult = await apiClient.put(`/api/domains/${domainData.id}`, domainPayload);
 
-        if (updateError) {
-          setError(updateError.message || 'Erro ao atualizar domínio. Tente novamente.');
+        if (!updateResult.success) {
+          setError(updateResult.error?.message || 'Erro ao atualizar domínio. Tente novamente.');
           return;
         }
       } else {
-        // Criar novo domínio
-        const { error: insertError } = await supabase
-          .from('domains')
-          .insert(domainPayload);
+        // Criar novo domínio via API
+        const createResult = await apiClient.post('/api/domains', domainPayload);
 
-        if (insertError) {
-          setError(insertError.message || 'Erro ao criar domínio. Tente novamente.');
+        if (!createResult.success) {
+          setError(createResult.error?.message || 'Erro ao criar domínio. Tente novamente.');
           return;
         }
       }

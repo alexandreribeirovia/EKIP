@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, ThumbsUp, MessageCircle, Trophy, TrendingUp, Target } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import * as apiClient from '../lib/apiClient';
 import Select from 'react-select';
 import { useAuthStore } from '../stores/authStore';
 import PDIModal from './PDIModal';
@@ -73,25 +73,12 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
       
       if (feedbackToEdit) {
         const checkPDI = async () => {
-          const { data, error } = await supabase
-            .from('pdi')
-            .select('id')
-            .eq('feedback_id', feedbackToEdit.id)
-            .limit(1);
+          const result = await apiClient.get<{ has_pdi: boolean }>(`/api/feedbacks/${feedbackToEdit.id}/pdi`);
 
-          if (error) {
+          if (!result.success) {
             setHasLinkedPDI(false);
           } else {
-            const hasPDI = data && data.length > 0;
-            setHasLinkedPDI(hasPDI);
-            
-            // Se existe PDI vinculado mas o campo is_pdi está false, atualiza
-            if (hasPDI && !feedbackToEdit.is_pdi) {
-              await supabase
-                .from('feedbacks')
-                .update({ is_pdi: true })
-                .eq('id', feedbackToEdit.id);
-            }
+            setHasLinkedPDI(result.data?.has_pdi || false);
           }
         };
         void checkPDI();
@@ -125,18 +112,14 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
   const fetchUsers = async () => {
     try {
       // Busca todos os usuários ativos para "Feedback para"
-      const { data: allUsers, error: usersError } = await supabase
-        .from('users')
-        .select('user_id, name, position')
-        .eq('is_active', true)
-        .order('name');
+      const result = await apiClient.get<{ user_id: string; name: string; position: string }[]>('/api/lookups/users');
 
-      if (usersError) {
+      if (!result.success) {
         setError('Erro ao carregar lista de usuários');
         return;
       }
 
-      const userOptions: UserOption[] = (allUsers || []).map((user) => ({
+      const userOptions: UserOption[] = (result.data || []).map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -203,26 +186,18 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
         private_comment: privateComment.trim() || null,
       };
 
-      let rpcError;
+      let result;
 
       if (feedbackToEdit) {
         // Update
-        const { error } = await supabase
-          .from('feedbacks')
-          .update(feedbackDataPayload)
-          .eq('id', feedbackToEdit.id);
-        rpcError = error;
+        result = await apiClient.patch(`/api/feedbacks/${feedbackToEdit.id}`, feedbackDataPayload);
       } else {
         // Insert
-        const { error } = await supabase
-          .from('feedbacks')
-          .insert(feedbackDataPayload);
-        rpcError = error;
+        result = await apiClient.post('/api/feedbacks', feedbackDataPayload);
       }
 
-
-      if (rpcError) {
-        setError(rpcError.message || 'Erro ao salvar feedback. Tente novamente.');
+      if (!result.success) {
+        setError(result.error?.message || 'Erro ao salvar feedback. Tente novamente.');
         return;
       }
 
@@ -420,12 +395,9 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
         onSuccess={async () => {
           setHasLinkedPDI(true);
           
-          // Atualiza o campo is_pdi na tabela feedbacks
+          // Atualiza o campo is_pdi na tabela feedbacks via API
           if (feedbackToEdit) {
-            await supabase
-              .from('feedbacks')
-              .update({ is_pdi: true })
-              .eq('id', feedbackToEdit.id);
+            await apiClient.patch(`/api/feedbacks/${feedbackToEdit.id}/pdi`, { is_pdi: true });
           }
           
           setIsPDIModalOpen(false);

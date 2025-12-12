@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 import { X, FileText } from 'lucide-react';
 import { EvaluationData } from '../types';
 
@@ -42,34 +42,27 @@ const EvaluationModelModal = ({ isOpen, onClose, onSuccess, evaluationToEdit }: 
     try {
       if (evaluationToEdit) {
         // Atualizar avaliação existente
-        const { error } = await supabase
-          .from('evaluations_model')
-          .update({
-            name: name.trim(),
-            description: description.trim() || null,
-            is_active: isActive,
-          })
-          .eq('id', evaluationToEdit.id);
+        const response = await apiClient.put(`/api/evaluations/${evaluationToEdit.id}`, {
+          name: name.trim(),
+          description: description.trim() || null,
+          is_active: isActive,
+        });
 
-        if (error) {
-          console.error('Erro ao atualizar avaliação:', error);
+        if (!response.success) {
+          console.error('Erro ao atualizar avaliação:', response.error);
           alert('Erro ao atualizar avaliação. Tente novamente.');
           return;
         }
       } else {
         // Criar nova avaliação
-        const { error } = await supabase
-          .from('evaluations_model')
-          .insert([
-            {
-              name: name.trim(),
-              description: description.trim() || null,
-              is_active: isActive,
-            }
-          ]);
+        const response = await apiClient.post('/api/evaluations', {
+          name: name.trim(),
+          description: description.trim() || null,
+          is_active: isActive,
+        });
 
-        if (error) {
-          console.error('Erro ao criar avaliação:', error);
+        if (!response.success) {
+          console.error('Erro ao criar avaliação:', response.error);
           alert('Erro ao criar avaliação. Tente novamente.');
           return;
         }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/stores/authStore'
 import { X, User, Mail, Shield, KeyRound, UserCheck, UserX } from 'lucide-react'
 import NotificationToast from './NotificationToast'
+import * as apiClient from '../lib/apiClient'
 
 interface UserModalProps {
   isOpen: boolean
@@ -28,7 +28,6 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
-  const { session } = useAuthStore()
 
   const isEditMode = !!userId
 
@@ -51,30 +50,16 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
     if (!userId) return
 
     try {
-      const token = session?.access_token
-      
-      if (!token) {
-        setError('Usuário não autenticado')
-        return
-      }
-
       // Buscar lista de usuários e filtrar pelo ID
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
+      const result = await apiClient.get<{users: any[]}>(`/api/auth/users`)
 
-      if (!response.ok) {
+      if (!result.success) {
         console.error('Erro ao buscar usuário')
         setError('Erro ao carregar dados do usuário')
         return
       }
 
-      const result = await response.json()
-      
-      if (result.success && result.data.users) {
+      if (result.data?.users) {
         const user = result.data.users.find((u: any) => u.id === userId)
         
         if (user) {
@@ -107,31 +92,16 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
     setIsLoading(true)
 
     try {
-      const token = session?.access_token
-      
-      if (!token) {
-        setError('Usuário não autenticado')
-        return
-      }
-
       if (isEditMode && userId) {
         // Atualizar usuário existente
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users/${userId}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            role: formData.role,
-            status: formData.status,
-          }),
+        const result = await apiClient.patch(`/api/auth/users/${userId}`, {
+          name: formData.name,
+          role: formData.role,
+          status: formData.status,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          const message = errorData.error?.message || 'Erro ao atualizar usuário';
+        if (!result.success) {
+          const message = result.error?.message || 'Erro ao atualizar usuário';
           console.error('Erro ao salvar usuário:', new Error(message));
           setError(message);
           return;
@@ -140,22 +110,14 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
         setNotification({ type: 'success', message: 'Usuário atualizado com sucesso!' })
       } else {
         // Criar novo usuário
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            name: formData.name,
-            role: formData.role,
-          }),
+        const result = await apiClient.post(`/api/auth/users`, {
+          email: formData.email,
+          name: formData.name,
+          role: formData.role,
         })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          const message = errorData.error?.message || 'Erro ao criar usuário';
+        if (!result.success) {
+          const message = result.error?.message || 'Erro ao criar usuário';
           console.error('Erro ao salvar usuário:', new Error(message));
           setError(message);
           return;
@@ -188,25 +150,10 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
     setIsLoading(true)
 
     try {
-      const token = session?.access_token
-      
-      if (!token) {
-        setError('Usuário não autenticado')
-        setIsLoading(false)
-        return
-      }
+      const result = await apiClient.post(`/api/auth/users/${userId}/reset-password`)
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users/${userId}/reset-password`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        const message = errorData.error?.message || 'Erro ao enviar e-mail de redefinição';
+      if (!result.success) {
+        const message = result.error?.message || 'Erro ao enviar e-mail de redefinição';
         console.error('Erro ao redefinir senha:', new Error(message));
         setError(message);
         return;
@@ -236,27 +183,12 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
     setIsLoading(true)
 
     try {
-      const token = session?.access_token
-      
-      if (!token) {
-        setError('Usuário não autenticado')
-        return
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: newStatus,
-        }),
+      const result = await apiClient.patch(`/api/auth/users/${userId}`, {
+        status: newStatus,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        const message = errorData.error?.message || 'Erro ao alterar status';
+      if (!result.success) {
+        const message = result.error?.message || 'Erro ao alterar status';
         console.error('Erro ao alterar status:', new Error(message));
         setError(message);
         return;

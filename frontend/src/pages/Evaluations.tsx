@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import { apiClient } from '../lib/apiClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
@@ -75,18 +75,14 @@ const Evaluations = () => {
   // Buscar consultores para o filtro
   const fetchConsultants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get<{ user_id: string; name: string }[]>('/api/lookups/users');
 
-      if (error) {
-        console.error('Erro ao buscar consultores:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar consultores:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (data || []).map((user) => ({
+      const options: ConsultantOption[] = response.data.map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -100,24 +96,14 @@ const Evaluations = () => {
   // Buscar gestores (usuários com posição contendo "Gestor")
   const fetchManagers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name, position')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get<{ user_id: string; name: string }[]>('/api/lookups/managers');
 
-      if (error) {
-        console.error('Erro ao buscar gestores:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar gestores:', response.error);
         return;
       }
 
-      // Filtrar gestores pela posição (deve conter "Gestor")
-      const managersList = (data || []).filter((user) => {
-        const position = (user.position || '').toLowerCase();
-        return position.includes('gestor');
-      });
-
-      const options: ConsultantOption[] = managersList.map((user) => ({
+      const options: ConsultantOption[] = response.data.map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -131,19 +117,14 @@ const Evaluations = () => {
   // Buscar status disponíveis
   const fetchStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from('domains')
-        .select('id, value')
-        .eq('type', 'evaluation_status')
-        .eq('is_active', true)
-        .order('value');
+      const response = await apiClient.get<{ id: number; value: string }[]>('/api/lookups/evaluation-statuses');
 
-      if (error) {
-        console.error('Erro ao buscar status:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar status:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (data || []).map((status) => ({
+      const options: ConsultantOption[] = response.data.map((status) => ({
         value: status.id.toString(),
         label: status.value,
       }));
@@ -163,121 +144,31 @@ const Evaluations = () => {
     try {
       const dateRange = getDateRange();
       
-      let query = supabase
-        .from('evaluations')
-        .select(`
-          *,
-          is_pdi,
-          evaluations_projects (
-            project_id
-          ),
-          evaluations_questions_reply (
-            score,
-            weight
-          )
-        `)
-        .gte('updated_at', dateRange.start)
-        .lte('updated_at', dateRange.end + 'T23:59:59')
-        .order('updated_at', { ascending: false });
-
-      // Filtrar por consultores selecionados
+      // Construir parâmetros de query
+      const params = new URLSearchParams();
+      params.append('start_date', dateRange.start);
+      params.append('end_date', dateRange.end);
+      
       if (selectedConsultants.length > 0) {
-        const selectedIds = selectedConsultants.map(c => c.value);
-        query = query.in('user_id', selectedIds);
+        params.append('consultant_ids', selectedConsultants.map(c => c.value).join(','));
       }
-
-      // Filtrar por gestores selecionados
+      
       if (selectedManagers.length > 0) {
-        const selectedIds = selectedManagers.map(m => m.value);
-        query = query.in('owner_id', selectedIds);
+        params.append('manager_ids', selectedManagers.map(m => m.value).join(','));
       }
-
-      // Filtrar por status selecionados
+      
       if (selectedStatus.length > 0) {
-        const selectedIds = selectedStatus.map(s => parseInt(s.value));
-        query = query.in('status_id', selectedIds);
+        params.append('status_ids', selectedStatus.map(s => s.value).join(','));
       }
 
-      const { data, error } = await query;
+      const response = await apiClient.get<EmployeeEvaluationData[]>(`/api/employee-evaluations?${params.toString()}`);
 
-      if (error) {
-        console.error('Erro ao buscar avaliações:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar avaliações:', response.error);
         return;
       }
 
-      // Buscar todos os status da tabela domains
-      const { data: statusData, error: statusError } = await supabase
-        .from('domains')
-        .select('id, value')
-        .eq('type', 'evaluation_status');
-
-      if (statusError) {
-        console.error('Erro ao buscar status:', statusError);
-      }
-
-      // Buscar todos os projetos para fazer o join com os nomes
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('project_id, name');
-
-      if (projectsError) {
-        console.error('Erro ao buscar projetos:', projectsError);
-      }
-
-      // Criar um mapa de status para facilitar o join
-      const statusMap = new Map();
-      if (statusData) {
-        statusData.forEach((status) => {
-          statusMap.set(status.id, status);
-        });
-      }
-
-      // Criar um mapa de projetos para facilitar o join
-      const projectsMap = new Map();
-      if (projectsData) {
-        projectsData.forEach((project) => {
-          projectsMap.set(project.project_id, project);
-        });
-      }
-
-      // Fazer o join manual entre evaluations, domains e projects
-      const evaluationsWithStatus = (data || []).map((evaluation) => {
-        // Enriquecer os projetos com os nomes
-        const projectsWithNames = (evaluation.evaluations_projects || []).map((ep: any) => ({
-          ...ep,
-          project_name: projectsMap.get(ep.project_id)?.name || 'Projeto não encontrado',
-        }));
-
-        // Calcular média ponderada dos scores
-        let averageScore = null;
-        const replies = evaluation.evaluations_questions_reply || [];
-        
-        if (replies.length > 0) {
-          const validReplies = replies.filter((r: any) => r.score !== null && r.weight !== null);
-          
-          if (validReplies.length > 0) {
-            const totalWeightedScore = validReplies.reduce(
-              (sum: number, r: any) => sum + (r.score * r.weight),
-              0
-            );
-            const totalWeight = validReplies.reduce(
-              (sum: number, r: any) => sum + r.weight,
-              0
-            );
-            
-            averageScore = totalWeight > 0 ? totalWeightedScore / totalWeight : null;
-          }
-        }
-
-        return {
-          ...evaluation,
-          status: evaluation.status_id ? statusMap.get(evaluation.status_id) : null,
-          evaluations_projects: projectsWithNames,
-          average_score: averageScore,
-        };
-      });
-
-      setEvaluations(evaluationsWithStatus);
+      setEvaluations(response.data);
     } catch (err) {
       console.error('Erro ao buscar avaliações:', err);
     } finally {
@@ -317,38 +208,10 @@ const Evaluations = () => {
     if (!evaluationToDelete) return;
 
     try {
-      // 1. Deletar as respostas na tabela evaluations_questions_reply
-      const { error: replyError } = await supabase
-        .from('evaluations_questions_reply')
-        .delete()
-        .eq('evaluation_id', evaluationToDelete.id);
+      const response = await apiClient.delete(`/api/employee-evaluations/${evaluationToDelete.id}`);
 
-      if (replyError) {
-        console.error('Erro ao deletar respostas da avaliação:', replyError);
-        alert('Erro ao deletar respostas da avaliação. Tente novamente.');
-        return;
-      }
-
-      // 2. Deletar os vínculos na tabela evaluations_projects
-      const { error: linkError } = await supabase
-        .from('evaluations_projects')
-        .delete()
-        .eq('evaluation_id', evaluationToDelete.id);
-
-      if (linkError) {
-        console.error('Erro ao deletar vínculos da avaliação:', linkError);
-        alert('Erro ao deletar vínculos da avaliação. Tente novamente.');
-        return;
-      }
-
-      // 3. Deletar a avaliação principal
-      const { error } = await supabase
-        .from('evaluations')
-        .delete()
-        .eq('id', evaluationToDelete.id);
-
-      if (error) {
-        console.error('Erro ao deletar avaliação:', error);
+      if (!response.success) {
+        console.error('Erro ao deletar avaliação:', response.error);
         alert('Erro ao deletar avaliação. Tente novamente.');
         return;
       }

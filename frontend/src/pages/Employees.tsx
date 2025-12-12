@@ -4,7 +4,7 @@ import { AgGridReact } from 'ag-grid-react'
 import { ColDef, RowClickedEvent } from 'ag-grid-community'
 import { Search, User, Users, UserCheck, UserX } from 'lucide-react'
 import { DbUser } from '../types'
-import { supabase } from '../lib/supabaseClient'; 
+import * as apiClient from '../lib/apiClient'
 import '../styles/main.css';
 
 const Employees = () => {
@@ -17,28 +17,19 @@ const Employees = () => {
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);
 
-  // Função para buscar dados do Supabase
+  // Função para buscar dados via Backend API
   const fetchEmployees = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select(`
-        *,
-        users_skill (
-          id,
-          skills (
-            id,
-            area,
-            category,
-            skill
-          )
-        )
-      `)
-      .order('name', { ascending: true });
+    try {
+      const result = await apiClient.get<DbUser[]>(`/api/employees`);
 
-    if (error) {
-      console.error('Erro ao buscar funcionários:', error);
-    } else {
-      setEmployees(data || []);
+      if (!result.success) {
+        console.error('Erro ao buscar funcionários:', result.error);
+        return;
+      }
+
+      setEmployees(result.data || []);
+    } catch (error) {
+      console.error('Erro na requisição:', error);
     }
   };
 

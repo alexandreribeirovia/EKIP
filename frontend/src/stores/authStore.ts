@@ -1,11 +1,26 @@
+/**
+ * Auth Store - Gerenciamento de autenticação baseada em Sessão
+ * 
+ * Este store gerencia a autenticação usando sessionId em vez de JWT.
+ * Os tokens do Supabase ficam criptografados no banco, nunca no frontend.
+ * 
+ * Fluxo:
+ * 1. Login via Backend -> Recebe sessionId no body e em cookie httpOnly
+ * 2. sessionId armazenado no Zustand (persiste em localStorage)
+ * 3. Requisições enviam sessionId via header X-Session-Id
+ * 4. Backend descriptografa tokens e aplica RLS
+ */
+
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabaseClient'
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
+import { configureApiClient } from '@/lib/apiClient'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 interface User {
   id: string
-  runrun_user_id: string
+  runrun_user_id?: string
   name: string
   email: string
   role: string
@@ -15,136 +30,253 @@ interface User {
 
 interface AuthState {
   user: User | null
-  session: Session | null
+  sessionId: string | null
   isAuthenticated: boolean
   loading: boolean
-  login: (user: User, session: Session) => void
+  
+  // Actions
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
   updateUser: (user: Partial<User>) => void
   initializeAuth: () => Promise<void>
-  setSession: (session: Session | null, supabaseUser: SupabaseUser | null) => void
+  setSessionId: (sessionId: string | null) => void
+  refreshSession: () => Promise<boolean>
   fetchUserProfile: (userId: string) => Promise<void>
-}
-
-/**
- * Mapeia o usuário do Supabase para o formato interno da aplicação
- */
-const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
-  return {
-    id: supabaseUser.id,
-    email: supabaseUser.email || '',
-    name: supabaseUser.user_metadata?.name || supabaseUser.email || 'Usuário',
-    role: supabaseUser.user_metadata?.role || 'user',
-    avatar: supabaseUser.user_metadata?.avatar,
-    runrun_user_id: supabaseUser.user_metadata?.runrun_user_id || '',
-  }
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
-      session: null,
+      sessionId: null,
       isAuthenticated: false,
       loading: true,
 
-      login: (user: User, session: Session) => {
-        set({ user, session, isAuthenticated: true, loading: false });
-        void get().fetchUserProfile(user.id);
+      /**
+       * Faz login via Backend API
+       * Backend autentica com Supabase e retorna sessionId
+       */
+      login: async (email: string, password: string) => {
+        try {
+          const response = await fetch(`${API_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // Para receber o cookie httpOnly
+            body: JSON.stringify({ email, password }),
+          })
+
+          const result = await response.json()
+
+          if (!result.success) {
+            return { 
+              success: false, 
+              error: result.error?.message || 'Erro ao fazer login' 
+            }
+          }
+
+          const { user, sessionId } = result.data
+
+          // Atualiza o estado
+          set({ 
+            user, 
+            sessionId, 
+            isAuthenticated: true, 
+            loading: false 
+          })
+
+          // Busca dados adicionais do perfil
+          void get().fetchUserProfile(user.id)
+
+          return { success: true }
+        } catch (error) {
+          console.error('Login error:', error)
+          return { 
+            success: false, 
+            error: 'Erro de conexão. Verifique sua internet.' 
+          }
+        }
       },
 
       /**
-       * Inicializa a autenticação verificando sessão existente de forma segura
+       * Faz logout - limpa estado local e chama backend
+       */
+      logout: async () => {
+        const { sessionId } = get()
+
+        // Limpa o estado local primeiro
+        set({
+          user: null,
+          sessionId: null,
+          isAuthenticated: false,
+        })
+
+        // Tenta chamar o backend para limpar sessão
+        if (sessionId) {
+          try {
+            await fetch(`${API_URL}/api/auth/logout`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Id': sessionId,
+              },
+              credentials: 'include', // Para limpar o cookie
+            })
+          } catch (error) {
+            console.error('Logout error:', error)
+            // Ignora erro - o estado local já foi limpo
+          }
+        }
+      },
+
+      /**
+       * Inicializa a autenticação verificando se há sessão salva
        */
       initializeAuth: async () => {
         try {
-          // Apenas tenta obter a sessão. Se existir, atualiza o estado.
-          const { data: { session } } = await supabase.auth.getSession()
+          const { sessionId, user } = get()
 
-          if (session?.user) {
-            const user = mapSupabaseUser(session.user)
-            set({
-              user,
-              session,
-              isAuthenticated: true,
+          // Configura o apiClient com os callbacks
+          configureApiClient({
+            getSessionId: () => get().sessionId,
+            setSessionId: (id) => get().setSessionId(id),
+            onAuthError: () => {
+              // Quando a sessão expira e não consegue renovar
+              console.log('[authStore] Sessão expirada, fazendo logout')
+              void get().logout()
+            },
+          })
+
+          // Se tem sessionId salvo, verifica se ainda é válido
+          if (sessionId && user) {
+            // Tenta chamar /api/auth/me para validar a sessão
+            const response = await fetch(`${API_URL}/api/auth/me`, {
+              headers: {
+                'X-Session-Id': sessionId,
+              },
+              credentials: 'include',
             })
-            void get().fetchUserProfile(user.id)
+
+            if (response.ok) {
+              // Sessão válida, mantém o estado
+              set({ isAuthenticated: true, loading: false })
+              void get().fetchUserProfile(user.id)
+              return
+            }
+
+            // Sessão expirada, tenta renovar
+            const refreshed = await get().refreshSession()
+            
+            if (refreshed) {
+              set({ isAuthenticated: true, loading: false })
+              return
+            }
+
+            // Não conseguiu renovar, limpa o estado
+            set({
+              user: null,
+              sessionId: null,
+              isAuthenticated: false,
+            })
           }
         } catch (error) {
           console.error('Erro ao inicializar autenticação:', error)
         } finally {
-          // Garante que o estado de loading seja finalizado
           set({ loading: false })
         }
       },
 
       /**
-       * Busca dados adicionais do perfil do usuário na tabela users
+       * Tenta renovar a sessão usando o refresh token (cookie)
        */
-      fetchUserProfile: async (userId: string) => {
+      refreshSession: async () => {
         try {
-          console.log('Fetching user profile for:', userId);
+          const response = await fetch(`${API_URL}/api/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include', // Envia o cookie httpOnly
+            headers: { 'Content-Type': 'application/json' },
+          })
 
-          // Tenta buscar primeiro pelo user_id
-          const { data: dataByUserId } = await supabase
-            .from('users')
-            .select('avatar_large_url')
-            .eq('user_id', userId)
-            .maybeSingle()
-
-          if (dataByUserId?.avatar_large_url) {
-            console.log('Found avatar by user_id:', dataByUserId.avatar_large_url);
-            set((state) => ({
-              user: state.user ? { ...state.user, avatar_large_url: dataByUserId.avatar_large_url || undefined } : null,
-            }))
-            return;
+          if (!response.ok) {
+            return false
           }
 
-          // Se não encontrar por user_id, tenta pelo email
-          const currentUserEmail = get().user?.email;
-          if (currentUserEmail) {
-            console.log('Fetching user profile by email:', currentUserEmail);
-            const { data: dataByEmail } = await supabase
-              .from('users')
-              .select('avatar_large_url')
-              .eq('email', currentUserEmail)
-              .maybeSingle()
+          const result = await response.json()
 
-            if (dataByEmail?.avatar_large_url) {
-              console.log('Found avatar by email:', dataByEmail.avatar_large_url);
-              set((state) => ({
-                user: state.user ? { ...state.user, avatar_large_url: dataByEmail.avatar_large_url || undefined } : null,
-              }))
-              return;
+          if (result.success && result.data?.sessionId) {
+            set({ sessionId: result.data.sessionId })
+            if (result.data.user) {
+              set({ user: result.data.user })
             }
+            return true
           }
 
-          console.log('No avatar found in users table');
-
+          return false
         } catch (error) {
-          console.error('Erro ao buscar perfil do usuário:', error)
+          console.error('Refresh session error:', error)
+          return false
         }
       },
 
       /**
-       * Faz logout e limpa a sessão
+       * Define o session ID
        */
-      logout: async () => {
+      setSessionId: (sessionId: string | null) => {
+        set({ sessionId })
+      },
+
+      /**
+       * Busca dados adicionais do perfil do usuário na tabela users
+       * Ainda usa Supabase diretamente (será migrado posteriormente)
+       */
+      fetchUserProfile: async (userId: string) => {
         try {
-          await supabase.auth.signOut()
-          set({
-            user: null,
-            session: null,
-            isAuthenticated: false,
-          })
+          console.log('Fetching user profile for:', userId)
+
+          // Tenta buscar primeiro pelo user_id
+          const { data: dataByUserId } = await supabase
+            .from('users')
+            .select('avatar_large_url, runrun_user_id')
+            .eq('user_id', userId)
+            .maybeSingle()
+
+          if (dataByUserId) {
+            console.log('Found profile by user_id:', dataByUserId)
+            set((state) => ({
+              user: state.user ? { 
+                ...state.user, 
+                avatar_large_url: dataByUserId.avatar_large_url || undefined,
+                runrun_user_id: dataByUserId.runrun_user_id || undefined,
+              } : null,
+            }))
+            return
+          }
+
+          // Se não encontrar por user_id, tenta pelo email
+          const currentUserEmail = get().user?.email
+          if (currentUserEmail) {
+            console.log('Fetching user profile by email:', currentUserEmail)
+            const { data: dataByEmail } = await supabase
+              .from('users')
+              .select('avatar_large_url, runrun_user_id')
+              .eq('email', currentUserEmail)
+              .maybeSingle()
+
+            if (dataByEmail) {
+              console.log('Found profile by email:', dataByEmail)
+              set((state) => ({
+                user: state.user ? { 
+                  ...state.user, 
+                  avatar_large_url: dataByEmail.avatar_large_url || undefined,
+                  runrun_user_id: dataByEmail.runrun_user_id || undefined,
+                } : null,
+              }))
+              return
+            }
+          }
+
+          console.log('No additional profile data found in users table')
         } catch (error) {
-          console.error('Logout error:', error)
-          // Mesmo com erro, limpa o estado local
-          set({
-            user: null,
-            session: null,
-            isAuthenticated: false,
-          })
+          console.error('Erro ao buscar perfil do usuário:', error)
         }
       },
 
@@ -155,52 +287,14 @@ export const useAuthStore = create<AuthState>()(
         set((state) => ({
           user: state.user ? { ...state.user, ...userData } : null,
         })),
-
-      /**
-       * Define a sessão manualmente (usado por listeners)
-       */
-      setSession: (session: Session | null, supabaseUser: SupabaseUser | null) => {
-        if (session && supabaseUser) {
-          const user = mapSupabaseUser(supabaseUser)
-          set({
-            user,
-            session,
-            isAuthenticated: true
-          })
-          void get().fetchUserProfile(user.id)
-        } else {
-          set({
-            user: null,
-            session: null,
-            isAuthenticated: false
-          })
-        }
-      },
     }),
     {
-      name: 'auth-storage',
+      name: 'ekip-auth-storage',
       partialize: (state) => ({
         user: state.user,
-        session: state.session,
+        sessionId: state.sessionId,
         isAuthenticated: state.isAuthenticated,
       }),
     }
   )
 )
-
-// Listener para mudanças de autenticação
-supabase.auth.onAuthStateChange((event, session) => {
-  const store = useAuthStore.getState()
-
-  if (event === 'SIGNED_IN' && session) {
-    store.setSession(session, session.user)
-  } else if (event === 'SIGNED_OUT') {
-    store.setSession(null, null)
-  } else if (event === 'TOKEN_REFRESHED' && session) {
-    store.setSession(session, session.user)
-  } else if (event === 'USER_UPDATED' && session) {
-    store.setSession(session, session.user)
-  } else if (event === 'PASSWORD_RECOVERY' && session) {
-    store.setSession(session, session.user)
-  }
-})

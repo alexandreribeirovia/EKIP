@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { apiClient } from '@/lib/apiClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
@@ -84,18 +84,14 @@ const PDI = () => {
   // Buscar consultores para o filtro
   const fetchConsultants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get('/api/lookups/users');
 
-      if (error) {
-        console.error('Erro ao buscar consultores:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar consultores:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (data || []).map((user) => ({
+      const options: ConsultantOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -109,24 +105,14 @@ const PDI = () => {
   // Buscar gestores (usuários com posição contendo "Gestor")
   const fetchManagers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name, position')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get('/api/lookups/managers');
 
-      if (error) {
-        console.error('Erro ao buscar gestores:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar gestores:', response.error);
         return;
       }
 
-      // Filtrar gestores pela posição (deve conter "Gestor")
-      const managersList = (data || []).filter((user) => {
-        const position = (user.position || '').toLowerCase();
-        return position.includes('gestor');
-      });
-
-      const options: ConsultantOption[] = managersList.map((user) => ({
+      const options: ConsultantOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -140,12 +126,10 @@ const PDI = () => {
   // Buscar status disponíveis
   const fetchStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from('domains')
-        .select('id, value')
-        .eq('type', 'pdi_status')
-        .eq('is_active', true)
-        .order('value');
+      const response = await apiClient.get('/api/domains?type=pdi_status&is_active=true');
+
+      const error = !response.success;
+      const data = response.data;
 
       if (error) {
         console.error('Erro ao buscar status:', error);
@@ -172,86 +156,38 @@ const PDI = () => {
     try {
       const dateRange = getDateRange();
       
-      // Filtrar por data de atualização (updated_at), não por período do PDI
-      let query = supabase
-        .from('pdi')
-        .select(`*`)
-        .gte('updated_at', dateRange.start)
-        .lte('updated_at', dateRange.end + 'T23:59:59')
-        .order('updated_at', { ascending: false });
+      // Montar query params para a API
+      const queryParams = new URLSearchParams({
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+      });
 
       // Filtrar por consultores selecionados
       if (selectedConsultants.length > 0) {
         const selectedIds = selectedConsultants.map(c => c.value);
-        query = query.in('user_id', selectedIds);
+        queryParams.append('consultantIds', selectedIds.join(','));
       }
 
       // Filtrar por gestores selecionados
       if (selectedManagers.length > 0) {
         const selectedIds = selectedManagers.map(m => m.value);
-        query = query.in('owner_id', selectedIds);
+        queryParams.append('managerIds', selectedIds.join(','));
       }
 
       // Filtrar por status selecionados
       if (selectedStatus.length > 0) {
-        const selectedIds = selectedStatus.map(s => parseInt(s.value));
-        query = query.in('status_id', selectedIds);
+        const selectedIds = selectedStatus.map(s => s.value);
+        queryParams.append('statusIds', selectedIds.join(','));
       }
 
-      const { data, error } = await query;
+      const response = await apiClient.get(`/api/pdi?${queryParams.toString()}`);
 
-      if (error) {
-        console.error('Erro ao buscar PDIs:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar PDIs:', response.error);
         return;
       }
 
-      // Buscar todos os status da tabela domains
-      const { data: statusData, error: statusError } = await supabase
-        .from('domains')
-        .select('id, value')
-        .eq('type', 'pdi_status');
-
-      if (statusError) {
-        console.error('Erro ao buscar status:', statusError);
-      }
-
-      // Criar um mapa de status para facilitar o join
-      const statusMap = new Map();
-      if (statusData) {
-        statusData.forEach((status) => {
-          statusMap.set(status.id, status);
-        });
-      }
-
-      // Buscar a quantidade de competências de cada PDI
-      const pdiIds = (data || []).map(pdi => pdi.id);
-      let competencyCounts = new Map();
-      
-      if (pdiIds.length > 0) {
-        const { data: itemsData, error: itemsError } = await supabase
-          .from('pdi_items')
-          .select('pdi_id')
-          .in('pdi_id', pdiIds);
-        
-        if (!itemsError && itemsData) {
-          // Contar quantos itens cada PDI tem
-          itemsData.forEach((item) => {
-            const count = competencyCounts.get(item.pdi_id) || 0;
-            competencyCounts.set(item.pdi_id, count + 1);
-          });
-        }
-      }
-
-      // Fazer o join manual entre pdi e domains, e adicionar a quantidade de competências
-      const pdisWithStatus = (data || []).map((pdi) => {
-        return {
-          ...pdi,
-          status: pdi.status_id ? statusMap.get(pdi.status_id) : null,
-          competency_count: competencyCounts.get(pdi.id) || 0,
-        };
-      });
-
-      setPdis(pdisWithStatus);
+      setPdis(response.data || []);
     } catch (err) {
       console.error('Erro ao buscar PDIs:', err);
     } finally {
@@ -309,27 +245,12 @@ const PDI = () => {
     if (!pdiToDelete) return;
 
     try {
-      // 1. Deletar os itens na tabela pdi_items
-      const { error: itemsError } = await supabase
-        .from('pdi_items')
-        .delete()
-        .eq('pdi_id', pdiToDelete.id);
+      // Deletar o PDI (cascade deleta itens automaticamente)
+      const response = await apiClient.del(`/api/pdi/${pdiToDelete.id}`);
 
-      if (itemsError) {
-        console.error('Erro ao deletar itens do PDI:', itemsError);
-        alert('Erro ao deletar itens do PDI. Tente novamente.');
-        return;
-      }
-
-      // 2. Deletar o PDI principal
-      const { error } = await supabase
-        .from('pdi')
-        .delete()
-        .eq('id', pdiToDelete.id);
-
-      if (error) {
-        console.error('Erro ao deletar PDI:', error);
-        alert('Erro ao deletar PDI. Tente novamente.');
+      if (!response.success) {
+        console.error('Erro ao deletar PDI:', response.error);
+        showErrorNotification(response.error?.message || 'Erro ao deletar PDI. Tente novamente.');
         return;
       }
 
@@ -339,9 +260,10 @@ const PDI = () => {
       // Fecha modal e limpa estado
       setIsDeleteConfirmModalOpen(false);
       setPdiToDelete(null);
+      showSuccessNotification('PDI deletado com sucesso!');
     } catch (err) {
       console.error('Erro ao deletar PDI:', err);
-      alert('Erro ao deletar PDI. Tente novamente.');
+      showErrorNotification('Erro ao deletar PDI. Tente novamente.');
     }
   };
 

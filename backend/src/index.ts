@@ -4,10 +4,13 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 import express from 'express'
+import { createServer } from 'http'
+import { Server as SocketIOServer } from 'socket.io'
 import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import compression from 'compression'
+import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
 import slowDown from 'express-slow-down'
 import swaggerJsdoc from 'swagger-jsdoc'
@@ -15,15 +18,41 @@ import swaggerUi from 'swagger-ui-express'
 
 import { errorHandler } from './middleware/errorHandler'
 import { notFound } from './middleware/notFound'
+import { socketAuthMiddleware, initializeNotificationSocket } from './websocket'
 import authRoutes from './routes/auth'
 import userRoutes from './routes/users'
 import projectRoutes from './routes/projects'
 import allocationRoutes from './routes/allocations'
 import employeeRoutes from './routes/employees'
+import employeeDetailRoutes from './routes/employeeDetail'
 import dashboardRoutes from './routes/dashboard'
+import domainsRoutes from './routes/domains'
+import evaluationsRoutes from './routes/evaluations'
+import lookupsRoutes from './routes/lookups'
+import employeeEvaluationsRoutes from './routes/employeeEvaluations'
+import feedbacksRoutes from './routes/feedbacks'
+import pdiRoutes from './routes/pdi'
+import notificationsRoutes from './routes/notifications'
 
 const app = express()
+const httpServer = createServer(app)
 const PORT = process.env['PORT'] || 5000
+
+// Configurar Socket.IO com CORS
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: process.env['FRONTEND_URL'] || 'http://localhost:3000',
+    credentials: true
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
+})
+
+// Aplicar middleware de autenticação no Socket.IO
+io.use(socketAuthMiddleware)
+
+// Inicializar serviço de notificações WebSocket
+initializeNotificationSocket(io)
 
 // Swagger configuration
 const swaggerOptions = {
@@ -66,6 +95,8 @@ app.use(cors({
   credentials: true,
 }))
 app.use(compression())
+// @ts-expect-error - Conflito de tipos entre versões de @types/express
+app.use(cookieParser())
 app.use(morgan('combined'))
 app.use(limiter)
 app.use(speedLimiter)
@@ -90,17 +121,26 @@ app.use('/api/users', userRoutes)
 app.use('/api/projects', projectRoutes)
 app.use('/api/allocations', allocationRoutes)
 app.use('/api/employees', employeeRoutes)
+app.use('/api/employee-detail', employeeDetailRoutes) // Rotas de detalhes do funcionário
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/domains', domainsRoutes)
+app.use('/api/evaluations', evaluationsRoutes) // Modelos de avaliação
+app.use('/api/lookups', lookupsRoutes) // Lookups centralizados
+app.use('/api/employee-evaluations', employeeEvaluationsRoutes) // Avaliações de funcionários
+app.use('/api/feedbacks', feedbacksRoutes) // Feedbacks de consultores
+app.use('/api/pdi', pdiRoutes) // PDI de consultores
+app.use('/api/notifications', notificationsRoutes) // Notificações
 
 // Error handling
 app.use(notFound)
 app.use(errorHandler)
 
-// Start server
-app.listen(PORT, () => {
+// Start server (HTTP + WebSocket)
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
   console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`)
   console.log(`🏥 Health Check: http://localhost:${PORT}/health`)
+  console.log(`🔔 WebSocket: ws://localhost:${PORT}`)
 })
 
-export default app 
+export { app, io, httpServer } 

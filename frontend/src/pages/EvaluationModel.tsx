@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, FileText, Edit, CreditCard } from 'lucide-react';
@@ -24,17 +24,14 @@ const Evaluations = () => {
     setIsLoading(true);
     
     try {
-      const { data, error } = await supabase
-        .from('evaluations_model')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await apiClient.get<EvaluationData[]>('/api/evaluations');
 
-      if (error) {
-        console.error('Erro ao buscar avaliações:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar avaliações:', response.error);
         return;
       }
 
-      setEvaluations(data || []);
+      setEvaluations(response.data || []);
     } catch (err) {
       console.error('Erro ao buscar avaliações:', err);
     } finally {
@@ -76,53 +73,11 @@ const Evaluations = () => {
     if (!evaluationToDelete) return;
 
     try {
-      // 1. Primeiro, buscar todas as perguntas vinculadas a esta avaliação
-      const { data: linkedQuestions, error: fetchError } = await supabase
-        .from('evaluations_questions_model')
-        .select('question_id')
-        .eq('evaluation_id', evaluationToDelete.id);
+      // Backend faz cascade delete (vínculos + perguntas + avaliação)
+      const response = await apiClient.delete(`/api/evaluations/${evaluationToDelete.id}`);
 
-      if (fetchError) {
-        console.error('Erro ao buscar perguntas vinculadas:', fetchError);
-        alert('Erro ao deletar avaliação. Tente novamente.');
-        return;
-      }
-
-      // 2. Deletar os vínculos na tabela evaluations_questions_model
-      const { error: linkError } = await supabase
-        .from('evaluations_questions_model')
-        .delete()
-        .eq('evaluation_id', evaluationToDelete.id);
-
-      if (linkError) {
-        console.error('Erro ao deletar vínculos da avaliação:', linkError);
-        alert('Erro ao deletar avaliação. Tente novamente.');
-        return;
-      }
-
-      // 3. Deletar as perguntas da tabela questions_model
-      if (linkedQuestions && linkedQuestions.length > 0) {
-        const questionIds = linkedQuestions.map(q => q.question_id);
-        const { error: questionsError } = await supabase
-          .from('questions_model')
-          .delete()
-          .in('id', questionIds);
-
-        if (questionsError) {
-          console.error('Erro ao deletar perguntas:', questionsError);
-          alert('Erro ao deletar avaliação. Tente novamente.');
-          return;
-        }
-      }
-
-      // 4. Finalmente, deletar a avaliação
-      const { error: evaluationError } = await supabase
-        .from('evaluations_model')
-        .delete()
-        .eq('id', evaluationToDelete.id);
-
-      if (evaluationError) {
-        console.error('Erro ao deletar avaliação:', evaluationError);
+      if (!response.success) {
+        console.error('Erro ao deletar avaliação:', response.error);
         alert('Erro ao deletar avaliação. Tente novamente.');
         return;
       }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { apiClient } from '../lib/apiClient';
 import Select from 'react-select';
 import { X, FileCheck } from 'lucide-react';
 
@@ -40,46 +40,20 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [statusAbertoId, setStatusAbertoId] = useState<number | null>(null);
-
-  // Buscar o ID do status "Aberto" da tabela domains
-  const fetchStatusAberto = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('domains')
-        .select('id')
-        .eq('type', 'evaluation_status')
-        .ilike('value', 'aberto')
-        .single();
-
-      if (error) {
-        console.error('Erro ao buscar status Aberto:', error);
-        return;
-      }
-
-      if (data) {
-        setStatusAbertoId(data.id);
-      }
-    } catch (err) {
-      console.error('Erro ao buscar status Aberto:', err);
-    }
-  };
 
   // Buscar modelos de avaliação ativos
   const fetchEvaluationModels = async () => {
     try {
-      const { data, error } = await supabase
-        .from('evaluations_model')
-        .select('id, name')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get<Array<{ id: number; name: string }>>(
+        '/api/lookups/evaluation-models/active'
+      );
 
-      if (error) {
-        console.error('Erro ao buscar modelos de avaliação:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar modelos de avaliação:', response.error);
         return;
       }
 
-      const options: EvaluationModelOption[] = (data || []).map((model) => ({
+      const options: EvaluationModelOption[] = response.data.map((model) => ({
         value: model.id,
         label: model.name,
       }));
@@ -93,18 +67,16 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }
   // Buscar consultores (todos usuários ativos)
   const fetchConsultants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get<Array<{ user_id: string; name: string }>>(
+        '/api/lookups/users'
+      );
 
-      if (error) {
-        console.error('Erro ao buscar consultores:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar consultores:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (data || []).map((user) => ({
+      const options: ConsultantOption[] = response.data.map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -118,24 +90,16 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }
   // Buscar gestores (usuários com posição contendo "Gestor")
   const fetchManagers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name, position')
-        .eq('is_active', true)
-        .order('name');
+      const response = await apiClient.get<Array<{ user_id: string; name: string }>>(
+        '/api/lookups/managers'
+      );
 
-      if (error) {
-        console.error('Erro ao buscar gestores:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar gestores:', response.error);
         return;
       }
 
-      // Filtrar gestores pela posição (deve conter "Gestor")
-      const managersList = (data || []).filter((user) => {
-        const position = (user.position || '').toLowerCase();
-        return position.includes('gestor');
-      });
-
-      const options: ConsultantOption[] = managersList.map((user) => ({
+      const options: ConsultantOption[] = response.data.map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -149,19 +113,17 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }
   // Buscar projetos ativos
   const fetchProjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('project_id, name')
-        .eq('is_closed', false)
-        .order('name');
+      const response = await apiClient.get<Array<{ project_id: string; name: string }>>(
+        '/api/lookups/projects/active'
+      );
 
-      if (error) {
-        console.error('Erro ao buscar projetos:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar projetos:', response.error);
         return;
       }
 
-      const options: ProjectOption[] = (data || []).map((project) => ({
-        value: project.project_id,
+      const options: ProjectOption[] = response.data.map((project) => ({
+        value: parseInt(project.project_id) || 0,
         label: project.name,
       }));
 
@@ -173,7 +135,6 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }
 
   useEffect(() => {
     if (isOpen) {
-      void fetchStatusAberto();
       void fetchEvaluationModels();
       void fetchConsultants();
       void fetchManagers();
@@ -221,46 +182,25 @@ const EmployeeEvaluationModal = ({ isOpen, onClose, onSuccess, preSelectedUser }
     try {
       // Criar uma avaliação para cada consultor selecionado
       for (const consultant of selectedConsultants) {
-        // 1. Criar o registro principal na tabela evaluations
-        const { data: evaluationData, error: evaluationError } = await supabase
-          .from('evaluations')
-          .insert([{
+        // Criar avaliação via API (backend cria e vincula projetos atomicamente)
+        const result = await apiClient.post<{ id: number }>(
+          '/api/employee-evaluations',
+          {
             evaluation_model_id: selectedModel.value,
-            name: `${selectedModel.label} - ${consultant.label}`,
             user_id: consultant.value,
             user_name: consultant.label,
             owner_id: selectedManager.value,
             owner_name: selectedManager.label,
             period_start: periodStart,
             period_end: periodEnd,
-            status_id: statusAbertoId, // Define status padrão como "Aberto"
-          }])
-          .select();
-
-        if (evaluationError) {
-          console.error('Erro ao criar avaliação:', evaluationError);
-          setError('Erro ao criar avaliação. Tente novamente.');
-          return;
-        }
-
-        // 2. Se houver projetos selecionados, vincular na tabela evaluations_projects
-        if (selectedProjects.length > 0 && evaluationData && evaluationData.length > 0) {
-          const evaluationId = evaluationData[0].id;
-          
-          const projectLinks = selectedProjects.map((project) => ({
-            evaluation_id: evaluationId,
-            project_id: project.value,
-          }));
-
-          const { error: linkError } = await supabase
-            .from('evaluations_projects')
-            .insert(projectLinks);
-
-          if (linkError) {
-            console.error('Erro ao vincular projetos:', linkError);
-            setError('Erro ao vincular projetos à avaliação. Tente novamente.');
-            return;
+            project_ids: selectedProjects.map((p) => p.value.toString()),
           }
+        );
+
+        if (!result.success) {
+          console.error('Erro ao criar avaliação:', result.error);
+          setError(result.error?.message || 'Erro ao criar avaliação. Tente novamente.');
+          return;
         }
       }
 

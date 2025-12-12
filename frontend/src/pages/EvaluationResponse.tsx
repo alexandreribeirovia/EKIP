@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import { apiClient } from '../lib/apiClient';
 import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target, Maximize } from 'lucide-react';
 import { EvaluationInfo, CategoryData, EvaluationQuestionData, QuestionResponse } from '../types';
 import PDIModal from '../components/PDIModal';
@@ -263,78 +263,52 @@ const EvaluationResponse = () => {
     if (!id) return;
 
     try {
-      const { data, error } = await supabase
-        .from('evaluations')
-        .select('*')
-        .eq('id', parseInt(id))
-        .single();
+      const response = await apiClient.get<{
+        id: number;
+        user_id: string;
+        owner_id: string;
+        user_name: string;
+        owner_name: string;
+        evaluation_model_id: number;
+        status_id: number;
+        is_closed: boolean;
+        is_pdi: boolean;
+        period_start: string;
+        period_end: string;
+        evaluation_model_name: string | null;
+        status_name: string | null;
+        project_names: string[];
+        has_linked_pdi: boolean;
+      }>(`/api/employee-evaluations/${id}`);
 
-      if (error) {
-        console.error('Erro ao buscar avaliação:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar avaliação:', response.error);
         setError('Erro ao carregar avaliação');
         return;
       }
 
-      setEvaluation(data);
+      const data = response.data;
+      
+      // Mapear para o formato esperado pelo state
+      setEvaluation({
+        id: data.id,
+        name: data.evaluation_model_name || '',
+        user_id: data.user_id,
+        owner_id: data.owner_id,
+        user_name: data.user_name,
+        owner_name: data.owner_name,
+        evaluation_model_id: data.evaluation_model_id,
+        status_id: data.status_id,
+        is_closed: data.is_closed,
+        is_done: data.is_closed,
+        period_start: data.period_start,
+        period_end: data.period_end,
+      });
 
-      // Buscar nome do modelo de avaliação
-      if (data.evaluation_model_id) {
-        const { data: modelData, error: modelError } = await supabase
-          .from('evaluations_model')
-          .select('name')
-          .eq('id', data.evaluation_model_id)
-          .single();
-
-        if (!modelError && modelData) {
-          setEvaluationModelName(modelData.name);
-        }
-      }
-
-      // Buscar status da avaliação
-      if (data.status_id) {
-        const { data: statusData, error: statusError } = await supabase
-          .from('domains')
-          .select('value')
-          .eq('id', data.status_id)
-          .eq('type', 'evaluation_status')
-          .single();
-
-        if (!statusError && statusData) {
-          setStatusName(statusData.value);
-        }
-      }
-
-      // Buscar projetos vinculados
-      const { data: projectLinks, error: projectLinksError } = await supabase
-        .from('evaluations_projects')
-        .select('project_id')
-        .eq('evaluation_id', parseInt(id));
-
-      if (!projectLinksError && projectLinks && projectLinks.length > 0) {
-        const projectIds = projectLinks.map((link: any) => link.project_id);
-        
-        const { data: projectsData, error: projectsError } = await supabase
-          .from('projects')
-          .select('name')
-          .in('project_id', projectIds);
-
-        if (!projectsError && projectsData) {
-          setProjectNames(projectsData.map((p: any) => p.name));
-        }
-      }
-
-      // Verificar PDI vinculado
-      const { data: pdiData, error: pdiError } = await supabase
-        .from('pdi')
-        .select('id')
-        .eq('evaluation_id', parseInt(id))
-        .limit(1);
-
-      if (pdiError) {
-        console.error('Erro ao verificar PDI vinculado:', pdiError);
-      } else {
-        setHasLinkedPDI(pdiData && pdiData.length > 0);
-      }
+      setEvaluationModelName(data.evaluation_model_name || '');
+      setStatusName(data.status_name || '');
+      setProjectNames(data.project_names || []);
+      setHasLinkedPDI(data.has_linked_pdi);
     } catch (err) {
       console.error('Erro ao buscar avaliação:', err);
       setError('Erro ao carregar avaliação');
@@ -343,109 +317,61 @@ const EvaluationResponse = () => {
 
   // Buscar perguntas do modelo de avaliação
   const fetchQuestions = async () => {
-    if (!evaluation?.evaluation_model_id) return;
+    if (!id) return;
 
     try {
-      // Buscar perguntas vinculadas ao modelo
-      const { data: evalQuestions, error: evalError } = await supabase
-        .from('evaluations_questions_model')
-        .select(`
-          id,
-          question_id,
-          category_order,
-          question_order,
-          subcategory_order,
-          questions_model (
-            id,
-            question,
-            description,
-            category_id,
-            subcategory_id,
-            reply_type_id,
-            weight,
-            required
-          )
-        `)
-        .eq('evaluation_id', evaluation.evaluation_model_id)
-        .order('category_order', { ascending: true })
-        .order('subcategory_order', { ascending: true })
-        .order('question_order', { ascending: true });
+      const response = await apiClient.get<{
+        questions: Array<{
+          evaluation_question_id: number;
+          question_id: number;
+          question: string;
+          description: string | null;
+          category_id: number;
+          category: string;
+          subcategory_id: number | null;
+          subcategory: string;
+          reply_type_id: number;
+          reply_type: string;
+          weight: number;
+          required: boolean;
+          category_order: number;
+          subcategory_order: number;
+          question_order: number;
+        }>;
+        categories: Array<{
+          id: number;
+          type: string;
+          value: string;
+          description: string | null;
+          is_active: boolean;
+          parent_id: number | null;
+        }>;
+      }>(`/api/employee-evaluations/${id}/questions`);
 
-      if (evalError) {
-        console.error('Erro ao buscar perguntas:', evalError);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar perguntas:', response.error);
         return;
       }
 
-      // Extrair IDs de categorias e subcategorias
-      const categoryIds = new Set<number>();
-      const subcategoryIds = new Set<number>();
+      // Mapear categorias
+      setCategories(response.data.categories || []);
 
-      evalQuestions?.forEach((item: any) => {
-        if (item.questions_model?.category_id) {
-          categoryIds.add(item.questions_model.category_id);
-        }
-        if (item.questions_model?.subcategory_id) {
-          subcategoryIds.add(item.questions_model.subcategory_id);
-        }
-      });
-
-      const allIds = [...Array.from(categoryIds), ...Array.from(subcategoryIds)];
-
-      // Buscar categorias e subcategorias
-      const { data: domainsData, error: domainsError } = await supabase
-        .from('domains')
-        .select('*')
-        .in('id', allIds)
-        .eq('is_active', true);
-
-      if (domainsError) {
-        console.error('Erro ao buscar domínios:', domainsError);
-      } else {
-        setCategories(domainsData || []);
-      }
-
-      // Buscar tipos de resposta
-      const replyTypeIds = evalQuestions
-        ?.map((item: any) => item.questions_model?.reply_type_id)
-        .filter((id: number) => id !== null);
-
-      const { data: replyTypesData, error: replyTypesError } = await supabase
-        .from('domains')
-        .select('*')
-        .in('id', replyTypeIds)
-        .eq('type', 'evaluation_reply_type');
-
-      if (replyTypesError) {
-        console.error('Erro ao buscar tipos de resposta:', replyTypesError);
-      }
-
-      const replyTypesMap = new Map(
-        replyTypesData?.map((rt: any) => [rt.id, rt.value]) || []
-      );
-
-      // Processar perguntas
-      const processedQuestions: EvaluationQuestionData[] = (evalQuestions
-        ?.map((item: any) => {
-          const question = item.questions_model;
-          if (!question) return null;
-
-          return {
-            id: item.id, // ID da tabela evaluations_questions_model
-            question_id: question.id, // ID da tabela questions_model
-            question: question.question,
-            description: question.description,
-            category_id: question.category_id,
-            subcategory_id: question.subcategory_id,
-            reply_type_id: question.reply_type_id,
-            reply_type: replyTypesMap.get(question.reply_type_id) || '',
-            weight: question.weight,
-            required: question.required,
-            category_order: item.category_order,
-            question_order: item.question_order,
-            subcategory_order: item.subcategory_order,
-          };
-        })
-        .filter((q: any) => q !== null) || []) as EvaluationQuestionData[];
+      // Mapear perguntas para o formato esperado
+      const processedQuestions: EvaluationQuestionData[] = response.data.questions.map((q) => ({
+        id: q.evaluation_question_id,
+        question_id: q.question_id,
+        question: q.question,
+        description: q.description,
+        category_id: q.category_id,
+        subcategory_id: q.subcategory_id ?? 0,
+        reply_type_id: q.reply_type_id,
+        reply_type: q.reply_type,
+        weight: q.weight,
+        required: q.required,
+        category_order: q.category_order,
+        question_order: q.question_order,
+        subcategory_order: q.subcategory_order,
+      }));
 
       setQuestions(processedQuestions);
 
@@ -467,18 +393,20 @@ const EvaluationResponse = () => {
     if (!id) return;
 
     try {
-      const { data, error } = await supabase
-        .from('evaluations_questions_reply')
-        .select('*')
-        .eq('evaluation_id', parseInt(id));
+      const response = await apiClient.get<Array<{
+        question_id: number;
+        score: number | null;
+        reply: string | null;
+        yes_no: boolean | null;
+      }>>(`/api/employee-evaluations/${id}/responses`);
 
-      if (error) {
-        console.error('Erro ao buscar respostas:', error);
+      if (!response.success || !response.data) {
+        console.error('Erro ao buscar respostas:', response.error);
         return;
       }
 
       const responsesMap = new Map<number, QuestionResponse>();
-      data?.forEach((item: any) => {
+      response.data.forEach((item) => {
         responsesMap.set(item.question_id, {
           question_id: item.question_id,
           score: item.score,
@@ -596,7 +524,7 @@ const EvaluationResponse = () => {
     setError(null);
 
     try {
-      // Preparar dados para inserção/atualização
+      // Preparar dados para a API (formato simplificado)
       const responsesToSave = Array.from(responses.entries())
         .filter(([_, response]) => {
           // Salva apenas respostas que têm algum valor preenchido
@@ -606,22 +534,11 @@ const EvaluationResponse = () => {
           const question = questions.find((q) => q.question_id === questionId);
           
           return {
-            evaluation_id: parseInt(id),
             question_id: questionId,
-            category_id: question?.category_id || null,
-            subcategory_id: question?.subcategory_id || null,
-            category: categories.find((c) => c.id === question?.category_id)?.value || '',
-            subcategory: question?.subcategory_id
-              ? categories.find((c) => c.id === question?.subcategory_id)?.value || ''
-              : '',
-            question: question?.question || '',
             score: response.score,
             reply: response.reply,
             yes_no: response.yes_no,
-            weight: question?.weight || 0,
-            reply_type: question?.reply_type || '',
-            user_id: evaluation?.user_id || null,
-            owner_id: evaluation?.owner_id || null,
+            weight: question?.weight || 1,
           };
         });
 
@@ -631,62 +548,17 @@ const EvaluationResponse = () => {
         return;
       }
 
-      // Deletar respostas existentes
-      const { error: deleteError } = await supabase
-        .from('evaluations_questions_reply')
-        .delete()
-        .eq('evaluation_id', parseInt(id));
+      // Salvar via API (backend faz delete + insert e atualiza status)
+      const result = await apiClient.put<{ message: string; count: number }>(
+        `/api/employee-evaluations/${id}/responses`,
+        { responses: responsesToSave }
+      );
 
-      if (deleteError) {
-        console.error('Erro ao deletar respostas antigas:', deleteError);
-        setError('Erro ao salvar respostas');
+      if (!result.success) {
+        console.error('Erro ao salvar respostas:', result.error);
+        setError(result.error?.message || 'Erro ao salvar respostas');
         setIsSaving(false);
         return;
-      }
-
-      // Inserir novas respostas
-      const { error: insertError } = await supabase
-        .from('evaluations_questions_reply')
-        .insert(responsesToSave);
-
-      if (insertError) {
-        console.error('Erro ao inserir respostas:', insertError);
-        setError('Erro ao salvar respostas');
-        setIsSaving(false);
-        return;
-      }
-
-      // Atualizar status da avaliação baseado no progresso
-      if (responsesToSave.length > 0) {
-        // Verificar se todas as perguntas obrigatórias foram respondidas
-        const allAnswered = calculateProgress() === 100;
-        
-        // Buscar o ID do status apropriado
-        const statusValue = allAnswered ? 'concluído' : 'em andamento';
-        const { data: statusData, error: statusError } = await supabase
-          .from('domains')
-          .select('id, value')
-          .eq('type', 'evaluation_status')
-          .ilike('value', statusValue)
-          .single();
-
-        if (!statusError && statusData) {
-          // Atualizar o status da avaliação
-          const { error: updateError } = await supabase
-            .from('evaluations')
-            .update({ status_id: statusData.id })
-            .eq('id', parseInt(id));
-
-          if (updateError) {
-            console.error('Erro ao atualizar status da avaliação:', updateError);
-          } else {
-            // Atualizar o estado local
-            setStatusName(statusData.value);
-            if (evaluation) {
-              setEvaluation({ ...evaluation, status_id: statusData.id });
-            }
-          }
-        }
       }
 
       setHasUnsavedChanges(false);
@@ -694,7 +566,8 @@ const EvaluationResponse = () => {
       // Mostrar mensagem de sucesso
       setSuccessMessage(`${responsesToSave.length} resposta(s) salva(s) com sucesso!`);
       
-      // Recarregar as respostas para sincronizar
+      // Recarregar dados para sincronizar status
+      await fetchEvaluation();
       await fetchResponses();
     } catch (err) {
       console.error('Erro ao salvar respostas:', err);
@@ -727,43 +600,24 @@ const EvaluationResponse = () => {
     setError(null);
 
     try {
-      // Buscar o ID do status "Fechado"
-      const { data: statusData, error: statusError } = await supabase
-        .from('domains')
-        .select('id, value')
-        .eq('type', 'evaluation_status')
-        .ilike('value', 'fechado')
-        .single();
+      // Encerrar via API
+      const result = await apiClient.patch<{ is_closed: boolean; status_id: number }>(
+        `/api/employee-evaluations/${id}/close`
+      );
 
-      if (statusError || !statusData) {
-        console.error('Erro ao buscar status Fechado:', statusError);
-        setError('Erro ao buscar status. Verifique se o status "Fechado" existe nos domínios.');
-        setIsClosing(false);
-        return;
-      }
-
-      // Atualizar avaliação para Fechado e is_closed = true
-      const { error: updateError } = await supabase
-        .from('evaluations')
-        .update({ 
-          status_id: statusData.id,
-          is_closed: true 
-        })
-        .eq('id', parseInt(id));
-
-      if (updateError) {
-        console.error('Erro ao encerrar avaliação:', updateError);
-        setError('Erro ao encerrar avaliação');
+      if (!result.success) {
+        console.error('Erro ao encerrar avaliação:', result.error);
+        setError(result.error?.message || 'Erro ao encerrar avaliação');
         setIsClosing(false);
         return;
       }
 
       // Atualizar estado local
-      setStatusName(statusData.value);
+      setStatusName('Fechado');
       if (evaluation) {
         setEvaluation({ 
           ...evaluation, 
-          status_id: statusData.id,
+          status_id: result.data?.status_id || evaluation.status_id,
           is_closed: true 
         });
       }

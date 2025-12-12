@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 import { 
   ArrowLeft, 
   FileText, 
@@ -118,18 +118,14 @@ const EvaluationDetail = () => {
     if (!id) return;
     
     try {
-      const { data, error } = await supabase
-        .from('evaluations_model')
-        .select('*')
-        .eq('id', parseInt(id))
-        .single();
+      const response = await apiClient.get<EvaluationData>(`/api/evaluations/${id}`);
 
-      if (error) {
-        console.error('Erro ao buscar avaliação:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar avaliação:', response.error);
         return;
       }
 
-      setEvaluation(data);
+      setEvaluation(response.data || null);
     } catch (err) {
       console.error('Erro ao buscar avaliação:', err);
     }
@@ -140,57 +136,31 @@ const EvaluationDetail = () => {
     if (!id) return;
     
     try {
-      // Buscar todas as categorias e subcategorias usadas nas perguntas desta avaliação
-      const { data: evalQuestions, error: evalError } = await supabase
-        .from('evaluations_questions_model')
-        .select(`
-          questions_model (
-            category_id,
-            subcategory_id
-          )
-        `)
-        .eq('evaluation_id', parseInt(id));
+      // Buscar categorias usadas nesta avaliação via API
+      const response = await apiClient.get<CategoryData[]>(`/api/evaluations/${id}/categories`);
 
-      if (evalError) {
-        console.error('Erro ao buscar perguntas da avaliação:', evalError);
+      if (!response.success) {
+        console.error('Erro ao buscar categorias:', response.error);
         return;
       }
 
-      // Extrair IDs únicos de categorias e subcategorias
-      const categoryIds = new Set<number>();
-      const subcategoryIds = new Set<number>();
-      
-      evalQuestions?.forEach((item: any) => {
-        if (item.questions_model?.category_id) {
-          categoryIds.add(item.questions_model.category_id);
-        }
-        if (item.questions_model?.subcategory_id) {
-          subcategoryIds.add(item.questions_model.subcategory_id);
-        }
-      });
+      const data = response.data || [];
 
-      const allIds = [...Array.from(categoryIds), ...Array.from(subcategoryIds)];
-
-      if (allIds.length === 0) {
+      if (data.length === 0) {
         setCategories([]);
         setExpandedCategories(new Set());
         return;
       }
 
-      // Buscar os domínios das categorias e subcategorias usadas
-      const { data, error } = await supabase
-        .from('domains')
-        .select('*')
-        .in('id', allIds)
-        .eq('is_active', true)
-        .order('value');
+      // Extrair IDs únicos de categorias
+      const categoryIds = new Set<number>();
+      data.forEach((item: CategoryData) => {
+        if (item.type === 'evaluation_category') {
+          categoryIds.add(item.id);
+        }
+      });
 
-      if (error) {
-        console.error('Erro ao buscar categorias:', error);
-        return;
-      }
-
-      setCategories(data || []);
+      setCategories(data);
       
       // Expandir todas as categorias APENAS na primeira carga
       // (quando ainda não há nenhuma categoria expandida)
@@ -217,19 +187,14 @@ const EvaluationDetail = () => {
   // Buscar tipos de resposta
   const fetchReplyTypes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('domains')
-        .select('id, value')
-        .eq('type', 'evaluation_reply_type')
-        .eq('is_active', true)
-        .order('value');
+      const response = await apiClient.get<ReplyTypeOption[]>('/api/evaluations/reply-types');
 
-      if (error) {
-        console.error('Erro ao buscar tipos de resposta:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar tipos de resposta:', response.error);
         return;
       }
 
-      setReplyTypes(data || []);
+      setReplyTypes(response.data || []);
     } catch (err) {
       console.error('Erro ao buscar tipos de resposta:', err);
     }
@@ -240,69 +205,15 @@ const EvaluationDetail = () => {
     if (!id) return;
     
     try {
-      // Buscar perguntas através da tabela de vínculo
-      const { data, error } = await supabase
-        .from('evaluations_questions_model')
-        .select(`
-          id,
-          question_id,
-          category_order,
-          question_order,
-          subcategory_order,
-          questions_model (
-            id,
-            question,
-            description,
-            category,
-            subcategory,
-            category_id,
-            subcategory_id,
-            weight,
-            required,
-            reply_type_id
-          )
-        `)
-        .eq('evaluation_id', parseInt(id));
+      // Buscar perguntas via API
+      const response = await apiClient.get<QuestionData[]>(`/api/evaluations/${id}/questions`);
 
-      if (error) {
-        console.error('Erro ao buscar perguntas:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar perguntas:', response.error);
         return;
       }
 
-      // Mapear os dados para o formato esperado
-      const questionsData = (data || [])
-        .filter(item => item.questions_model) // Filtrar apenas registros com pergunta válida
-        .map(item => {
-          const q = item.questions_model as any;
-          return {
-            id: q.id,
-            question: q.question,
-            description: q.description || '',
-            category: q.category,
-            subcategory: q.subcategory,
-            category_id: q.category_id,
-            subcategory_id: q.subcategory_id,
-            weight: q.weight,
-            required: q.required,
-            reply_type_id: q.reply_type_id,
-            category_order: item.category_order || 0,
-            question_order: item.question_order || 0,
-            subcategory_order: item.subcategory_order || 0,
-            evaluation_question_id: item.id, // ID da linha na intertable
-          } as QuestionData;
-        })
-        .sort((a, b) => {
-          // Primeiro ordena por categoria, depois por subcategoria, depois por ordem da pergunta
-          if (a.category_order !== b.category_order) {
-            return a.category_order - b.category_order;
-          }
-          if (a.subcategory_order !== b.subcategory_order) {
-            return a.subcategory_order - b.subcategory_order;
-          }
-          return a.question_order - b.question_order;
-        });
-
-      setQuestions(questionsData);
+      setQuestions(response.data || []);
     } catch (err) {
       console.error('Erro ao buscar perguntas:', err);
     }
@@ -314,23 +225,18 @@ const EvaluationDetail = () => {
     if (!id) return;
     
     try {
-      // Buscar todas as categorias ativas
-      const { data: allCategories, error: allError } = await supabase
-        .from('domains')
-        .select('*')
-        .eq('type', 'evaluation_category')
-        .eq('is_active', true)
-        .order('value');
+      // Buscar todas as categorias ativas via API
+      const response = await apiClient.get<CategoryData[]>('/api/evaluations/categories');
 
-      if (allError) {
-        console.error('Erro ao buscar todas as categorias:', allError);
+      if (!response.success) {
+        console.error('Erro ao buscar todas as categorias:', response.error);
         return;
       }
 
       // MUDANÇA: Permitir adicionar a mesma categoria múltiplas vezes
       // (com subcategorias diferentes ou sem subcategoria)
       // Todas as categorias ficam sempre disponíveis
-      setAvailableCategories(allCategories || []);
+      setAvailableCategories(response.data || []);
     } catch (err) {
       console.error('Erro ao buscar categorias disponíveis:', err);
     }
@@ -340,20 +246,14 @@ const EvaluationDetail = () => {
   const handleCategorySelection = async (categoryId: number) => {
     setSelectedCategoryForModal(categoryId);
     
-    // Buscar subcategorias desta categoria
-    const { data: subcats, error: subcatsError } = await supabase
-      .from('domains')
-      .select('*')
-      .eq('type', 'evaluation_subcategory')
-      .eq('parent_id', categoryId)
-      .eq('is_active', true)
-      .order('value');
+    // Buscar subcategorias desta categoria via API
+    const response = await apiClient.get<CategoryData[]>(`/api/evaluations/categories/${categoryId}/subcategories`);
 
-    if (subcatsError) {
-      console.error('Erro ao buscar subcategorias:', subcatsError);
+    if (!response.success) {
+      console.error('Erro ao buscar subcategorias:', response.error);
       setSubcategoriesForModal([]);
     } else {
-      setSubcategoriesForModal(subcats || []);
+      setSubcategoriesForModal(response.data || []);
     }
   };
 
@@ -371,17 +271,12 @@ const EvaluationDetail = () => {
       return;
     }
     
-    // Buscar subcategorias desta categoria (para adicionar ao state)
-    const { data: subcats, error: subcatsError } = await supabase
-      .from('domains')
-      .select('*')
-      .eq('type', 'evaluation_subcategory')
-      .eq('parent_id', categoryId)
-      .eq('is_active', true)
-      .order('value');
+    // Buscar subcategorias desta categoria (para adicionar ao state) via API
+    const subcatsResponse = await apiClient.get<CategoryData[]>(`/api/evaluations/categories/${categoryId}/subcategories`);
+    const subcats = subcatsResponse.success ? subcatsResponse.data || [] : [];
 
-    if (subcatsError) {
-      console.error('Erro ao buscar subcategorias:', subcatsError);
+    if (!subcatsResponse.success) {
+      console.error('Erro ao buscar subcategorias:', subcatsResponse.error);
     }
     
     // Adicionar a categoria e suas subcategorias temporariamente ao array de categorias
@@ -491,19 +386,22 @@ const EvaluationDetail = () => {
     if (!id) return;
     
     try {
-      // Atualizar todas as perguntas da categoria com a nova ordem na tabela intermediária
+      // Atualizar todas as perguntas da categoria com a nova ordem via batch
       const categoryQuestions = questions.filter(q => q.category_id === categoryId);
+      const questionsToReorder = categoryQuestions
+        .filter(q => q.evaluation_question_id)
+        .map(q => ({
+          evaluation_question_id: q.evaluation_question_id,
+          category_order: newOrder
+        }));
       
-      for (const question of categoryQuestions) {
-        if (question.evaluation_question_id) {
-          const { error } = await supabase
-            .from('evaluations_questions_model')
-            .update({ category_order: newOrder })
-            .eq('id', question.evaluation_question_id);
-
-          if (error) {
-            console.error('Erro ao atualizar ordem da categoria:', error);
-          }
+      if (questionsToReorder.length > 0) {
+        const response = await apiClient.put(`/api/evaluations/${id}/questions/reorder`, {
+          questions: questionsToReorder
+        });
+        
+        if (!response.success) {
+          console.error('Erro ao atualizar ordem da categoria:', response.error);
         }
       }
     } catch (err) {
@@ -513,14 +411,15 @@ const EvaluationDetail = () => {
 
   // Atualizar ordem das perguntas
   const updateQuestionOrder = async (evaluationQuestionId: number, newOrder: number) => {
+    if (!id) return;
+    
     try {
-      const { error } = await supabase
-        .from('evaluations_questions_model')
-        .update({ question_order: newOrder })
-        .eq('id', evaluationQuestionId);
+      const response = await apiClient.put(`/api/evaluations/${id}/questions/reorder`, {
+        questions: [{ evaluation_question_id: evaluationQuestionId, question_order: newOrder }]
+      });
 
-      if (error) {
-        console.error('Erro ao atualizar ordem da pergunta:', error);
+      if (!response.success) {
+        console.error('Erro ao atualizar ordem da pergunta:', response.error);
       }
     } catch (err) {
       console.error('Erro ao atualizar ordem da pergunta:', err);
@@ -532,21 +431,25 @@ const EvaluationDetail = () => {
     if (!id) return;
     
     try {
-      // Atualizar todas as perguntas dessa subcategoria com a nova ordem
+      // Atualizar todas as perguntas dessa subcategoria com a nova ordem via batch
       const subcategoryQuestions = questions.filter(
         q => q.category_id === categoryId && q.subcategory_id === subcategoryId
       );
       
-      for (const question of subcategoryQuestions) {
-        if (question.evaluation_question_id) {
-          const { error } = await supabase
-            .from('evaluations_questions_model')
-            .update({ subcategory_order: newOrder })
-            .eq('id', question.evaluation_question_id);
-
-          if (error) {
-            console.error('Erro ao atualizar ordem da subcategoria:', error);
-          }
+      const questionsToReorder = subcategoryQuestions
+        .filter(q => q.evaluation_question_id)
+        .map(q => ({
+          evaluation_question_id: q.evaluation_question_id,
+          subcategory_order: newOrder
+        }));
+      
+      if (questionsToReorder.length > 0) {
+        const response = await apiClient.put(`/api/evaluations/${id}/questions/reorder`, {
+          questions: questionsToReorder
+        });
+        
+        if (!response.success) {
+          console.error('Erro ao atualizar ordem da subcategoria:', response.error);
         }
       }
     } catch (err) {
@@ -646,27 +549,10 @@ const EvaluationDetail = () => {
         }
       } else {
         // Movimento entre diferentes categorias/subcategorias
-
-        // 1. Atualizar a tabela questions_model com nova categoria/subcategoria
         const newCategory = categories.find(c => c.id === newCategoryId);
         const newSubcategory = categories.find(c => c.id === newSubcategoryId);
-        
-        const { error: questionUpdateError } = await supabase
-          .from('questions_model')
-          .update({
-            category_id: newCategoryId,
-            subcategory_id: newSubcategoryId,
-            category: newCategory?.value || activeQuestion.category,
-            subcategory: newSubcategory?.value || null,
-          })
-          .eq('id', activeQuestion.id);
 
-        if (questionUpdateError) {
-          console.error('Erro ao atualizar categoria da pergunta:', questionUpdateError);
-          return;
-        }
-
-        // 2. Obter o maior subcategory_order do container de destino
+        // 1. Obter o maior subcategory_order do container de destino
         const destQuestions = questions.filter(q => 
           q.category_id === newCategoryId && 
           q.subcategory_id === newSubcategoryId &&
@@ -682,28 +568,30 @@ const EvaluationDetail = () => {
         // Obter o subcategory_order correto
         let newSubcategoryOrder = 0;
         if (newSubcategoryId) {
-          // Se tem subcategoria, usar o subcategory_order da pergunta destino
           newSubcategoryOrder = overQuestion.subcategory_order;
         }
 
-        // 3. Atualizar a tabela evaluations_questions_model
-        if (activeQuestion.evaluation_question_id) {
-          const { error: evalQuestionError } = await supabase
-            .from('evaluations_questions_model')
-            .update({
-              category_order: newCategoryOrder,
-              subcategory_order: newSubcategoryOrder,
-              question_order: newQuestionOrder,
-            })
-            .eq('id', activeQuestion.evaluation_question_id);
+        // 2. Atualizar pergunta e ordem via batch API
+        const reorderResponse = await apiClient.put(`/api/evaluations/${id}/questions/reorder`, {
+          questions: [{
+            evaluation_question_id: activeQuestion.evaluation_question_id,
+            question_id: activeQuestion.id,
+            category_id: newCategoryId,
+            subcategory_id: newSubcategoryId,
+            category: newCategory?.value || activeQuestion.category,
+            subcategory: newSubcategory?.value || null,
+            category_order: newCategoryOrder,
+            subcategory_order: newSubcategoryOrder,
+            question_order: newQuestionOrder,
+          }]
+        });
 
-          if (evalQuestionError) {
-            console.error('Erro ao atualizar evaluation_question:', evalQuestionError);
-            return;
-          }
+        if (!reorderResponse.success) {
+          console.error('Erro ao mover pergunta:', reorderResponse.error);
+          return;
         }
 
-        // 4. Reordenar todas as perguntas do container de destino
+        // 3. Reordenar todas as perguntas do container de destino
         const questionsToReorder = [...destQuestions];
         questionsToReorder.splice(overQuestionIndex + 1, 0, activeQuestion);
 
@@ -903,16 +791,6 @@ const EvaluationDetail = () => {
         category = availableCategories.find(c => c.id === categoryId);
       }
       
-      // Se ainda não encontrou, buscar do banco
-      if (!category) {
-        const { data: catData } = await supabase
-          .from('domains')
-          .select('*')
-          .eq('id', categoryId)
-          .single();
-        category = catData;
-      }
-      
       // Usar a subcategoria do estado (selecionada no modal)
       const subcategory = selectedSubcategoryForModal 
         ? categories.find(c => c.id === selectedSubcategoryForModal)
@@ -967,51 +845,26 @@ const EvaluationDetail = () => {
         ? Math.max(...containerQuestions.map(q => q.question_order)) + 1
         : 0;
 
-      // 1. Primeiro, criar a pergunta na tabela questions_model
-      // (Não inclui mais category_order e question_order aqui)
-      const { data: questionData, error: questionError } = await supabase
-        .from('questions_model')
-        .insert([
-          {
-            question: question.trim(),
-            description: description.trim() || null,
-            category: category?.value || '',
-            subcategory: subcategory?.value || '',
-            category_id: categoryId,
-            subcategory_id: selectedSubcategoryForModal,
-            weight: weight,
-            required: required,
-            reply_type_id: replyTypeId,
-          }
-        ])
-        .select();
+      // Criar pergunta via API (inclui criação da pergunta + vínculo com a avaliação)
+      const response = await apiClient.post(`/api/evaluations/${id}/questions`, {
+        question: question.trim(),
+        description: description.trim() || null,
+        category: category?.value || '',
+        subcategory: subcategory?.value || '',
+        category_id: categoryId,
+        subcategory_id: selectedSubcategoryForModal,
+        weight: weight,
+        required: required,
+        reply_type_id: replyTypeId,
+        category_order: nextCategoryOrder,
+        subcategory_order: nextSubcategoryOrder,
+        question_order: nextQuestionOrder,
+      });
 
-      if (questionError) {
-        console.error('Erro ao criar pergunta:', questionError);
+      if (!response.success) {
+        console.error('Erro ao criar pergunta:', response.error);
         alert('Erro ao criar pergunta. Tente novamente.');
         return;
-      }
-
-      // 2. Depois, criar o vínculo na tabela evaluations_questions_model
-      // Agora inclui a ordem da categoria, subcategoria e da pergunta
-      if (questionData && questionData.length > 0) {
-        const { error: linkError } = await supabase
-          .from('evaluations_questions_model')
-          .insert([
-            {
-              evaluation_id: parseInt(id),
-              question_id: questionData[0].id,
-              category_order: nextCategoryOrder,
-              question_order: nextQuestionOrder,
-              subcategory_order: nextSubcategoryOrder,
-            }
-          ]);
-
-        if (linkError) {
-          console.error('Erro ao vincular pergunta à avaliação:', linkError);
-          alert('Erro ao vincular pergunta à avaliação. Tente novamente.');
-          return;
-        }
       }
 
       // Recarrega as perguntas e categorias
@@ -1096,28 +949,11 @@ const EvaluationDetail = () => {
     if (!questionToDelete || !id) return;
 
     try {
-      // 1. Primeiro, remover o vínculo na tabela evaluations_questions_model
-      const { error: linkError } = await supabase
-        .from('evaluations_questions_model')
-        .delete()
-        .eq('evaluation_id', parseInt(id))
-        .eq('question_id', questionToDelete);
+      // Deletar pergunta via API (backend remove vínculo + pergunta)
+      const response = await apiClient.delete(`/api/evaluations/${id}/questions/${questionToDelete}`);
 
-      if (linkError) {
-        console.error('Erro ao remover vínculo da pergunta:', linkError);
-        alert('Erro ao remover vínculo da pergunta. Tente novamente.');
-        return;
-      }
-
-      // 2. Depois, deletar a pergunta da tabela questions_model
-      // (Opcional: você pode manter a pergunta e apenas remover o vínculo)
-      const { error: questionError } = await supabase
-        .from('questions_model')
-        .delete()
-        .eq('id', questionToDelete);
-
-      if (questionError) {
-        console.error('Erro ao deletar pergunta:', questionError);
+      if (!response.success) {
+        console.error('Erro ao deletar pergunta:', response.error);
         alert('Erro ao deletar pergunta. Tente novamente.');
         return;
       }
@@ -1196,20 +1032,17 @@ const EvaluationDetail = () => {
     }
 
     try {
-      // Atualizar a pergunta na tabela questions_model
-      const { error } = await supabase
-        .from('questions_model')
-        .update({
-          question: questionToSave.trim(),
-          description: descriptionToSave.trim() || null,
-          reply_type_id: replyTypeIdToSave,
-          weight: weightToSave,
-          required: requiredToSave,
-        })
-        .eq('id', editingQuestionId);
+      // Atualizar a pergunta via API
+      const response = await apiClient.put(`/api/evaluations/${id}/questions/${editingQuestionId}`, {
+        question: questionToSave.trim(),
+        description: descriptionToSave.trim() || null,
+        reply_type_id: replyTypeIdToSave,
+        weight: weightToSave,
+        required: requiredToSave,
+      });
 
-      if (error) {
-        console.error('Erro ao atualizar pergunta:', error);
+      if (!response.success) {
+        console.error('Erro ao atualizar pergunta:', response.error);
         alert('Erro ao atualizar pergunta. Tente novamente.');
         return;
       }
@@ -2026,13 +1859,10 @@ const EvaluationDetail = () => {
             <button
               onClick={async () => {
                 if (!evaluation.is_active || confirm('Tem certeza que deseja desativar esta avaliação?')) {
-                  const { error } = await supabase
-                    .from('evaluations_model')
-                    .update({ is_active: !evaluation.is_active })
-                    .eq('id', parseInt(id!));
+                  const response = await apiClient.patch(`/api/evaluations/${id}/toggle-status`);
                   
-                  if (error) {
-                    console.error('Erro ao alterar status da avaliação:', error);
+                  if (!response.success) {
+                    console.error('Erro ao alterar status da avaliação:', response.error);
                     alert('Erro ao alterar status da avaliação.');
                   } else {
                     await fetchEvaluation();

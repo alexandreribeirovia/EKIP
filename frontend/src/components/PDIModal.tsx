@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { apiClient } from '@/lib/apiClient';
 import Select from 'react-select';
 import { X, Plus, Trash2, Target, TrendingUp, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import ReactQuill from 'react-quill';
@@ -106,18 +106,14 @@ const PDIModal = ({
   }, [onSuccessMessage]);
 
   const fetchConsultants = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('user_id, name')
-      .eq('is_active', true)
-      .order('name');
+    const response = await apiClient.get('/api/lookups/users');
 
-    if (error) {
-      console.error('❌ Erro ao buscar consultores:', error);
+    if (!response.success) {
+      console.error('❌ Erro ao buscar consultores:', response.error);
       return;
     }
 
-    const options: UserOption[] = (data || []).map((user) => ({
+    const options: UserOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
       value: user.user_id,
       label: user.name,
     }));
@@ -126,23 +122,14 @@ const PDIModal = ({
   };
 
   const fetchManagers = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('user_id, name, position')
-      .eq('is_active', true)
-      .order('name');
+    const response = await apiClient.get('/api/lookups/managers');
 
-    if (error) {
-      console.error('❌ Erro ao buscar gestores:', error);
+    if (!response.success) {
+      console.error('❌ Erro ao buscar gestores:', response.error);
       return;
     }
 
-    const managersList = (data || []).filter((user) => {
-      const position = (user.position || '').toLowerCase();
-      return position.includes('gestor');
-    });
-
-    const options: UserOption[] = managersList.map((user) => ({
+    const options: UserOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
       value: user.user_id,
       label: user.name,
     }));
@@ -151,19 +138,14 @@ const PDIModal = ({
   };
 
   const fetchCompetencies = async () => {
-    const { data, error } = await supabase
-      .from('domains')
-      .select('id, value')
-      .eq('type', 'pdi_competencies')
-      .eq('is_active', true)
-      .order('value');
+    const response = await apiClient.get('/api/domains?type=pdi_competencies&is_active=true');
 
-    if (error) {
-      console.error('Erro ao buscar competências:', error);
+    if (!response.success) {
+      console.error('Erro ao buscar competências:', response.error);
       return;
     }
 
-    const options: CompetencyOption[] = (data || []).map((comp) => ({
+    const options: CompetencyOption[] = (response.data || []).map((comp: { id: number; value: string }) => ({
       value: comp.id,
       label: comp.value,
     }));
@@ -172,19 +154,14 @@ const PDIModal = ({
   };
 
   const fetchStatus = async () => {
-    const { data, error } = await supabase
-      .from('domains')
-      .select('id, value')
-      .eq('type', 'pdi_status')
-      .eq('is_active', true)
-      .order('value');
+    const response = await apiClient.get('/api/domains?type=pdi_status&is_active=true');
 
-    if (error) {
-      console.error('Erro ao buscar status:', error);
+    if (!response.success) {
+      console.error('Erro ao buscar status:', response.error);
       return;
     }
 
-    const options = (data || []).map((status) => ({
+    const options = (response.data || []).map((status: { id: number; value: string }) => ({
       value: status.id,
       label: status.value,
     }));
@@ -206,33 +183,18 @@ const PDIModal = ({
     setInternalPdiId(id);
     setIsLoading(true);
     
-    // Buscar dados do PDI
-    const { data: pdiData, error: pdiError } = await supabase
-      .from('pdi')
-      .select('*')
-      .eq('id', id)
-      .single();
+    // Buscar dados do PDI via API
+    const response = await apiClient.get(`/api/pdi/${id}`);
 
-    if (pdiError) {
-      console.error('Erro ao buscar dados do PDI:', pdiError);
+    if (!response.success) {
+      console.error('Erro ao buscar dados do PDI:', response.error);
       showErrorNotification('Erro ao carregar dados do PDI. Tente novamente.');
       setIsLoading(false);
       return;
     }
 
-    // Buscar itens do PDI
-    const { data: itemsData, error: itemsError } = await supabase
-      .from('pdi_items')
-      .select('*')
-      .eq('pdi_id', id)
-      .order('created_at');
-
-    if (itemsError) {
-      console.error('Erro ao buscar itens do PDI:', itemsError);
-      showErrorNotification('Erro ao carregar dados do PDI. Tente novamente.');
-      setIsLoading(false);
-      return;
-    }
+    const pdiData = response.data;
+    const itemsData = pdiData.items || [];
 
       // Preencher os dados do PDI
       setSelectedConsultant({
@@ -260,7 +222,7 @@ const PDIModal = ({
 
       // Preencher os itens de competência
       if (itemsData && itemsData.length > 0) {
-        const items: CompetencyItem[] = itemsData.map((item) => {
+        const items: CompetencyItem[] = itemsData.map((item: any) => {
           // Buscar o nome da competência
           const comp = competencies.find((c) => c.value === item.competency_id);
           
@@ -287,22 +249,18 @@ const PDIModal = ({
   const fetchPDIByEvaluationId = async (evalId: number) => {
     setIsLoading(true);
     
-    const { data, error } = await supabase
-      .from('pdi')
-      .select('id')
-      .eq('evaluation_id', evalId)
-      .maybeSingle();
+    const response = await apiClient.get(`/api/pdi/by-evaluation/${evalId}`);
 
-    if (error) {
-      console.error('Erro ao buscar PDI por evaluation_id:', error);
+    if (!response.success) {
+      console.error('Erro ao buscar PDI por evaluation_id:', response.error);
       setInternalPdiId(null);
       setIsLoading(false);
       return;
     }
     
-    if (data) {
+    if (response.data) {
       // Se encontrou um PDI vinculado, carregar seus dados do banco
-      await fetchPDIData(data.id);
+      await fetchPDIData(response.data.id);
     } else {
       // Se não encontrou PDI vinculado - campos já foram pré-preenchidos
       setInternalPdiId(null);
@@ -314,22 +272,18 @@ const PDIModal = ({
   const fetchPDIByFeedbackId = async (fbId: number) => {
     setIsLoading(true);
     
-    const { data, error } = await supabase
-      .from('pdi')
-      .select('id')
-      .eq('feedback_id', fbId)
-      .maybeSingle();
+    const response = await apiClient.get(`/api/pdi/by-feedback/${fbId}`);
 
-    if (error) {
-      console.error('Erro ao buscar PDI por feedback_id:', error);
+    if (!response.success) {
+      console.error('Erro ao buscar PDI por feedback_id:', response.error);
       setInternalPdiId(null);
       setIsLoading(false);
       return;
     }
     
-    if (data) {
+    if (response.data) {
       // Se encontrou um PDI vinculado, carregar seus dados do banco
-      await fetchPDIData(data.id);
+      await fetchPDIData(response.data.id);
     } else {
       // Se não encontrou PDI vinculado - campos já foram pré-preenchidos
       setInternalPdiId(null);
@@ -493,164 +447,60 @@ const PDIModal = ({
 
     setIsSubmitting(true);
 
+    // Preparar dados do PDI
+    const pdiData = {
+      user_id: selectedConsultant!.value,
+      user_name: selectedConsultant!.label,
+      owner_id: selectedManager!.value,
+      owner_name: selectedManager!.label,
+      status_id: selectedStatus!.value,
+      status: selectedStatus!.label,
+      name: `PDI - ${selectedConsultant!.label}`,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      comments: comments || null,
+      evaluation_id: evaluationId || null,
+      feedback_id: feedbackId || null,
+    };
+
+    // Preparar itens do PDI
+    const itemsData = competencyItems.map((item) => ({
+      competency_id: item.competency_id,
+      level_current: null,
+      level_target: null,
+      goal_description: item.goal_description,
+      actions: item.actions,
+      due_date: item.due_date,
+      progress: item.progress,
+    }));
+
     if (internalPdiId) {
-      // Modo de edição - atualizar PDI existente
-      const { error: pdiError } = await supabase
-        .from('pdi')
-        .update({
-          user_id: selectedConsultant!.value,
-          user_name: selectedConsultant!.label,
-          owner_id: selectedManager!.value,
-          owner_name: selectedManager!.label,
-          status_id: selectedStatus!.value,
-          status: selectedStatus!.label,
-          name: `PDI - ${selectedConsultant!.label}`,
-          start_date: startDate || null,
-          end_date: endDate || null,
-          comments: comments || null,
-          evaluation_id: evaluationId || null,
-          feedback_id: feedbackId || null,
-        })
-        .eq('id', internalPdiId);
+      // Modo de edição - atualizar PDI existente via RPC
+      const response = await apiClient.put(`/api/pdi/${internalPdiId}`, {
+        pdi: pdiData,
+        items: itemsData,
+      });
 
-      if (pdiError) {
-        console.error('Erro ao atualizar PDI:', pdiError);
-        showErrorNotification('Erro ao atualizar PDI. Tente novamente.');
+      if (!response.success) {
+        console.error('Erro ao atualizar PDI:', response.error);
+        showErrorNotification(response.error?.message || 'Erro ao atualizar PDI. Tente novamente.');
         setIsSubmitting(false);
         return;
-      }
-
-      // Deletar todos os itens antigos
-      const { error: deleteError } = await supabase
-        .from('pdi_items')
-        .delete()
-        .eq('pdi_id', internalPdiId);
-
-      if (deleteError) {
-        console.error('Erro ao deletar itens antigos:', deleteError);
-        showErrorNotification('Erro ao atualizar PDI. Tente novamente.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Inserir os novos itens
-      const itemsToInsert = competencyItems.map((item) => ({
-        pdi_id: internalPdiId,
-        competency_id: item.competency_id,
-        level_current: null,
-        level_target: null,
-        goal_description: item.goal_description,
-        actions: item.actions,
-        due_date: item.due_date,
-        progress: item.progress,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('pdi_items')
-        .insert(itemsToInsert);
-
-      if (itemsError) {
-        console.error('Erro ao inserir itens do PDI:', itemsError);
-        showErrorNotification('Erro ao atualizar PDI. Tente novamente.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Atualizar is_pdi nas tabelas vinculadas (feedback ou avaliação)
-      if (feedbackId) {
-        const { error: updateFeedbackError } = await supabase
-          .from('feedbacks')
-          .update({ is_pdi: true })
-          .eq('id', feedbackId);
-        
-        if (updateFeedbackError) {
-          console.error('Erro ao atualizar is_pdi no feedback:', updateFeedbackError);
-        }
-      }
-      
-      if (evaluationId) {
-        const { error: updateEvaluationError } = await supabase
-          .from('evaluations')
-          .update({ is_pdi: true })
-          .eq('id', evaluationId);
-        
-        if (updateEvaluationError) {
-          console.error('Erro ao atualizar is_pdi na avaliação:', updateEvaluationError);
-        }
       }
 
       showSuccessNotification('PDI atualizado com sucesso!');
     } else {
-      // Modo de criação - inserir novo PDI
-      const { data: pdiData, error: pdiError } = await supabase
-        .from('pdi')
-        .insert({
-          user_id: selectedConsultant!.value,
-          user_name: selectedConsultant!.label,
-          owner_id: selectedManager!.value,
-          owner_name: selectedManager!.label,
-          status_id: selectedStatus!.value,
-          status: selectedStatus!.label,
-          name: `PDI - ${selectedConsultant!.label}`,
-          start_date: startDate || null,
-          end_date: endDate || null,
-          comments: comments || null,
-          evaluation_id: evaluationId || null,
-          feedback_id: feedbackId || null,
-        })
-        .select()
-        .single();
+      // Modo de criação - inserir novo PDI via RPC
+      const response = await apiClient.post('/api/pdi', {
+        pdi: pdiData,
+        items: itemsData,
+      });
 
-      if (pdiError) {
-        console.error('Erro ao criar PDI:', pdiError);
-        showErrorNotification('Erro ao criar PDI. Tente novamente.');
+      if (!response.success) {
+        console.error('Erro ao criar PDI:', response.error);
+        showErrorNotification(response.error?.message || 'Erro ao criar PDI. Tente novamente.');
         setIsSubmitting(false);
         return;
-      }
-
-      const itemsToInsert = competencyItems.map((item) => ({
-        pdi_id: pdiData.id,
-        competency_id: item.competency_id,
-        level_current: null,
-        level_target: null,
-        goal_description: item.goal_description,
-        actions: item.actions,
-        due_date: item.due_date,
-        progress: item.progress,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('pdi_items')
-        .insert(itemsToInsert);
-
-      if (itemsError) {
-        console.error('Erro ao inserir itens do PDI:', itemsError);
-        showErrorNotification('Erro ao criar PDI. Tente novamente.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Atualizar is_pdi nas tabelas vinculadas (feedback ou avaliação)
-      if (feedbackId) {
-        const { error: updateFeedbackError } = await supabase
-          .from('feedbacks')
-          .update({ is_pdi: true })
-          .eq('id', feedbackId);
-        
-        if (updateFeedbackError) {
-          console.error('Erro ao atualizar is_pdi no feedback:', updateFeedbackError);
-        }
-      }
-      
-      if (evaluationId) {
-        const { error: updateEvaluationError } = await supabase
-          .from('evaluations')
-          .update({ is_pdi: true })
-          .eq('id', evaluationId);
-        
-        if (updateEvaluationError) {
-          console.error('Erro ao atualizar is_pdi na avaliação:', updateEvaluationError);
-        }
       }
 
       showSuccessNotification('PDI criado com sucesso!');

@@ -1,6 +1,15 @@
 import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
-import { supabaseAuth } from '@/middleware/supabaseAuth'
+import { sessionAuth } from '@/middleware/sessionAuth'
+import { 
+  createSession,
+  getSessionById,
+  getSessionByRefreshToken,
+  updateSessionTokens,
+  invalidateSession,
+  invalidateAllUserSessions,
+  getUserSessions
+} from '@/lib/sessionStore'
 
 const router = Router()
 
@@ -9,11 +18,18 @@ const supabaseUrl = process.env['SUPABASE_URL'] || ''
 const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'] || ''
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Configuração de cookies
+const isProduction = process.env['NODE_ENV'] === 'production'
+const REFRESH_TOKEN_COOKIE_NAME = 'ekip_refresh_token'
+const SESSION_ID_COOKIE_NAME = 'ekip_session_id'
+const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 dias em ms
+const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 dias em ms
+
 /**
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Login do usuário via Supabase Auth
+ *     summary: Login do usuário - retorna sessionId (tokens ficam criptografados no servidor)
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -31,7 +47,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
  *                 type: string
  *     responses:
  *       200:
- *         description: Login realizado com sucesso
+ *         description: Login realizado com sucesso. Retorna sessionId no body e em httpOnly cookie.
  *       401:
  *         description: Credenciais inválidas
  */
@@ -71,24 +87,62 @@ router.post('/login', async (req, res) => {
       })
     }
 
-    // Retornar dados do usuário e sessão
+    const userId = data.user.id
+    const userEmail = data.user.email || ''
+    const userName = data.user.user_metadata?.['name'] || data.user.email || 'Usuário'
+    const userRole = data.user.user_metadata?.['role'] || 'user'
+
+    // Criar sessão segura no banco (tokens criptografados)
+    const sessionResult = await createSession({
+      userId,
+      email: userEmail,
+      supabaseAccessToken: data.session.access_token,
+      supabaseRefreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at || Math.floor(Date.now() / 1000) + 3600,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || '',
+    })
+
+    if (!sessionResult) {
+      console.error('Erro ao criar sessão')
+      return res.status(500).json({
+        success: false,
+        error: { message: 'Erro ao criar sessão segura' },
+      })
+    }
+
+    const { sessionId, backendRefreshToken } = sessionResult
+
+    // Enviar sessionId e backendRefreshToken como httpOnly cookies
+    res.cookie(SESSION_ID_COOKIE_NAME, sessionId, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: SESSION_MAX_AGE,
+      path: '/',
+    })
+
+    res.cookie(REFRESH_TOKEN_COOKIE_NAME, backendRefreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: REFRESH_TOKEN_MAX_AGE,
+      path: '/',
+    })
+
+    // Retornar sessionId e dados do usuário (SEM tokens Supabase)
     return res.json({
       success: true,
       data: {
         user: {
-          id: (data.user as any).id,
-          email: (data.user as any).email,
-          name: (data.user as any).user_metadata?.['name'] || (data.user as any).email,
-          role: (data.user as any).user_metadata?.['role'] || 'user',
-          avatar: (data.user as any).user_metadata?.['avatar'],
-          runrun_user_id: (data.user as any).user_metadata?.['runrun_user_id'],
+          id: userId,
+          email: userEmail,
+          name: userName,
+          role: userRole,
+          avatar: data.user.user_metadata?.['avatar'],
+          runrun_user_id: data.user.user_metadata?.['runrun_user_id'],
         },
-        session: {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at,
-          expires_in: data.session.expires_in,
-        },
+        sessionId, // Frontend usa isso para as próximas requisições
       },
     })
   } catch (error) {
@@ -104,35 +158,47 @@ router.post('/login', async (req, res) => {
  * @swagger
  * /api/auth/me:
  *   get:
- *     summary: Obter dados do usuário logado via Supabase Auth
+ *     summary: Obter dados do usuário logado via sessionId
  *     tags: [Auth]
  *     security:
- *       - bearerAuth: []
+ *       - sessionAuth: []
  *     responses:
  *       200:
  *         description: Dados do usuário
  *       401:
  *         description: Não autorizado
  */
-router.get('/me', supabaseAuth, async (req, res) => {
+router.get('/me', sessionAuth, async (req, res) => {
   try {
-    // O middleware já validou e adicionou o usuário ao req
-    const user = req.user as any
+    // O middleware sessionAuth já validou a sessão
+    const session = req.session
 
-    if (!user) {
+    if (!session) {
       return res.status(401).json({
         success: false,
         error: { message: 'Usuário não autenticado' },
       })
     }
 
+    // Buscar dados completos do usuário no Supabase
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(session.userId)
+
+    if (userError || !userData.user) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Usuário não encontrado' },
+      })
+    }
+
+    const user = userData.user
+
     return res.json({
       success: true,
       data: {
         user: {
           id: user.id,
-          email: user.email || '',
-          name: user.user_metadata?.['name'] || user.email || 'Usuário',
+          email: user.email,
+          name: user.user_metadata?.['name'] || user.email,
           role: user.user_metadata?.['role'] || 'user',
           avatar: user.user_metadata?.['avatar'],
           runrun_user_id: user.user_metadata?.['runrun_user_id'],
@@ -152,71 +218,103 @@ router.get('/me', supabaseAuth, async (req, res) => {
  * @swagger
  * /api/auth/refresh:
  *   post:
- *     summary: Atualizar token de acesso usando refresh token
+ *     summary: Atualizar sessão usando refresh token do cookie httpOnly
  *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - refresh_token
- *             properties:
- *               refresh_token:
- *                 type: string
  *     responses:
  *       200:
- *         description: Token atualizado com sucesso
+ *         description: Sessão atualizada com sucesso
  *       401:
- *         description: Refresh token inválido
+ *         description: Refresh token inválido ou expirado
  */
 router.post('/refresh', async (req, res) => {
   try {
-    const { refresh_token } = req.body
+    // Ler refresh token do cookie httpOnly
+    const backendRefreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME]
 
-    if (!refresh_token) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'Refresh token é obrigatório' },
-      })
-    }
-
-    const { data, error } = await supabase.auth.refreshSession({
-      refresh_token,
-    })
-
-    if (error) {
-      console.error('Refresh token error:', error)
+    if (!backendRefreshToken) {
       return res.status(401).json({
         success: false,
-        error: { message: 'Refresh token inválido ou expirado' },
+        error: { message: 'Refresh token não encontrado', code: 'NO_REFRESH_TOKEN' },
       })
     }
 
-    if (!data.session) {
+    // Buscar sessão pelo backendRefreshToken
+    const session = await getSessionByRefreshToken(backendRefreshToken)
+    
+    if (!session) {
+      // Limpar cookies inválidos
+      res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' })
+      res.clearCookie(SESSION_ID_COOKIE_NAME, { path: '/' })
       return res.status(401).json({
         success: false,
-        error: { message: 'Erro ao atualizar sessão' },
+        error: { message: 'Refresh token inválido ou expirado', code: 'INVALID_REFRESH_TOKEN' },
       })
     }
+
+    // Verificar se precisa renovar tokens do Supabase
+    const now = Math.floor(Date.now() / 1000)
+    const tokenExpiresIn = session.expiresAt - now
+    
+    const newSessionId = session.id
+
+    // Se token do Supabase está próximo de expirar (menos de 5 minutos), renovar
+    if (tokenExpiresIn < 300) {
+      // Criar cliente temporário com o refresh token para renovar
+      const tempClient = createClient(supabaseUrl, supabaseServiceKey)
+      const { data: refreshData, error: refreshError } = await tempClient.auth.refreshSession({
+        refresh_token: session.supabaseRefreshToken,
+      })
+
+      if (refreshError || !refreshData.session) {
+        console.error('Erro ao renovar tokens Supabase:', refreshError)
+        // Invalidar sessão antiga
+        await invalidateSession(session.id)
+        res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' })
+        res.clearCookie(SESSION_ID_COOKIE_NAME, { path: '/' })
+        return res.status(401).json({
+          success: false,
+          error: { message: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' },
+        })
+      }
+
+      // Atualizar tokens na sessão
+      const updateSuccess = await updateSessionTokens(
+        session.id,
+        refreshData.session.access_token,
+        refreshData.session.refresh_token,
+        refreshData.session.expires_at || Math.floor(Date.now() / 1000) + 3600
+      )
+
+      if (!updateSuccess) {
+        return res.status(500).json({
+          success: false,
+          error: { message: 'Erro ao atualizar sessão' },
+        })
+      }
+    }
+
+    // Buscar dados atualizados do usuário
+    const { data: userData } = await supabase.auth.admin.getUserById(session.userId)
 
     return res.json({
       success: true,
       data: {
-        session: {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at,
-          expires_in: data.session.expires_in,
-        },
+        sessionId: newSessionId,
+        user: userData?.user ? {
+          id: userData.user.id,
+          email: userData.user.email,
+          name: userData.user.user_metadata?.['name'] || userData.user.email,
+          role: userData.user.user_metadata?.['role'] || 'user',
+          avatar: userData.user.user_metadata?.['avatar'],
+          runrun_user_id: userData.user.user_metadata?.['runrun_user_id'],
+        } : null,
       },
     })
   } catch (error) {
     console.error('Refresh token error:', error)
     return res.status(500).json({
       success: false,
-      error: { message: 'Erro ao atualizar token' },
+      error: { message: 'Erro ao atualizar sessão' },
     })
   }
 })
@@ -225,24 +323,26 @@ router.post('/refresh', async (req, res) => {
  * @swagger
  * /api/auth/logout:
  *   post:
- *     summary: Fazer logout e invalidar sessão
+ *     summary: Fazer logout - invalida sessão no banco e limpa cookies
  *     tags: [Auth]
  *     security:
- *       - bearerAuth: []
+ *       - sessionAuth: []
  *     responses:
  *       200:
  *         description: Logout realizado com sucesso
  */
-router.post('/logout', supabaseAuth, async (req, res) => {
+router.post('/logout', sessionAuth, async (req, res) => {
   try {
-    // Extrair token do header
-    const authHeader = req.headers.authorization
-    const token = authHeader?.replace('Bearer ', '')
+    const sessionId = req.sessionId
 
-    if (token) {
-      // Invalidar o token no Supabase
-      await supabase.auth.admin.signOut(token)
+    if (sessionId) {
+      // Invalidar sessão no banco
+      await invalidateSession(sessionId)
     }
+
+    // Limpar cookies
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' })
+    res.clearCookie(SESSION_ID_COOKIE_NAME, { path: '/' })
 
     return res.json({
       success: true,
@@ -250,10 +350,165 @@ router.post('/logout', supabaseAuth, async (req, res) => {
     })
   } catch (error) {
     console.error('Logout error:', error)
-    // Mesmo com erro, retorna sucesso pois o frontend vai limpar o estado
+    
+    // Mesmo com erro, limpa os cookies
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' })
+    res.clearCookie(SESSION_ID_COOKIE_NAME, { path: '/' })
+    
+    // Retorna sucesso pois o frontend vai limpar o estado
     return res.json({
       success: true,
       data: { message: 'Logout realizado' },
+    })
+  }
+})
+
+/**
+ * @swagger
+ * /api/auth/logout-all:
+ *   post:
+ *     summary: Fazer logout de todas as sessões do usuário
+ *     tags: [Auth]
+ *     security:
+ *       - sessionAuth: []
+ *     responses:
+ *       200:
+ *         description: Todas as sessões foram invalidadas
+ */
+router.post('/logout-all', sessionAuth, async (req, res) => {
+  try {
+    const session = req.session
+
+    if (session) {
+      // Invalidar todas as sessões do usuário
+      await invalidateAllUserSessions(session.userId)
+    }
+
+    // Limpar cookies
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' })
+    res.clearCookie(SESSION_ID_COOKIE_NAME, { path: '/' })
+
+    return res.json({
+      success: true,
+      data: { message: 'Todas as sessões foram encerradas' },
+    })
+  } catch (error) {
+    console.error('Logout-all error:', error)
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Erro ao encerrar sessões' },
+    })
+  }
+})
+
+/**
+ * @swagger
+ * /api/auth/sessions:
+ *   get:
+ *     summary: Listar todas as sessões ativas do usuário
+ *     tags: [Auth]
+ *     security:
+ *       - sessionAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de sessões ativas
+ */
+router.get('/sessions', sessionAuth, async (req, res) => {
+  try {
+    const session = req.session
+    const currentSessionId = req.sessionId
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Não autenticado' },
+      })
+    }
+
+    const sessions = await getUserSessions(session.userId)
+
+    // Retornar sessões com indicação de qual é a atual
+    const formattedSessions = sessions.map(s => ({
+      id: s.id,
+      createdAt: new Date(s.createdAt || 0).toISOString(),
+      lastUsedAt: new Date(s.lastUsedAt || 0).toISOString(),
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      isCurrent: s.id === currentSessionId,
+    }))
+
+    return res.json({
+      success: true,
+      data: { sessions: formattedSessions },
+    })
+  } catch (error) {
+    console.error('Get sessions error:', error)
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Erro ao buscar sessões' },
+    })
+  }
+})
+
+/**
+ * @swagger
+ * /api/auth/sessions/{id}:
+ *   delete:
+ *     summary: Revogar uma sessão específica
+ *     tags: [Auth]
+ *     security:
+ *       - sessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Sessão revogada com sucesso
+ */
+router.delete('/sessions/:id', sessionAuth, async (req, res) => {
+  try {
+    const session = req.session
+    const targetSessionId = req.params['id']
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Não autenticado' },
+      })
+    }
+
+    if (!targetSessionId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'ID da sessão é obrigatório' },
+      })
+    }
+
+    // Verificar se a sessão pertence ao usuário
+    const targetSession = await getSessionById(targetSessionId)
+    
+    if (!targetSession || targetSession.userId !== session.userId) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Sessão não encontrada' },
+      })
+    }
+
+    // Invalidar a sessão
+    await invalidateSession(targetSessionId)
+
+    return res.json({
+      success: true,
+      data: { message: 'Sessão revogada com sucesso' },
+    })
+  } catch (error) {
+    console.error('Delete session error:', error)
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Erro ao revogar sessão' },
     })
   }
 })
@@ -274,10 +529,16 @@ router.post('/logout', supabaseAuth, async (req, res) => {
  *       403:
  *         description: Acesso negado (requer admin)
  */
-router.get('/users', supabaseAuth, async (req, res) => {
+router.get('/users', sessionAuth, async (req, res) => {
   try {
-    // Verificar se o usuário é admin
-    const user = req.user as any
+    // Verificar se o usuário é admin usando o cliente autenticado
+    const { data: { user }, error: userError } = await req.supabaseUser!.auth.getUser()
+    if (userError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não autenticado' },
+      })
+    }
     const userRole = user?.user_metadata?.['role']
     if (userRole !== 'admin') {
       return res.status(403).json({
@@ -355,10 +616,16 @@ router.get('/users', supabaseAuth, async (req, res) => {
       * 403:
  * description: Acesso negado(requer admin)
       */
-router.post('/users', supabaseAuth, async (req, res) => {
+router.post('/users', sessionAuth, async (req, res) => {
   try {
-    // Verificar se o usuário é admin
-    const user = req.user as any
+    // Verificar se o usuário é admin usando o cliente autenticado
+    const { data: { user }, error: authError } = await req.supabaseUser!.auth.getUser()
+    if (authError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não autenticado' },
+      })
+    }
     const userRole = user?.user_metadata?.['role']
     if (userRole !== 'admin') {
       return res.status(403).json({
@@ -377,14 +644,14 @@ router.post('/users', supabaseAuth, async (req, res) => {
     }
 
     // Buscar dados adicionais do usuário na tabela 'users' do schema 'public'
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: fetchUserError } = await supabase
       .from('users')
       .select('avatar_large_url, user_id')
       .eq('email', email)
       .single()
 
-    if (userError && userError.code !== 'PGRST116') { // Ignora erro 'user not found'
-      console.error('Error fetching user data from public.users:', userError)
+    if (fetchUserError && fetchUserError.code !== 'PGRST116') { // Ignora erro 'user not found'
+      console.error('Error fetching user data from public.users:', fetchUserError)
       // Decide se quer bloquear a criação ou continuar sem os dados
     }
 
@@ -471,10 +738,16 @@ router.post('/users', supabaseAuth, async (req, res) => {
  *       403:
  *         description: Acesso negado (requer admin)
  */
-router.patch('/users/:id', supabaseAuth, async (req, res) => {
+router.patch('/users/:id', sessionAuth, async (req, res) => {
   try {
-    // Verificar se o usuário é admin
-    const user = req.user as any
+    // Verificar se o usuário é admin usando o cliente autenticado
+    const { data: { user }, error: userError } = await req.supabaseUser!.auth.getUser()
+    if (userError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não autenticado' },
+      })
+    }
     const userRole = user?.user_metadata?.['role']
     if (userRole !== 'admin') {
       return res.status(403).json({
@@ -597,10 +870,16 @@ router.patch('/users/:id', supabaseAuth, async (req, res) => {
  *       403:
  *         description: Acesso negado (requer admin)
  */
-router.post('/users/:id/reset-password', supabaseAuth, async (req, res) => {
+router.post('/users/:id/reset-password', sessionAuth, async (req, res) => {
   try {
-    // Verificar se o usuário é admin
-    const user = req.user as any
+    // Verificar se o usuário é admin usando o cliente autenticado
+    const { data: { user }, error: authError } = await req.supabaseUser!.auth.getUser()
+    if (authError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não autenticado' },
+      })
+    }
     const userRole = user?.user_metadata?.['role']
     if (userRole !== 'admin') {
       return res.status(403).json({
@@ -618,9 +897,9 @@ router.post('/users/:id/reset-password', supabaseAuth, async (req, res) => {
     }
 
     // Obter o email do usuário
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(id)
-    if (userError || !userData.user.email) {
-      console.error('Error getting user email:', userError)
+    const { data: userData, error: getUserError } = await supabase.auth.admin.getUserById(id)
+    if (getUserError || !userData?.user?.email) {
+      console.error('Error getting user email:', getUserError)
       return res.status(404).json({
         success: false,
         error: { message: 'Usuário não encontrado ou sem e-mail.' },

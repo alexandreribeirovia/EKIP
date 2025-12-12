@@ -15,12 +15,11 @@ interface TypeOption {
 
 const NotificationsPage = () => {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
   const {
     notifications,
     unreadCount,
     isLoading,
-    fetchNotifications,
     markAsRead,
     markAllAsRead,
     deleteNotification
@@ -29,12 +28,10 @@ const NotificationsPage = () => {
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
   const [selectedTypes, setSelectedTypes] = useState<TypeOption[]>([])
 
-  // Buscar notificações ao montar
-  useEffect(() => {
-    if (user?.id) {
-      void fetchNotifications()
-    }
-  }, [user?.id])
+  // O subscribe do authStore no notificationStore já cuida de:
+  // - connectSocket() ao autenticar
+  // - fetchNotifications() ao autenticar  
+  // Não precisamos chamar aqui para evitar duplicação
 
   const handleNotificationClick = async (notification: Notification) => {
     // Marcar como lida

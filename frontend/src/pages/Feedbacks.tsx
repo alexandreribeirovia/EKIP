@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import * as apiClient from '../lib/apiClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
@@ -81,17 +81,14 @@ const Feedbacks = () => {
   // Buscar consultores para o filtro
   const fetchConsultants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, name')
-        .order('name');
+      const result = await apiClient.get<{ user_id: string; name: string }[]>('/api/lookups/users');
 
-      if (error) {
-        console.error('Erro ao buscar consultores:', error);
+      if (!result.success) {
+        console.error('Erro ao buscar consultores:', result.error);
         return;
       }
 
-      const options: ConsultantOption[] = (data || []).map((user) => ({
+      const options: ConsultantOption[] = (result.data || []).map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -111,33 +108,26 @@ const Feedbacks = () => {
     try {
       const dateRange = getDateRange();
       
-      let query = supabase
-        .from('feedbacks')
-        .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment, is_pdi')
-        .gte('feedback_date', dateRange.start)
-        .lte('feedback_date', dateRange.end)
-        .order('feedback_date', { ascending: false });
+      // Construir query params
+      const params = new URLSearchParams({
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+      });
 
-      // Filtrar por consultores selecionados
+      // Adicionar consultores selecionados
       if (selectedConsultants.length > 0) {
-        const selectedIds = selectedConsultants.map(c => c.value);
-        query = query.in('feedback_user_id', selectedIds);
+        const selectedIds = selectedConsultants.map(c => c.value).join(',');
+        params.append('consultantIds', selectedIds);
       }
 
-      const { data, error } = await query;
+      const result = await apiClient.get<FeedbackData[]>(`/api/feedbacks?${params.toString()}`);
 
-      if (error) {
-        console.error('Erro ao buscar feedbacks:', error);
+      if (!result.success) {
+        console.error('Erro ao buscar feedbacks:', result.error);
         return;
       }
 
-      // Usa diretamente o campo is_pdi da tabela feedbacks
-      const feedbacksWithPDI = (data || []).map((feedback: any) => ({
-        ...feedback,
-        has_pdi: feedback.is_pdi || false,
-      }));
-
-      setFeedbacks(feedbacksWithPDI);
+      setFeedbacks(result.data || []);
     } catch (err) {
       console.error('Erro ao buscar feedbacks:', err);
     } finally {
@@ -180,13 +170,10 @@ const Feedbacks = () => {
     if (!feedbackToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('feedbacks')
-        .delete()
-        .eq('id', feedbackToDelete.id);
+      const result = await apiClient.del(`/api/feedbacks/${feedbackToDelete.id}`);
 
-      if (error) {
-        console.error('Erro ao deletar feedback:', error);
+      if (!result.success) {
+        console.error('Erro ao deletar feedback:', result.error);
         alert('Erro ao deletar feedback. Tente novamente.');
         return;
       }

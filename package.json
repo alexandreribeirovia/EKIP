@@ -13,6 +13,7 @@
     "start": "cd backend && npm start"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "concurrently": "^8.2.2"
   },
   "keywords": [
@@ -23,5 +24,9 @@
     "dashboard"
   ],
   "author": "Via Consulting",
-  "license": "MIT"
-} 
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "socket.io": "^4.8.1"
+  }
+}

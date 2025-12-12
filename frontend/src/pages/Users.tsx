@@ -3,7 +3,7 @@ import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
 import { Plus, Edit, Users as UsersIcon, UserCheck, UserX, Shield } from 'lucide-react'
 import UserModal from '@/components/UserModal'
-import { useAuthStore } from '@/stores/authStore'
+import * as apiClient from '../lib/apiClient'
 
 interface UserData {
   id: string
@@ -27,7 +27,6 @@ const Users = () => {
   const [searchText, setSearchText] = useState('')
   const [filterRole, setFilterRole] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
-  const { session } = useAuthStore()
 
   // Buscar usuários
   const fetchUsers = async () => {
@@ -36,31 +35,14 @@ const Users = () => {
     setIsLoading(true)
 
     try {
-      // Get latest token from store to prevent using a stale one from component state
-      const token = useAuthStore.getState().session?.access_token
+      const result = await apiClient.get<{users: UserData[]}>(`/api/auth/users`)
 
-      if (!token) {
-        console.error('Usuário não autenticado')
-        setIsLoading(false)
+      if (!result.success) {
+        console.error('Erro ao buscar usuários:', result.error)
         return
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Erro ao buscar usuários:', errorData)
-        return
-      }
-
-      const result = await response.json()
-
-      if (result.success && result.data.users) {
+      if (result.data?.users) {
         setUsers(result.data.users)
         applyFilters(result.data.users, searchText, filterRole, filterStatus)
       }
@@ -105,10 +87,8 @@ const Users = () => {
 
   // Carregar usuários ao montar
   useEffect(() => {
-    if (session) {
-      void fetchUsers()
-    }
-  }, [session])
+    void fetchUsers()
+  }, [])
 
   // Reaplica filtros quando mudam
   useEffect(() => {
