@@ -1,11 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin'
-import { jwtAuth } from '../middleware/jwtAuth'
+import { sessionAuth } from '../middleware/sessionAuth'
 
 const router = Router()
 
-// Aplicar middleware de autenticação em todas as rotas
-router.use(jwtAuth)
+// Aplicar middleware de autenticação por sessão em todas as rotas
+router.use(sessionAuth)
 
 // ==================== TAREFAS ====================
 

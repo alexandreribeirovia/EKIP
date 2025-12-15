@@ -133,13 +133,22 @@ const request = async <T = unknown>(
   try {
     let response = await makeRequest()
 
+    // Lista de códigos de erro de sessão que devem tentar refresh
+    const SESSION_ERROR_CODES = [
+      'SESSION_INVALID',
+      'SESSION_MISSING', 
+      'SESSION_INVALID_FORMAT',
+      'SESSION_ERROR'
+    ]
+
     // Se recebeu 401 (não autorizado), tenta renovar a sessão
     if (response.status === 401) {
       const errorData: ApiResponse = await response.clone().json().catch(() => ({}))
+      const errorCode = errorData.error?.code
       
-      // Se o erro é de sessão expirada, tenta renovar
-      if (errorData.error?.code === 'SESSION_INVALID' || errorData.error?.code === 'SESSION_MISSING') {
-        console.log('[apiClient] Sessão expirada, tentando renovar...')
+      // Verifica se é um erro de sessão que pode ser renovada
+      if (errorCode && SESSION_ERROR_CODES.includes(errorCode)) {
+        console.log('[apiClient] Problema com sessão, tentando renovar...', errorCode)
         
         const refreshed = await refreshSession()
         
@@ -157,6 +166,21 @@ const request = async <T = unknown>(
             credentials: 'include',
             body: body ? JSON.stringify(body) : undefined,
           })
+          
+          // Se a nova requisição ainda é 401 com erro de sessão, faz logout
+          if (response.status === 401) {
+            const newErrorData: ApiResponse = await response.clone().json().catch(() => ({}))
+            const newErrorCode = newErrorData.error?.code
+            
+            if (newErrorCode && SESSION_ERROR_CODES.includes(newErrorCode)) {
+              console.error('[apiClient] Sessão ainda inválida após refresh, redirecionando para login')
+              onAuthError()
+              return {
+                success: false,
+                error: { message: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' },
+              }
+            }
+          }
         } else {
           // Refresh falhou - usuário precisa fazer login novamente
           console.error('[apiClient] Refresh falhou, redirecionando para login')
@@ -166,23 +190,21 @@ const request = async <T = unknown>(
             error: { message: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' },
           }
         }
-      } else if (errorData.error?.code === 'SESSION_EXPIRED') {
+      } else if (errorCode === 'SESSION_EXPIRED') {
         // Sessão expirou no backend - usuário precisa fazer login
+        console.error('[apiClient] Sessão expirada no backend')
         onAuthError()
         return {
           success: false,
           error: { message: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' },
         }
       }
+      // Se chegou aqui com 401 mas NÃO é erro de sessão, 
+      // pode ser erro de permissão (RLS, etc) - NÃO fazer logout
     }
 
     // Parse da resposta
     const result: ApiResponse<T> = await response.json()
-
-    // Se ainda é 401 após refresh, chama onAuthError
-    if (!response.ok && response.status === 401) {
-      onAuthError()
-    }
 
     return result
   } catch (error) {
