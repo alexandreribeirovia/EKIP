@@ -79,7 +79,7 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <div className={`bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'
+      <div className={`bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-56'
         }`}>
         <div className="flex items-center justify-between plogo border-b border-gray-200 dark:border-gray-700 py-2">
           <div className="flex items-center">

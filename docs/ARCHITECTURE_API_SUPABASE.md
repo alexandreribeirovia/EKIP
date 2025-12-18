@@ -9,10 +9,10 @@ O EKIP utiliza uma arquitetura de três camadas com **autenticação baseada em 
 ```
 ┌─────────────────┐    X-Session-Id    ┌─────────────────┐   supabaseAdmin    ┌─────────────────┐
 │                 │ ─────────────────► │                 │ ─────────────────► │                 │
-│    Frontend     │   + httpOnly       │     Backend     │   + sessions      │    Supabase     │
-│  (React/Vite)   │     cookies        │    (Express)    │     (encrypted)   │   (PostgreSQL)  │
+│    Frontend     │   + httpOnly       │     Backend     │   + sessions       │    Supabase     │
+│  (React/Vite)   │     cookies        │    (Express)    │     (encrypted)    │   (PostgreSQL)  │
 │                 │ ◄───────────────── │                 │ ◄───────────────── │                 │
-└─────────────────┘    JSON Response   └─────────────────┘    Query Result   └─────────────────┘
+└─────────────────┘    JSON Response   └─────────────────┘    Query Result    └─────────────────┘
      :3000                                  :5000                              Cloud Database
                                               │
                                     ┌─────────┴─────────┐
@@ -28,8 +28,8 @@ O EKIP utiliza uma arquitetura de três camadas com **autenticação baseada em 
 │                 │   (sessionId)      │                 │   (server-side)    │                 │
 │    Frontend     │ ◄────────────────► │     Backend     │ ◄────────────────► │    Supabase     │
 │  (React/Vite)   │   ws://localhost   │  (Express+WS)   │   (admin key)      │   (PostgreSQL)  │
-│                 │        :5000       │                 │                     │                 │
-└─────────────────┘                    └─────────────────┘                     └─────────────────┘
+│                 │        :5000       │                 │                    │                 │
+└─────────────────┘                    └─────────────────┘                    └─────────────────┘
                                               │
                                     ┌─────────┴─────────┐
                                     │  postgres_changes │
@@ -44,20 +44,6 @@ O EKIP utiliza uma arquitetura de três camadas com **autenticação baseada em 
 3. Backend escuta Supabase Realtime (server-side com `supabaseAdmin`)
 4. Novas notificações são roteadas: `user:${userId}` ou broadcast
 
-## Por que essa arquitetura?
-
-### Antes (JWT exposto no Frontend)
-```typescript
-// ❌ Tokens JWT armazenados no localStorage
-const { data: { session } } = await supabase.auth.signIn(...)
-localStorage.setItem('access_token', session.access_token) // Vulnerável!
-```
-
-**Problemas:**
-- Tokens JWT expostos no localStorage (XSS vulnerability)
-- Refresh token visível ao JavaScript malicioso
-- Dificuldade de invalidar sessões remotamente
-- Sem controle centralizado de sessões ativas
 
 ### Agora (Sessões com tokens criptografados)
 ```typescript
@@ -221,7 +207,6 @@ router.get('/my-data', async (req: Request, res: Response, next: NextFunction) =
 export default router
 ```
 
-### Quando usar SERVICE_ROLE_KEY vs JWT do Usuário?
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -310,7 +295,7 @@ Todas as rotas retornam JSON no formato padronizado:
  │  │  })                 │    │    headers: { 'X-Session-Id': sessionId },                          │  │
  │  │                     │    │    credentials: 'include' // Envia httpOnly cookies                 │  │
  │  │                     │    │  })                                                                 │  │
- │  └─────────────────────┘    └──────────────────────────────────┬──────────────────────────────────┘  │
+ │  └─────────────────────┘    └───────────────────────────────────┬─────────────────────────────────┘  │
  └─────────────────────────────────────────────────────────────────┼────────────────────────────────────┘
                                                                    │
                                                                    │ HTTP GET /api/projects/123/tasks
@@ -496,82 +481,7 @@ frontend/
 
 ---
 
-## Guia de Migração: Supabase Direto → API Backend
 
-### Passo 1: Criar Endpoint no Backend
-
-```typescript
-// backend/src/routes/example.ts
-router.get('/:id/items', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const id = req.params['id'] as string
-    if (!id) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { message: 'ID é obrigatório', code: 'MISSING_ID' } 
-      })
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('items')
-      .select('*')
-      .eq('parent_id', parseInt(id))
-
-    if (error) {
-      console.error('Erro ao buscar items:', error)
-      return res.status(500).json({
-        success: false,
-        error: { message: error.message, code: 'SUPABASE_ERROR' }
-      })
-    }
-
-    return res.json({
-      success: true,
-      data: data || []
-    })
-  } catch (err) {
-    return next(err)
-  }
-})
-```
-
-### Passo 2: Migrar Chamada no Frontend
-
-**Antes:**
-```typescript
-import { supabase } from '../lib/supabaseClient'
-
-useEffect(() => {
-  const fetchItems = async () => {
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .eq('parent_id', id)
-    
-    if (!error) setItems(data || [])
-  }
-  fetchItems()
-}, [id])
-```
-
-**Depois:**
-```typescript
-import apiClient from '../lib/apiClient'
-
-useEffect(() => {
-  const fetchItems = async () => {
-    const response = await apiClient.get(`/api/example/${id}/items`)
-    if (response.success) {
-      setItems(response.data)
-    }
-  }
-  fetchItems()
-}, [id])
-```
-
----
-
-## Endpoints Implementados
 
 ### Projects (`/api/projects`)
 

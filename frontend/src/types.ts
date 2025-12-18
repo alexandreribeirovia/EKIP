@@ -96,7 +96,10 @@ export interface DbTask {
   title: string;
   is_closed: boolean;
   board_name: string | null;
+  board_stage_id: number | null;
   board_stage_name: string | null;
+  stage_position: number | null;
+  stage_group: string | null;
   type_name: string | null; 
   gantt_bar_start_date: string | null;
   gantt_bar_end_date: string | null;

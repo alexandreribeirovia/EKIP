@@ -45,21 +45,117 @@ This project uses **both Prisma/PostgreSQL AND Supabase** concurrently:
 - Default config: `defaultColDef={{ sortable: true, filter: true, resizable: true }}`
 - See `frontend/src/pages/Projects.tsx` or `ProjectDetail.tsx` for patterns
 
-### Supabase Queries
-```typescript
-const { data, error } = await supabase
-  .from('table_name')
-  .select('*, related_table(*)')
-  .eq('field', value)
-```
-- Always destructure `{ data, error }` and check error
-- Use `.select()` with joins for related tables
-- Foreign key joins are NOT enforced - manual joins in JS code when needed (see ProjectDetail phases)
+### API Calls Pattern (OBRIGATÓRIO)
 
-### API Responses
+**REGRA: Todas as chamadas de API do frontend DEVEM usar o `apiClient`.**
+
+O frontend NÃO deve fazer chamadas diretas ao Supabase. Use sempre o `apiClient` que:
+- Injeta automaticamente o `sessionId` via header `X-Session-Id`
+- Envia cookies httpOnly para refresh token
+- Faz refresh automático da sessão quando expira (401)
+- Retorna formato padronizado: `{ success: boolean, data?: T, error?: Error }`
+
+```typescript
+import apiClient from '../lib/apiClient'
+
+// GET request
+const response = await apiClient.get('/api/projects')
+if (response.success) {
+  setProjects(response.data)
+} else {
+  console.error(response.error?.message)
+}
+
+// POST request
+const response = await apiClient.post('/api/projects', { name: 'Novo Projeto' })
+
+// PATCH request
+const response = await apiClient.patch(`/api/projects/${id}`, { status: 'active' })
+
+// PUT request
+const response = await apiClient.put(`/api/pdi/${id}`, { pdi, items })
+
+// DELETE request
+const response = await apiClient.del(`/api/projects/${id}`)
+```
+
+**Endpoints Disponíveis:**
+
+| Módulo | Base URL | Descrição |
+|--------|----------|-----------|
+| Auth | `/api/auth` | Login, logout, refresh |
+| Projects | `/api/projects` | Projetos, tasks, risks, phases |
+| Employees | `/api/employees` | Funcionários e skills |
+| Employee Detail | `/api/employee-detail` | Detalhes do funcionário |
+| Evaluations | `/api/evaluations` | Modelos de avaliação |
+| Employee Evaluations | `/api/employee-evaluations` | Avaliações de funcionários |
+| Feedbacks | `/api/feedbacks` | Feedbacks |
+| PDI | `/api/pdi` | Planos de Desenvolvimento Individual |
+| Lookups | `/api/lookups` | Dados para dropdowns |
+| Notifications | `/api/notifications` | Notificações |
+| Allocations | `/api/allocations` | Alocações |
+| Dashboard | `/api/dashboard` | Dados do dashboard |
+| Domains | `/api/domains` | Domínios do sistema |
+| Users | `/api/users` | Usuários |
+
+**Ver documentação completa em:** `docs/ARCHITECTURE_API_SUPABASE.md`
+
+### Backend Route Pattern
+
+Todas as rotas do backend devem seguir este padrão:
+
+```typescript
+import { Router, Request, Response, NextFunction } from 'express'
+import { supabaseAdmin } from '../lib/supabaseAdmin'
+import { sessionAuth } from '../middleware/sessionAuth'
+
+const router = Router()
+
+// Aplicar middleware de autenticação em todas as rotas
+router.use(sessionAuth)
+
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('table_name')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Erro ao buscar dados:', error)
+      return res.status(500).json({
+        success: false,
+        error: { message: error.message, code: 'SUPABASE_ERROR' }
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: data || []
+    })
+  } catch (err) {
+    return next(err)
+  }
+})
+
+export default router
+```
+
+**Regras do Backend:**
+- Sempre usar `sessionAuth` middleware para autenticação
+- Usar `supabaseAdmin` para queries (bypass RLS) ou `req.supabaseUser` (com RLS)
+- Retornar formato padronizado: `{ success: boolean, data?, error? }`
+- Sempre usar try-catch com `next(err)` para erros
+- Logar erros do Supabase antes de retornar
+
+### API Response Format
 Backend returns standardized format:
 ```typescript
-{ success: boolean, data?: T, error?: { message, code, details } }
+// Sucesso
+{ success: true, data: [...] }
+
+// Erro
+{ success: false, error: { message: string, code: string, details?: any } }
 ```
 
 ## Development Workflows

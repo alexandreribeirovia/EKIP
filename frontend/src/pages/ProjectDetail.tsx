@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
-import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize, Copy } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Clock, BarChart3, ChevronDown, ChevronRight, PieChart, Edit, Maximize, Copy, List, Columns, User } from 'lucide-react';
 import Select from 'react-select';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea, BarChart, Bar, LabelList } from 'recharts';
 import * as apiClient from '../lib/apiClient';
@@ -220,6 +220,222 @@ const RiskPriorityBadge = ({ value }: { value: string }) => {
 };
 
 // Componente para renderizar badges de Status com cores
+// Componente para renderizar cards de tarefas no Kanban
+const KanbanCard = ({ 
+  task, 
+  onClick 
+}: { 
+  task: DbTask; 
+  onClick: (task: DbTask) => void;
+}) => {
+  // Determinar cor do card baseado no status
+  const getCardStyle = () => {
+    // Verde para tarefas entregues
+    if (task.is_closed) {
+      return 'border-l-4 border-l-green-500 bg-green-50 dark:bg-green-900/20';
+    }
+    // Vermelho para tarefas atrasadas
+    if (task.gantt_bar_end_date) {
+      const endDate = new Date(task.gantt_bar_end_date);
+      const currentDate = new Date();
+      endDate.setHours(0, 0, 0, 0);
+      currentDate.setHours(0, 0, 0, 0);
+      if (currentDate > endDate) {
+        return 'border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/20';
+      }
+    }
+    // Amarelo para tarefas não planejadas
+    if (!task.gantt_bar_end_date) {
+      return 'border-l-4 border-l-yellow-500 bg-yellow-50 dark:bg-yellow-900/20';
+    }
+    // Default
+    return 'border-l-4 border-l-gray-300 bg-white dark:bg-gray-800';
+  };
+
+  const formatCardDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
+  const formatCardHours = (seconds: number | null) => {
+    if (seconds === null || seconds === 0) return '00h00';
+    const roundedMinutes = Math.round(seconds / 60);
+    const hours = Math.floor(roundedMinutes / 60);
+    const minutes = roundedMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}h${minutes.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div
+      onClick={() => onClick(task)}
+      className={`${getCardStyle()} rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer p-3 mb-2 pt-1 pb-0.5`} 
+    >
+      {/* Título */}
+      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2 line-clamp-2">
+        {task.title}
+      </h4>
+      
+      {/* Tipo */}
+      {task.type_name && (
+        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 mb-2">
+          {task.type_name}
+        </span>
+      )}
+      
+      {/* Datas */}
+      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+        <Clock className="w-3 h-3" />
+        <span>{formatCardDate(task.gantt_bar_start_date)} - {formatCardDate(task.gantt_bar_end_date)}</span>
+      </div>
+      
+      {/* Horas */}
+      <div className="flex items-center justify-between text-xs mb-3">
+        <span className="text-gray-500 dark:text-gray-400">
+          Prev: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCardHours(task.current_estimate_seconds)}</span>
+        </span>
+        <span className="text-gray-500 dark:text-gray-400">
+          Trab: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCardHours(task.time_worked)}</span>
+        </span>
+      {/* </div> */}
+      
+      {/* Atribuídos */}
+      {task.assignments && task.assignments.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {task.assignments.slice(0, 3).map((assignment, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-full px-2 py-0.5"
+              title={assignment.users?.name || 'Não atribuído'}
+            >
+              {assignment.users?.avatar_large_url ? (
+                <img
+                  src={assignment.users.avatar_large_url}
+                  alt={assignment.users.name}
+                  className="w-4 h-4 rounded-full"
+                />
+              ) : (
+                <User className="w-3 h-3 text-gray-500" />
+              )}
+              {/* <span className="text-xs text-gray-600 dark:text-gray-300 max-w-[60px] truncate">
+                {assignment.users?.name?.split(' ')[0] || '-'}
+              </span> */}
+            </div>
+          ))}
+          {task.assignments.length > 3 && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">+{task.assignments.length - 3}</span>
+          )}
+        </div>
+      )}
+      </div>
+    </div>
+  );
+};
+
+// Componente para visualização Kanban de tarefas
+const TaskKanbanView = ({ 
+  tasks, 
+  onTaskClick,
+  isFullScreen = false
+}: { 
+  tasks: DbTask[]; 
+  onTaskClick: (task: DbTask) => void;
+  isFullScreen?: boolean;
+}) => {
+  // Interface para armazenar informações da coluna do Kanban
+  interface KanbanColumn {
+    stageName: string;
+    stageGroup: string | null;
+    position: number | null;
+    tasks: DbTask[];
+  }
+
+  // Agrupar tarefas por status (board_stage_name) e ordenar por stage_group e position
+  const groupedTasks = useMemo(() => {
+    const columnsMap = new Map<string, KanbanColumn>();
+    
+    tasks.forEach(task => {
+      const stageName = task.board_stage_name || 'Sem Status';
+      
+      if (!columnsMap.has(stageName)) {
+        columnsMap.set(stageName, {
+          stageName,
+          stageGroup: task.stage_group || null,
+          position: task.stage_position ?? null,
+          tasks: []
+        });
+      } else {
+        // Sempre atualizar com valores não-nulos se a coluna ainda não tem valores reais
+        const existingColumn = columnsMap.get(stageName)!;
+        if (task.stage_group !== null && existingColumn.stageGroup === null) {
+          existingColumn.stageGroup = task.stage_group;
+        }
+        if (task.stage_position !== null && existingColumn.position === null) {
+          existingColumn.position = task.stage_position;
+        }
+      }
+      columnsMap.get(stageName)!.tasks.push(task);
+    });
+    
+    // Ordenar colunas: primeiro por stage_group (opened antes de closed), depois por position
+    const sortedColumns = Array.from(columnsMap.values()).sort((a, b) => {
+      const groupA = a.stageGroup || 'opened';
+      const groupB = b.stageGroup || 'opened';
+      const posA = a.position ?? 999;
+      const posB = b.position ?? 999;
+      
+      // stage_group: 'opened' vem antes de 'closed'
+      if (groupA !== groupB) {
+        if (groupA === 'opened') return -1;
+        if (groupB === 'opened') return 1;
+        return groupA.localeCompare(groupB);
+      }
+      // Dentro do mesmo grupo, ordenar por position
+      return posA - posB;
+    });
+    
+    // Retornar no formato [stageName, tasks][]
+    return sortedColumns.map(col => [col.stageName, col.tasks] as [string, DbTask[]]);
+  }, [tasks]);
+
+  if (tasks.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full p-6">
+        <span className="text-gray-500 dark:text-gray-400">Nenhuma tarefa encontrada para os filtros selecionados.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-4 pt-0 p-6 pb-8 h-full" style={{ minWidth: 'max-content' }}>
+      {groupedTasks.map(([status, statusTasks]) => (
+        <div
+          key={status}
+          className="flex-shrink-0 w-72 bg-gray-100 dark:bg-gray-800 rounded-lg flex flex-col" style={{ height: isFullScreen ? 'calc(100vh - 180px)' : 'calc(100vh - 320px)' }}
+        >
+          {/* Cabeçalho da coluna */}
+          <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{status}</h3>
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+              {statusTasks.length}
+            </span>
+          </div>
+          
+          {/* Cards da coluna */}
+          <div className="flex-1 overflow-y-auto p-2">
+            {statusTasks.map(task => (
+              <KanbanCard
+                key={task.id}
+                task={task}
+                onClick={onTaskClick}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const RiskStatusBadge = ({ value }: { value: string }) => {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -363,6 +579,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [taskSearchTerm, setTaskSearchTerm] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<SelectOption[]>([]);
   const [statusFilter, setStatusFilter] = useState<'Aberto' | 'Fechado' | 'Todos'>('Aberto');
+  const [taskViewMode, setTaskViewMode] = useState<'list' | 'kanban'>('list');
   const [riskSearchTerm, setRiskSearchTerm] = useState('');
   const [selectedRiskStatuses, setSelectedRiskStatuses] = useState<SelectOption[]>([]);
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
@@ -2072,13 +2289,27 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                   </div>
                 </div>
 
-                <div className="flex flex-col flex-1">
-                  <div className="px-6 pt-1 pb-3 flex items-center gap-6 text-sm text-gray-600">
-                    <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{summaryCounts.total} Tarefas</span></span>
-                    <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Ativos: <span className="font-bold text-green-600 dark:text-green-400">{summaryCounts.active}</span></span>
-                    <span>Entregue: <span className="font-bold text-blue-600 dark:text-blue-400">{summaryCounts.delivered}</span></span>
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <div className="px-6 pt-1 pb-3 flex items-center justify-between text-sm text-gray-600 flex-shrink-0">
+                    <div className="flex items-center gap-6">
+                      <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{summaryCounts.total} Tarefas</span></span>
+                      <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Ativos: <span className="font-bold text-green-600 dark:text-green-400">{summaryCounts.active}</span></span>
+                      <span>Entregue: <span className="font-bold text-blue-600 dark:text-blue-400">{summaryCounts.delivered}</span></span>
+                    </div>
+                    <button
+                      onClick={() => setTaskViewMode(taskViewMode === 'list' ? 'kanban' : 'list')}
+                      className="flex items-center gap-2 px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      title={taskViewMode === 'list' ? 'Visualização Kanban' : 'Visualização Lista'}
+                    >
+                      {taskViewMode === 'list' ? (
+                        <Columns className="w-4 h-4" />
+                      ) : (
+                        <List className="w-4 h-4" />
+                      )}
+                    </button>
                   </div>
 
+                  {taskViewMode === 'list' ? (
                   <div className="ag-theme-alpine w-full flex-1 p-6 pt-0">
                     <AgGridReact
                       columnDefs={taskColumnDefs}
@@ -2128,6 +2359,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       }
                     />
                   </div>
+                  ) : (
+                    <div className="flex-1 overflow-x-scroll overflow-y-hidden" style={{ scrollbarWidth: 'auto' }}>
+                      <TaskKanbanView
+                        tasks={filteredTasks}
+                        onTaskClick={(task) => {
+                          if (task.task_id) {
+                            window.open(`https://viaconsulting.runrun.it/tasks/${task.task_id}`, '_blank');
+                          }
+                        }}
+                        isFullScreen={isFullScreen}
+                      />
+                    </div>
+                  )}
                 </div>
               </>
             )}
