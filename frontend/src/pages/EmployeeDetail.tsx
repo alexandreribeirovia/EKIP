@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy, CheckCircle } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform } from '../types'
@@ -1539,6 +1539,45 @@ const EmployeeDetail = () => {
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
             {statusText}
           </span>
+        );
+      },
+    },
+    {
+      headerName: 'Aceite',
+      field: 'accepted',
+      flex: 0.8,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const isClosed = params.data.is_closed;
+        const accepted = params.value;
+
+        // Só exibe status de aceite se a avaliação estiver fechada
+        if (!isClosed) {
+          return (
+            <div className="flex items-center justify-left h-full">
+              <span className="text-gray-400 dark:text-gray-600 text-xs">-</span>
+            </div>
+          );
+        }
+
+        if (accepted) {
+          return (
+            <div className="flex items-center justify-left h-full">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Aceito
+              </span>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+              <Clock className="w-3 h-3 mr-1" />
+              Pendente
+            </span>
+          </div>
         );
       },
     },

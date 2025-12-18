@@ -318,6 +318,9 @@ export interface EmployeeEvaluationData {
   period_end: string;
   status_id: number | null;
   is_done: boolean;
+  is_closed?: boolean;
+  accepted?: boolean;
+  accepted_at?: string | null;
   status?: {
     id: number;
     value: string;

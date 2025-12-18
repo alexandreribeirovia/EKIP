@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../lib/apiClient';
-import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target, Maximize } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Star, AlertCircle, ArrowLeft, CheckCircle, XCircle, X, MinusCircle, Target, Maximize, Link, Copy, Clock } from 'lucide-react';
 import { EvaluationInfo, CategoryData, EvaluationQuestionData, QuestionResponse } from '../types';
 import PDIModal from '../components/PDIModal';
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating';
@@ -162,6 +162,17 @@ const EvaluationResponse = () => {
   const [isPDIModalOpen, setIsPDIModalOpen] = useState(false);
   const [hasLinkedPDI, setHasLinkedPDI] = useState(false);
 
+  // Estados para Aceite de Avaliação
+  const [acceptLinkInfo, setAcceptLinkInfo] = useState<{
+    hasValidLink: boolean;
+    linkExpiresAt: string | null;
+    accepted: boolean;
+    acceptedAt: string | null;
+  } | null>(null);
+  const [generatedAcceptUrl, setGeneratedAcceptUrl] = useState<string | null>(null);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [showAcceptLinkModal, setShowAcceptLinkModal] = useState(false);
+
   // Modo Apresentação
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const presentationRef = useRef<HTMLDivElement>(null);
@@ -309,10 +320,117 @@ const EvaluationResponse = () => {
       setStatusName(data.status_name || '');
       setProjectNames(data.project_names || []);
       setHasLinkedPDI(data.has_linked_pdi);
+
+      // Se avaliação está fechada, buscar status do link de aceite
+      if (data.is_closed) {
+        await fetchAcceptLinkStatus();
+      }
     } catch (err) {
       console.error('Erro ao buscar avaliação:', err);
       setError('Erro ao carregar avaliação');
     }
+  };
+
+  // Buscar status do link de aceite
+  const fetchAcceptLinkStatus = async () => {
+    if (!id) return;
+
+    try {
+      const response = await apiClient.get<{
+        accepted: boolean;
+        acceptedAt: string | null;
+        isClosed: boolean;
+        hasValidLink: boolean;
+        linkExpiresAt: string | null;
+        linkCreatedAt: string | null;
+      }>(`/api/evaluation-accept/${id}/link`);
+
+      if (response.success && response.data) {
+        setAcceptLinkInfo({
+          hasValidLink: response.data.hasValidLink,
+          linkExpiresAt: response.data.linkExpiresAt,
+          accepted: response.data.accepted,
+          acceptedAt: response.data.acceptedAt
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao buscar status do link de aceite:', err);
+    }
+  };
+
+  // Gerar link de aceite
+  const generateAcceptLink = async () => {
+    if (!id || isGeneratingLink) return;
+
+    setIsGeneratingLink(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.post<{
+        token: string;
+        url: string;
+        expiresAt: string;
+        expiresInHours: number;
+        evaluation: { id: number; name: string; userName: string };
+      }>(`/api/evaluation-accept/${id}/generate`);
+
+      if (response.success && response.data) {
+        setGeneratedAcceptUrl(response.data.url);
+        setShowAcceptLinkModal(true);
+        
+        // Atualizar info do link
+        setAcceptLinkInfo(prev => ({
+          ...prev!,
+          hasValidLink: true,
+          linkExpiresAt: response.data!.expiresAt
+        }));
+
+        // Copiar para clipboard
+        try {
+          await navigator.clipboard.writeText(response.data.url);
+          setSuccessMessage('Link de aceite gerado e copiado para a área de transferência!');
+        } catch {
+          // Se não conseguir copiar, mostra modal mesmo assim
+          setSuccessMessage('Link de aceite gerado com sucesso!');
+        }
+      } else {
+        setError(response.error?.message || 'Erro ao gerar link de aceite');
+      }
+    } catch (err) {
+      console.error('Erro ao gerar link de aceite:', err);
+      setError('Erro ao gerar link de aceite');
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
+
+  // Copiar link para clipboard
+  const copyAcceptLink = async () => {
+    if (!generatedAcceptUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(generatedAcceptUrl);
+      setSuccessMessage('Link copiado para a área de transferência!');
+    } catch {
+      setError('Não foi possível copiar o link');
+    }
+  };
+
+  // Formatar tempo restante do link
+  const formatTimeRemaining = (expiresAt: string) => {
+    const now = new Date();
+    const expires = new Date(expiresAt);
+    const diff = expires.getTime() - now.getTime();
+    
+    if (diff <= 0) return 'Expirado';
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}min`;
+    }
+    return `${minutes} minutos`;
   };
 
   // Buscar perguntas do modelo de avaliação
@@ -1061,6 +1179,138 @@ const EvaluationResponse = () => {
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-lg flex items-center gap-2">
           <Target className="w-5 h-5" />
           <span>Existe PDI vinculado a esta avaliação.</span>
+        </div>
+      )}
+
+      {/* Card de Aceite de Avaliação - visível quando fechada e não aceita */}
+      {evaluation?.is_closed && acceptLinkInfo && (
+        <div className={`border rounded-lg px-4 py-3 ${
+          acceptLinkInfo.accepted
+            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {acceptLinkInfo.accepted ? (
+                <>
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <span className="text-green-700 dark:text-green-400 font-medium">
+                    Avaliação aceita em {new Date(acceptLinkInfo.acceptedAt!).toLocaleString('pt-BR')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Link className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <span className="text-purple-700 dark:text-purple-400">
+                    {acceptLinkInfo.hasValidLink ? (
+                      <>Link de aceite ativo • Expira em {formatTimeRemaining(acceptLinkInfo.linkExpiresAt!)}</>
+                    ) : (
+                      <>Aguardando aceite do funcionário</>
+                    )}
+                  </span>
+                </>
+              )}
+            </div>
+            
+            {!acceptLinkInfo.accepted && (
+              <div className="flex items-center gap-2">
+                {acceptLinkInfo.hasValidLink && generatedAcceptUrl && (
+                  <button
+                    onClick={() => setShowAcceptLinkModal(true)}
+                    className="px-3 py-1.5 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Exibir Link
+                  </button>
+                )}
+                <button
+                  onClick={generateAcceptLink}
+                  disabled={isGeneratingLink}
+                  className="px-3 py-1.5 text-sm font-medium text-white bg-purple-500 rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                >
+                  {isGeneratingLink ? (
+                    <>
+                      <Clock className="w-4 h-4 animate-spin" />
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <Link className="w-4 h-4" />
+                      {acceptLinkInfo.hasValidLink ? 'Gerar Novo Link' : 'Gerar Link de Aceite'}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Link de Aceite */}
+      {showAcceptLinkModal && generatedAcceptUrl && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-t-2xl flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Link className="w-5 h-5" />
+                Link de Aceite
+              </h2>
+              <button
+                onClick={() => setShowAcceptLinkModal(false)}
+                className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <p className="text-gray-700 dark:text-gray-300 text-sm">
+                Copie o link abaixo e envie ao funcionário para que ele aceite a avaliação.
+                O link é válido por <strong>24 horas</strong> e pode ser usado apenas uma vez.
+              </p>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={generatedAcceptUrl}
+                  readOnly
+                  className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300"
+                />
+                <button
+                  onClick={copyAcceptLink}
+                  className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar
+                </button>
+              </div>
+
+              {acceptLinkInfo?.linkExpiresAt && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <Clock className="w-4 h-4" />
+                  <span>Expira em: {formatTimeRemaining(acceptLinkInfo.linkExpiresAt)}</span>
+                </div>
+              )}
+
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 flex gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  Se você gerar um novo link, o link anterior será automaticamente invalidado.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowAcceptLinkModal(false)}
+                  className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
