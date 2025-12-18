@@ -14,7 +14,7 @@
 
 import type { Server as SocketIOServer } from 'socket.io'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { supabaseAdmin } from '../lib/supabaseAdmin'
+import { getSupabaseAdmin } from '../lib/supabaseAdmin'
 import type { AuthenticatedSocket } from './socketAuth'
 
 // ==================== TIPOS ====================
@@ -107,7 +107,7 @@ export const initializeNotificationSocket = (socketServer: SocketIOServer): void
  */
 export const shutdownNotificationSocket = (): void => {
   if (realtimeChannel) {
-    supabaseAdmin.removeChannel(realtimeChannel)
+    getSupabaseAdmin().removeChannel(realtimeChannel)
     realtimeChannel = null
   }
   userSockets.clear()
@@ -207,10 +207,10 @@ const unregisterSocket = (socket: AuthenticatedSocket): void => {
 const initializeRealtimeChannel = (): void => {
   // Remover canal anterior se existir
   if (realtimeChannel) {
-    supabaseAdmin.removeChannel(realtimeChannel)
+    getSupabaseAdmin().removeChannel(realtimeChannel)
   }
 
-  realtimeChannel = supabaseAdmin
+  realtimeChannel = getSupabaseAdmin()
     .channel('notifications-server')
     // Escutar INSERT
     .on(
@@ -220,9 +220,9 @@ const initializeRealtimeChannel = (): void => {
         schema: 'public',
         table: 'notifications'
       },
-      async (payload) => {
+      async (payload: { new: Record<string, unknown> }) => {
         try {
-          const notification = payload.new as NotificationPayload
+          const notification = payload.new as unknown as NotificationPayload
 
           console.log(`[NotificationSocket] Nova notificação recebida: ${notification.id} - ${notification.title}`)
 
@@ -255,9 +255,9 @@ const initializeRealtimeChannel = (): void => {
         schema: 'public',
         table: 'notifications'
       },
-      (payload) => {
+      (payload: { old: Record<string, unknown> }) => {
         try {
-          const deletedNotification = payload.old as { id: number; auth_user_id?: string; audience?: string }
+          const deletedNotification = payload.old as unknown as { id: number; auth_user_id?: string; audience?: string }
           
           console.log(`[NotificationSocket] Notificação deletada: ${deletedNotification.id}`)
 
@@ -270,7 +270,7 @@ const initializeRealtimeChannel = (): void => {
         }
       }
     )
-    .subscribe((status) => {
+    .subscribe((status: string) => {
       console.log(`[NotificationSocket] Supabase Realtime status: ${status}`)
       
       if (status === 'CHANNEL_ERROR') {

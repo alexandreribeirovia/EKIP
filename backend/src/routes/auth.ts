@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import { createClient } from '@supabase/supabase-js'
 import { sessionAuth } from '@/middleware/sessionAuth'
 import { 
   createSession,
@@ -10,13 +9,12 @@ import {
   invalidateAllUserSessions,
   getUserSessions
 } from '@/lib/sessionStore'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const router = Router()
 
-// Inicializar cliente Supabase
-const supabaseUrl = process.env['SUPABASE_URL'] || ''
-const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'] || ''
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+// Usar cliente Supabase Admin centralizado (bypassa RLS)
+const supabase = supabaseAdmin
 
 // Configuração de cookies
 const isProduction = process.env['NODE_ENV'] === 'production'
@@ -259,9 +257,8 @@ router.post('/refresh', async (req, res) => {
 
     // Se token do Supabase está próximo de expirar (menos de 5 minutos), renovar
     if (tokenExpiresIn < 300) {
-      // Criar cliente temporário com o refresh token para renovar
-      const tempClient = createClient(supabaseUrl, supabaseServiceKey)
-      const { data: refreshData, error: refreshError } = await tempClient.auth.refreshSession({
+      // Usar supabaseAdmin para renovar tokens (bypassa RLS)
+      const { data: refreshData, error: refreshError } = await supabaseAdmin.auth.refreshSession({
         refresh_token: session.supabaseRefreshToken,
       })
 

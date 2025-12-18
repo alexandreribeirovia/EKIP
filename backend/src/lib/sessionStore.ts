@@ -11,7 +11,7 @@
  * @module lib/sessionStore
  */
 
-import { supabaseAdmin } from './supabaseAdmin'
+import { getSupabaseAdmin } from './supabaseAdmin'
 import { encrypt, decrypt, hashSHA256, generateSecureToken } from './encryption'
 
 // ==================== INTERFACES ====================
@@ -96,7 +96,7 @@ export const createSession = async (data: CreateSessionData): Promise<{
     const encryptedRefreshToken = encrypt(data.supabaseRefreshToken)
     
     // Inserir no banco
-    const { data: session, error } = await supabaseAdmin
+    const { data: session, error } = await getSupabaseAdmin()
       .from('sessions')
       .insert({
         user_id: data.userId,
@@ -137,7 +137,7 @@ export const createSession = async (data: CreateSessionData): Promise<{
  */
 export const getSessionById = async (sessionId: string): Promise<StoredSession | null> => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('sessions')
       .select('*')
       .eq('id', sessionId)
@@ -165,7 +165,7 @@ export const getSessionById = async (sessionId: string): Promise<StoredSession |
     const supabaseRefreshToken = decrypt(record.refresh_token)
     
     // Atualizar last_used_at
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from('sessions')
       .update({ last_used_at: new Date().toISOString() })
       .eq('id', sessionId)
@@ -199,7 +199,7 @@ export const getSessionByRefreshToken = async (backendRefreshToken: string): Pro
   try {
     const tokenHash = hashSHA256(backendRefreshToken)
     
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('sessions')
       .select('*')
       .eq('backend_refresh_token', tokenHash)
@@ -262,7 +262,7 @@ export const updateSessionTokens = async (
     const encryptedAccessToken = encrypt(newAccessToken)
     const encryptedRefreshToken = encrypt(newRefreshToken)
     
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('sessions')
       .update({
         access_token: encryptedAccessToken,
@@ -291,7 +291,7 @@ export const updateSessionTokens = async (
  */
 export const invalidateSession = async (sessionId: string): Promise<boolean> => {
   try {
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('sessions')
       .update({ is_valid: false })
       .eq('id', sessionId)
@@ -321,7 +321,7 @@ export const invalidateAllUserSessions = async (
   exceptSessionId?: string
 ): Promise<number> => {
   try {
-    let query = supabaseAdmin
+    let query = getSupabaseAdmin()
       .from('sessions')
       .update({ is_valid: false })
       .eq('user_id', userId)
@@ -352,7 +352,7 @@ export const invalidateAllUserSessions = async (
  */
 export const getUserSessions = async (userId: string): Promise<Omit<StoredSession, 'supabaseAccessToken' | 'supabaseRefreshToken'>[]> => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await getSupabaseAdmin()
       .from('sessions')
       .select('id, user_id, email, expires_at, created_at, last_used_at, user_agent, ip_address, is_valid')
       .eq('user_id', userId)
@@ -409,7 +409,7 @@ export const refreshSessionIfNeeded = async (sessionId: string): Promise<StoredS
   
   try {
     // Usar refresh token para obter novos tokens
-    const { data, error } = await supabaseAdmin.auth.refreshSession({
+    const { data, error } = await getSupabaseAdmin().auth.refreshSession({
       refresh_token: session.supabaseRefreshToken
     })
     
@@ -461,12 +461,12 @@ export const getSessionStats = async (): Promise<{
   totalInvalid: number
 }> => {
   try {
-    const { count: activeCount } = await supabaseAdmin
+    const { count: activeCount } = await getSupabaseAdmin()
       .from('sessions')
       .select('*', { count: 'exact', head: true })
       .eq('is_valid', true)
     
-    const { count: invalidCount } = await supabaseAdmin
+    const { count: invalidCount } = await getSupabaseAdmin()
       .from('sessions')
       .select('*', { count: 'exact', head: true })
       .eq('is_valid', false)
@@ -490,7 +490,7 @@ export const cleanupExpiredSessions = async (): Promise<{
   deleted: number
 } | null> => {
   try {
-    const { data, error } = await supabaseAdmin.rpc('cleanup_expired_sessions')
+    const { data, error } = await getSupabaseAdmin().rpc('cleanup_expired_sessions')
     
     if (error) {
       console.error('[SessionStore] Erro no cleanup:', error)
