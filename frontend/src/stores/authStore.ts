@@ -13,7 +13,6 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { supabase } from '@/lib/supabaseClient'
 import { configureApiClient } from '@/lib/apiClient'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
@@ -87,9 +86,6 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true, 
             loading: false 
           })
-
-          // Busca dados adicionais do perfil
-          void get().fetchUserProfile(user.id)
 
           return { success: true }
         } catch (error) {
@@ -170,9 +166,17 @@ export const useAuthStore = create<AuthState>()(
               })
 
               if (response.ok) {
-                // Sessão válida, mantém o estado
-                set({ isAuthenticated: true, loading: false })
-                void get().fetchUserProfile(user.id)
+                // Sessão válida, atualiza com dados frescos do backend
+                const result = await response.json()
+                if (result.success && result.data?.user) {
+                  set({ 
+                    user: result.data.user,
+                    isAuthenticated: true, 
+                    loading: false 
+                  })
+                } else {
+                  set({ isAuthenticated: true, loading: false })
+                }
                 return
               }
 
@@ -243,59 +247,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       /**
-       * Busca dados adicionais do perfil do usuário na tabela users
-       * Ainda usa Supabase diretamente (será migrado posteriormente)
+       * Busca dados adicionais do perfil do usuário
+       * @deprecated Não mais necessário - dados já vem do /api/auth/me
        */
-      fetchUserProfile: async (userId: string) => {
-        try {
-          console.log('Fetching user profile for:', userId)
-
-          // Tenta buscar primeiro pelo user_id
-          const { data: dataByUserId } = await supabase
-            .from('users')
-            .select('avatar_large_url, runrun_user_id')
-            .eq('user_id', userId)
-            .maybeSingle()
-
-          if (dataByUserId) {
-            console.log('Found profile by user_id:', dataByUserId)
-            set((state) => ({
-              user: state.user ? { 
-                ...state.user, 
-                avatar_large_url: dataByUserId.avatar_large_url || undefined,
-                runrun_user_id: dataByUserId.runrun_user_id || undefined,
-              } : null,
-            }))
-            return
-          }
-
-          // Se não encontrar por user_id, tenta pelo email
-          const currentUserEmail = get().user?.email
-          if (currentUserEmail) {
-            console.log('Fetching user profile by email:', currentUserEmail)
-            const { data: dataByEmail } = await supabase
-              .from('users')
-              .select('avatar_large_url, runrun_user_id')
-              .eq('email', currentUserEmail)
-              .maybeSingle()
-
-            if (dataByEmail) {
-              console.log('Found profile by email:', dataByEmail)
-              set((state) => ({
-                user: state.user ? { 
-                  ...state.user, 
-                  avatar_large_url: dataByEmail.avatar_large_url || undefined,
-                  runrun_user_id: dataByEmail.runrun_user_id || undefined,
-                } : null,
-              }))
-              return
-            }
-          }
-
-          console.log('No additional profile data found in users table')
-        } catch (error) {
-          console.error('Erro ao buscar perfil do usuário:', error)
-        }
+      fetchUserProfile: async (_userId: string) => {
+        // Dados agora vem diretamente do backend via /api/auth/me
+        // Esta função é mantida apenas por compatibilidade
       },
 
       /**

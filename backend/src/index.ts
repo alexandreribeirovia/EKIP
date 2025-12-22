@@ -31,6 +31,7 @@ import evaluationsRoutes from './routes/evaluations'
 import lookupsRoutes from './routes/lookups'
 import employeeEvaluationsRoutes from './routes/employeeEvaluations'
 import evaluationAcceptRoutes from './routes/evaluationAccept'
+import feedbackAcceptRoutes from './routes/feedbackAccept'
 import feedbacksRoutes from './routes/feedbacks'
 import pdiRoutes from './routes/pdi'
 import notificationsRoutes from './routes/notifications'
@@ -129,6 +130,7 @@ app.use('/api/evaluations', evaluationsRoutes) // Modelos de avaliação
 app.use('/api/lookups', lookupsRoutes) // Lookups centralizados
 app.use('/api/employee-evaluations', employeeEvaluationsRoutes) // Avaliações de funcionários
 app.use('/api/evaluation-accept', evaluationAcceptRoutes) // Aceite de avaliações (rotas públicas e autenticadas)
+app.use('/api/feedback-accept', feedbackAcceptRoutes) // Aceite de feedbacks (rotas públicas e autenticadas)
 app.use('/api/feedbacks', feedbacksRoutes) // Feedbacks de consultores
 app.use('/api/pdi', pdiRoutes) // PDI de consultores
 app.use('/api/notifications', notificationsRoutes) // Notificações

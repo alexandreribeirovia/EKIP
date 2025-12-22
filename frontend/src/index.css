@@ -1,11 +1,10 @@
+/* AG-Grid Styles - imports must come first */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-
-/* AG-Grid Styles */
-@import 'ag-grid-community/styles/ag-grid.css';
-@import 'ag-grid-community/styles/ag-theme-alpine.css';
 
 /* Dark mode for AG-Grid */
 .dark .ag-theme-alpine {

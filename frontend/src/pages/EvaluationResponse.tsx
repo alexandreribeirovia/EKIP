@@ -172,6 +172,9 @@ const EvaluationResponse = () => {
   const [generatedAcceptUrl, setGeneratedAcceptUrl] = useState<string | null>(null);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [showAcceptLinkModal, setShowAcceptLinkModal] = useState(false);
+  const [showGenerateLinkModal, setShowGenerateLinkModal] = useState(false);
+  const [maxAccess, setMaxAccess] = useState(1);
+  const [expiresInHours, setExpiresInHours] = useState(24);
 
   // Modo Apresentação
   const [isPresentationMode, setIsPresentationMode] = useState(false);
@@ -371,11 +374,16 @@ const EvaluationResponse = () => {
         url: string;
         expiresAt: string;
         expiresInHours: number;
+        maxAccess: number;
         evaluation: { id: number; name: string; userName: string };
-      }>(`/api/evaluation-accept/${id}/generate`);
+      }>(`/api/evaluation-accept/${id}/generate`, {
+        maxAccess,
+        expiresInHours
+      });
 
       if (response.success && response.data) {
         setGeneratedAcceptUrl(response.data.url);
+        setShowGenerateLinkModal(false);
         setShowAcceptLinkModal(true);
         
         // Atualizar info do link
@@ -1224,24 +1232,99 @@ const EvaluationResponse = () => {
                   </button>
                 )}
                 <button
-                  onClick={generateAcceptLink}
+                  onClick={() => setShowGenerateLinkModal(true)}
                   disabled={isGeneratingLink}
                   className="px-3 py-1.5 text-sm font-medium text-white bg-purple-500 rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors flex items-center gap-1"
                 >
+                  <Link className="w-4 h-4" />
+                  {acceptLinkInfo.hasValidLink ? 'Gerar Novo Link' : 'Gerar Link de Aceite'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Gerar Link de Aceite */}
+      {showGenerateLinkModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-t-2xl flex items-center justify-between">
+              <h3 className="text-lg font-bold">Gerar Link de Aceite</h3>
+              <button
+                onClick={() => setShowGenerateLinkModal(false)}
+                className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Configure as opções do link de aceite que será gerado para o funcionário.
+              </p>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Número máximo de acessos:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={maxAccess}
+                  onChange={(e) => setMaxAccess(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Quantas vezes o link pode ser acessado antes de expirar
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Expiração (horas):
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="720"
+                  value={expiresInHours}
+                  onChange={(e) => setExpiresInHours(Math.max(1, parseInt(e.target.value) || 24))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Tempo até o link expirar (máximo 30 dias = 720 horas)
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGenerateLinkModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={generateAcceptLink}
+                  disabled={isGeneratingLink}
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-500 rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
                   {isGeneratingLink ? (
                     <>
-                      <Clock className="w-4 h-4 animate-spin" />
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Gerando...
                     </>
                   ) : (
                     <>
                       <Link className="w-4 h-4" />
-                      {acceptLinkInfo.hasValidLink ? 'Gerar Novo Link' : 'Gerar Link de Aceite'}
+                      Gerar Link
                     </>
                   )}
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -1268,7 +1351,6 @@ const EvaluationResponse = () => {
             <div className="p-6 space-y-4">
               <p className="text-gray-700 dark:text-gray-300 text-sm">
                 Copie o link abaixo e envie ao funcionário para que ele aceite a avaliação.
-                O link é válido por <strong>24 horas</strong> e pode ser usado apenas uma vez.
               </p>
 
               <div className="flex items-center gap-2">

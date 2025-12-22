@@ -154,7 +154,6 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   connectSocket: () => {
     const existingSocket = get().socket
     if (existingSocket?.connected) {
-      console.log('[NotificationStore] Socket já conectado')
       return
     }
 
@@ -162,14 +161,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const { sessionId, isAuthenticated } = useAuthStore.getState()
     
     if (!isAuthenticated || !sessionId) {
-      console.warn('[NotificationStore] Não autenticado - socket não será conectado')
       return
     }
 
     // URL do backend
     const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-    
-    console.log('[NotificationStore] Conectando ao WebSocket...')
     
     // Criar conexão Socket.IO com autenticação via sessionId
     const socket = io(backendUrl, {
@@ -186,16 +182,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     // Event handlers
     socket.on('connect', () => {
-      console.log('[NotificationStore] Socket conectado:', socket.id)
       set({ isConnected: true })
     })
 
-    socket.on('connected', (data: { message: string; userId: string }) => {
-      console.log('[NotificationStore]', data.message)
+    socket.on('connected', (_data: { message: string; userId: string }) => {
+      // Conexão estabelecida
     })
 
-    socket.on('disconnect', (reason) => {
-      console.log('[NotificationStore] Socket desconectado:', reason)
+    socket.on('disconnect', () => {
       set({ isConnected: false })
     })
 
@@ -212,13 +206,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     // Handler de novas notificações
     socket.on('notification', (notification: Notification) => {
-      console.log('[NotificationStore] Nova notificação recebida:', notification.title)
-      
       set(state => {
         // Verificar se já existe para evitar duplicação
         const exists = state.notifications.some(n => n.id === notification.id)
         if (exists) {
-          console.log('[NotificationStore] Notificação já existe, ignorando duplicata')
           return state
         }
         
@@ -231,8 +222,6 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     // Handler de notificações deletadas (sincroniza quando deletado no banco)
     socket.on('notification_deleted', (data: { id: number }) => {
-      console.log('[NotificationStore] Notificação deletada do banco:', data.id)
-      
       set(state => {
         const notification = state.notifications.find(n => n.id === data.id)
         const wasUnread = notification && !notification.is_read
@@ -259,7 +248,6 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const { socket } = get()
     
     if (socket) {
-      console.log('[NotificationStore] Desconectando socket...')
       socket.disconnect()
       set({ socket: null, isConnected: false })
     }
@@ -276,14 +264,12 @@ useAuthStore.subscribe((state, prevState) => {
   
   // Se acabou de autenticar
   if (state.isAuthenticated && !prevState.isAuthenticated && state.sessionId) {
-    console.log('[NotificationStore] Usuário autenticado - conectando socket')
     store.connectSocket()
     void store.fetchNotifications()
   }
   
   // Se acabou de deslogar
   if (!state.isAuthenticated && prevState.isAuthenticated) {
-    console.log('[NotificationStore] Usuário deslogou - desconectando socket')
     store.disconnectSocket()
   }
 })
@@ -296,7 +282,6 @@ const initializeIfAuthenticated = () => {
   const { isAuthenticated, sessionId } = useAuthStore.getState()
   
   if (isAuthenticated && sessionId) {
-    console.log('[NotificationStore] Usuário já autenticado - inicializando...')
     const store = useNotificationStore.getState()
     store.connectSocket()
     void store.fetchNotifications()

@@ -73,6 +73,31 @@ export interface EvaluationAcceptVerifyResponse {
 }
 
 // ============================================================================
+// FEEDBACK ACCEPT TYPES
+// ============================================================================
+
+/**
+ * Dados do feedback retornados pelo endpoint de verificação de token
+ */
+export interface FeedbackAcceptInfo {
+  id: number
+  feedbackUserName: string
+  ownerName: string
+  feedbackDate: string
+  type: string
+  typeId: number | null
+  publicComment: string
+}
+
+/**
+ * Resposta completa do endpoint /api/feedback-accept/verify/:token
+ */
+export interface FeedbackAcceptVerifyResponse {
+  feedback: FeedbackAcceptInfo
+  expiresAt: string
+}
+
+// ============================================================================
 
 export enum UserRole {
   ADMIN = 'ADMIN',

@@ -3,7 +3,7 @@ import * as apiClient from '../lib/apiClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
-import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Edit } from 'lucide-react';
+import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Edit, Eye, CheckCircle, Clock } from 'lucide-react';
 import FeedbackModal from '../components/FeedbackModal';
 import HtmlCellRenderer from '../components/HtmlCellRenderer';
 import '../styles/main.css';
@@ -22,7 +22,14 @@ interface FeedbackData {
   feedback_date: string;
   type: string;
   public_comment: string;
+  private_comment?: string | null;
+  type_id?: number | null;
   has_pdi?: boolean;
+  is_pdi?: boolean;
+  is_closed?: boolean;
+  closed_at?: string | null;
+  accepted?: boolean;
+  accepted_at?: string | null;
 }
 
 const Feedbacks = () => {
@@ -263,6 +270,65 @@ const Feedbacks = () => {
       },
     },
     {
+      headerName: 'Status',
+      field: 'is_closed',
+      flex: 0.8,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const isClosed = params.value === true;
+        return (
+          <div className="flex items-center h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              isClosed
+                ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+            }`}>
+              {isClosed ? 'Encerrado' : 'Aberto'}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Aceite',
+      field: 'accepted',
+      flex: 0.8,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const isClosed = params.data?.is_closed === true;
+        const isAccepted = params.value === true;
+        
+        // Se não está fechado, não mostra nada
+        if (!isClosed) {
+          return (
+            <div className="flex items-center h-full">
+              <span className="text-gray-400 dark:text-gray-500 text-xs">-</span>
+            </div>
+          );
+        }
+        
+        if (isAccepted) {
+          return (
+            <div className="flex items-center justify-left h-full">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Aceito
+              </span>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center justify-left h-full">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+              <Clock className="w-3 h-3 mr-1" />
+              Pendente
+            </span>
+          </div>
+        );
+      },
+    },
+    {
       headerName: 'PDI',
       field: 'has_pdi',
       flex: 0.8,
@@ -298,22 +364,29 @@ const Feedbacks = () => {
       field: 'id',
       width: 100,
       cellRenderer: (params: any) => {
+        const isClosed = params.data?.is_closed === true;
         return (
           <div className="flex items-center justify-center h-full gap-2">
             <button
               onClick={() => handleOpenEditModal(params.data)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Editar feedback"
+              className={`p-1 rounded transition-colors ${
+                isClosed
+                  ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
+                  : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+              }`}
+              title={isClosed ? 'Visualizar feedback' : 'Editar feedback'}
             >
-              <Edit className="w-4 h-4" />
+              {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
             </button>
-            <button
-              onClick={() => handleDeleteFeedback(params.value)}
-              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              title="Deletar feedback"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!isClosed && (
+              <button
+                onClick={() => handleDeleteFeedback(params.value)}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Deletar feedback"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         );
       },

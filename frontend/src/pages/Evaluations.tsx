@@ -4,7 +4,7 @@ import { apiClient } from '../lib/apiClient';
 import Select from 'react-select';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
-import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit } from 'lucide-react';
+import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit, Eye } from 'lucide-react';
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal';
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating';
 import { EmployeeEvaluationData } from '../types';
@@ -393,10 +393,14 @@ const Evaluations = () => {
           <div className="flex items-center justify-center h-full gap-2">
             <button
               onClick={() => navigate(`/employee-evaluations/${params.value}`)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              className={`p-1 rounded transition-colors ${
+                isClosed
+                  ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
+                  : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+              }`}
               title={isClosed ? "Visualizar avaliação" : "Responder avaliação"}
             >
-              <Edit className="w-4 h-4" />
+              {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
             </button>
             
             {/* Botão deletar só aparece se a avaliação não estiver encerrada */}

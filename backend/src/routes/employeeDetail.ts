@@ -225,7 +225,7 @@ router.get('/:id/feedbacks', async (req: Request, res: Response, next: NextFunct
 
     const { data, error } = await supabaseAdmin
       .from('feedbacks')
-      .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment')
+      .select('id, feedback_user_id, feedback_user_name, owner_user_id, owner_user_name, feedback_date, type, public_comment, is_closed, closed_at, accepted, accepted_at')
       .eq('feedback_user_id', id)
       .order('feedback_date', { ascending: false })
 

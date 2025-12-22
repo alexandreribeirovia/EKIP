@@ -63,7 +63,11 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         type_id,
         public_comment,
         private_comment,
-        is_pdi
+        is_pdi,
+        is_closed,
+        closed_at,
+        accepted,
+        accepted_at
       `)
       .gte('feedback_date', startDate as string)
       .lte('feedback_date', endDate as string)
@@ -449,6 +453,74 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
     return res.json({
       success: true,
       message: 'Feedback deletado com sucesso'
+    })
+  } catch (err) {
+    return next(err)
+  }
+})
+
+/**
+ * @swagger
+ * /api/feedbacks/{id}/close:
+ *   patch:
+ *     summary: Encerra um feedback (bloqueia edição)
+ *     tags: [Feedbacks]
+ *     security:
+ *       - sessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do feedback
+ *     responses:
+ *       200:
+ *         description: Feedback encerrado com sucesso
+ *       403:
+ *         description: Apenas o criador do feedback pode encerrá-lo
+ *       404:
+ *         description: Feedback não encontrado
+ */
+router.patch('/:id/close', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'ID é obrigatório', code: 'VALIDATION_ERROR' }
+      })
+    }
+
+    // Encerrar o feedback
+    const { data, error } = await supabaseAdmin
+      .from('feedbacks')
+      .update({
+        is_closed: true,
+        closed_at: new Date().toISOString()
+      })
+      .eq('id', parseInt(id))
+      .select()
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Feedback não encontrado', code: 'NOT_FOUND' }
+        })
+      }
+      console.error('Erro ao encerrar feedback:', error)
+      return res.status(500).json({
+        success: false,
+        error: { message: error.message, code: 'SUPABASE_ERROR' }
+      })
+    }
+
+    return res.json({
+      success: true,
+      data
     })
   } catch (err) {
     return next(err)

@@ -64,8 +64,6 @@ export const initializeNotificationSocket = (socketServer: SocketIOServer): void
   // Handler de conexão
   io.on('connection', (socket) => {
     const authSocket = socket as AuthenticatedSocket
-    
-    console.log(`[NotificationSocket] Usuário conectado: ${authSocket.email}`)
 
     // Registrar socket no mapa de usuários
     registerSocket(authSocket)
@@ -80,8 +78,7 @@ export const initializeNotificationSocket = (socketServer: SocketIOServer): void
     })
 
     // Handler de desconexão
-    authSocket.on('disconnect', (reason) => {
-      console.log(`[NotificationSocket] Usuário desconectado: ${authSocket.email} (${reason})`)
+    authSocket.on('disconnect', () => {
       unregisterSocket(authSocket)
     })
 
@@ -98,8 +95,6 @@ export const initializeNotificationSocket = (socketServer: SocketIOServer): void
 
   // Inicializar canal Supabase Realtime (server-side)
   initializeRealtimeChannel()
-
-  console.log('[NotificationSocket] Serviço de notificações inicializado')
 }
 
 /**
@@ -112,7 +107,6 @@ export const shutdownNotificationSocket = (): void => {
   }
   userSockets.clear()
   io = null
-  console.log('[NotificationSocket] Serviço de notificações encerrado')
 }
 
 /**
@@ -128,7 +122,6 @@ export const sendToUser = (userId: string, notification: NotificationWithState):
   }
 
   io.to(`user:${userId}`).emit('notification', notification)
-  console.log(`[NotificationSocket] Notificação enviada para user:${userId}`)
 }
 
 /**
@@ -143,7 +136,6 @@ export const broadcastToAll = (notification: NotificationWithState): void => {
   }
 
   io.emit('notification', notification)
-  console.log('[NotificationSocket] Notificação broadcast para todos os usuários')
 }
 
 /**
@@ -177,9 +169,6 @@ const registerSocket = (socket: AuthenticatedSocket): void => {
   }
   
   userSockets.get(userId)!.add(socket)
-  
-  const count = userSockets.get(userId)!.size
-  console.log(`[NotificationSocket] Socket registrado. User ${userId} tem ${count} conexão(ões)`)
 }
 
 /**
@@ -224,8 +213,6 @@ const initializeRealtimeChannel = (): void => {
         try {
           const notification = payload.new as unknown as NotificationPayload
 
-          console.log(`[NotificationSocket] Nova notificação recebida: ${notification.id} - ${notification.title}`)
-
           // Preparar notificação com estado inicial
           const notificationWithState: NotificationWithState = {
             ...notification,
@@ -258,8 +245,6 @@ const initializeRealtimeChannel = (): void => {
       (payload: { old: Record<string, unknown> }) => {
         try {
           const deletedNotification = payload.old as unknown as { id: number; auth_user_id?: string; audience?: string }
-          
-          console.log(`[NotificationSocket] Notificação deletada: ${deletedNotification.id}`)
 
           // Broadcast evento de remoção para todos (o frontend filtrará)
           if (io) {
@@ -271,8 +256,6 @@ const initializeRealtimeChannel = (): void => {
       }
     )
     .subscribe((status: string) => {
-      console.log(`[NotificationSocket] Supabase Realtime status: ${status}`)
-      
       if (status === 'CHANNEL_ERROR') {
         console.error('[NotificationSocket] Erro no canal Supabase. Reconectando em 5s...')
         setTimeout(() => {

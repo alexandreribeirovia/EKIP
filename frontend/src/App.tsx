@@ -2,7 +2,7 @@
  * App.tsx - Entry Point Principal
  * 
  * Este componente é ultra-leve. Apenas verifica a rota e decide:
- * - Se é rota pública isolada (EvaluationAccept): carrega APENAS esse componente
+ * - Se é rota pública isolada (EvaluationAccept, FeedbackAccept): carrega APENAS esse componente
  * - Caso contrário: carrega o AuthenticatedApp com toda a lógica de auth
  * 
  * Isso garante que páginas públicas não carreguem authStore, Layout, Supabase, etc.
@@ -13,6 +13,9 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 
 // Lazy loading do EvaluationAccept - completamente isolado
 const EvaluationAccept = lazy(() => import('@/pages/EvaluationAccept'))
+
+// Lazy loading do FeedbackAccept - completamente isolado
+const FeedbackAccept = lazy(() => import('@/pages/FeedbackAccept'))
 
 // Lazy loading do AuthenticatedApp - contém toda lógica de auth e páginas
 const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'))
@@ -40,6 +43,17 @@ function App() {
       <Suspense fallback={<LazyLoadingFallback />}>
         <Routes>
           <Route path="/evaluation-accept/:token" element={<EvaluationAccept />} />
+        </Routes>
+      </Suspense>
+    )
+  }
+
+  // Rota pública isolada - carrega APENAS o FeedbackAccept
+  if (location.pathname.startsWith('/feedback-accept/')) {
+    return (
+      <Suspense fallback={<LazyLoadingFallback />}>
+        <Routes>
+          <Route path="/feedback-accept/:token" element={<FeedbackAccept />} />
         </Routes>
       </Suspense>
     )

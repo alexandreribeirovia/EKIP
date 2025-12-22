@@ -208,6 +208,90 @@ The `ProjectDetail.tsx` component is tab-based:
 3. Token auto-included in API calls (check axios config if implementing)
 4. Logout clears store: `useAuthStore().logout()`
 
+### Notifications System (Real-Time)
+O sistema de notificações usa WebSocket (Socket.IO) + Supabase Realtime para entrega em tempo real.
+
+**Arquitetura:**
+```
+[Supabase DB INSERT] → [Supabase Realtime] → [Backend notificationSocket.ts] → [Socket.IO] → [Frontend NotificationBell]
+```
+
+**Estrutura da Tabela `notifications`:**
+```typescript
+interface Notification {
+  id: number                    // PK auto-increment
+  created_at: string            // timestamp
+  updated_at: string            // timestamp
+  auth_user_id: string | null   // UUID do auth.users (destino da notificação)
+  title: string                 // Título da notificação
+  message: string               // Mensagem detalhada
+  type_id: number               // FK para domains (categoria)
+  type: string                  // 'info' | 'success' | 'warning' | 'error'
+  source_type: number           // FK para domains (80=Feedback, 132=Avaliação)
+  source_id: string | null      // ID da entidade relacionada
+  audience: 'all' | 'user'      // 'user' para notificação pessoal
+  link_url: string | null       // URL para navegação (ex: /employees/user-slug#feedbacks)
+}
+```
+
+**Campos importantes da tabela `domains`:**
+| ID | Descrição |
+|----|-----------|
+| 76 | type_id para notificações gerais (type='info') |
+| 80 | source_type para Feedback |
+| 132 | source_type para Avaliação |
+
+**Como buscar o `auth_user_id` correto:**
+A tabela `users` usa `user_id` como slug (ex: 'alexandre-ribeiro'), não UUID. Para obter o UUID do auth.users:
+```typescript
+// 1. Buscar email na tabela users pelo slug
+const { data: ownerUser } = await supabaseAdmin
+  .from('users')
+  .select('email')
+  .eq('user_id', 'slug-do-usuario')  // ex: 'alexandre-ribeiro'
+  .single()
+
+// 2. Buscar UUID na tabela sessions pelo email
+const { data: ownerSession } = await supabaseAdmin
+  .from('sessions')
+  .select('user_id')  // Este é o UUID do auth.users
+  .eq('email', ownerUser.email)
+  .limit(1)
+  .single()
+
+// 3. Usar ownerSession.user_id como auth_user_id na notificação
+```
+
+**Criar notificação no backend:**
+```typescript
+const { error } = await supabaseAdmin
+  .from('notifications')
+  .insert({
+    title: 'Feedback Aceito',
+    message: `${userName} aceitou o feedback do tipo "${type}" de ${date}`,
+    type_id: 76,
+    type: 'info',
+    audience: 'user',
+    auth_user_id: ownerSession.user_id,  // UUID do auth.users
+    link_url: `/employees/${userSlug}#feedbacks`,
+    source_type: 80,  // 80=Feedback, 132=Avaliação
+    source_id: entityId.toString()
+  })
+```
+
+**Arquivos relacionados:**
+- `backend/src/websocket/notificationSocket.ts` - WebSocket server e Supabase Realtime listener
+- `backend/src/routes/notifications.ts` - API REST para CRUD de notificações
+- `frontend/src/components/NotificationBell.tsx` - Bell icon com dropdown
+- `frontend/src/stores/notificationStore.ts` - Zustand store para estado das notificações
+- `frontend/src/pages/Notifications.tsx` - Página de listagem de notificações
+
+**Navegação com hash (âncora para aba):**
+O `EmployeeDetail.tsx` suporta hash na URL para abrir aba específica:
+- `/employees/user-slug#feedbacks` → Abre aba Feedbacks
+- `/employees/user-slug#avaliacoes` → Abre aba Avaliações
+- Hashes válidos: `tarefas`, `registro`, `feedbacks`, `avaliacoes`, `pdi`, `acompanhamento`, `acessos`
+
 ## Project-Specific Rules
 
 ### File Organization

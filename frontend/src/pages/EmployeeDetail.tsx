@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy, CheckCircle, Eye } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform } from '../types'
@@ -25,11 +25,23 @@ interface DbAccessClientGrouped {
 const EmployeeDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [employee, setEmployee] = useState<DbUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos'>('tarefas')
+  
+  // Determinar aba inicial baseado no hash da URL
+  const getInitialTab = (): 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' => {
+    const hash = location.hash.replace('#', '')
+    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos']
+    if (validTabs.includes(hash)) {
+      return hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos'
+    }
+    return 'tarefas'
+  }
+  
+  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos'>(getInitialTab())
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -784,7 +796,6 @@ const EmployeeDetail = () => {
   // Função para carregar acessos do funcionário
   const loadEmployeeAccesses = async (userId: string) => {
     setIsLoadingAccesses(true);
-    console.log('Carregando acessos para user_id:', userId);
     
     try {
       const result = await apiClient.get<DbAccessPlatform[]>(`/api/employee-detail/${userId}/accesses`);
@@ -798,7 +809,6 @@ const EmployeeDetail = () => {
       const data = result.data || [];
       
       if (data.length === 0) {
-        console.log('Nenhum acesso encontrado para o funcionário');
         setAccesses([]);
         return;
       }
@@ -1389,6 +1399,56 @@ const EmployeeDetail = () => {
       },
     },
     {
+      headerName: 'Status',
+      field: 'is_closed',
+      flex: 0.7,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const isClosed = params.value === true;
+        return (
+          <div className="flex items-center h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              isClosed
+                ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+            }`}>
+              {isClosed ? 'Encerrado' : 'Aberto'}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      headerName: 'Aceite',
+      field: 'accepted',
+      flex: 0.7,
+      minWidth: 100,
+      cellRenderer: (params: any) => {
+        const isClosed = params.data?.is_closed === true;
+        const isAccepted = params.value === true;
+        
+        if (!isClosed) {
+          return (
+            <div className="flex items-center h-full">
+              <span className="text-gray-400 dark:text-gray-500 text-xs">-</span>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="flex items-center h-full">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              isAccepted
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+            }`}>
+              {isAccepted ? 'Aceito' : 'Pendente'}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
       headerName: 'PDI',
       field: 'has_pdi',
       flex: 0.7,
@@ -1425,23 +1485,29 @@ const EmployeeDetail = () => {
       field: 'id',
       width: 100,
       cellRenderer: (params: any) => {
+        const isClosed = params.data?.is_closed === true;
         return (
           <div className="flex items-center justify-center h-full gap-2">
             <button
               onClick={() => handleEditFeedback(params.value)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Editar feedback"
+              className={`p-1 rounded transition-colors ${
+                isClosed
+                  ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
+                  : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+              }`}
+              title={isClosed ? 'Visualizar feedback' : 'Editar feedback'}
             >
-              <Edit className="w-4 h-4" />
+              {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
             </button>
-            
-            <button
-              onClick={() => handleDeleteFeedback(params.value)}
-              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              title="Deletar feedback"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!isClosed && (
+              <button
+                onClick={() => handleDeleteFeedback(params.value)}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Deletar feedback"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         );
       },
@@ -2157,6 +2223,15 @@ const EmployeeDetail = () => {
     },
     menuPortal: base => ({ ...base, zIndex: 10000 }),
   };
+
+  // Listener para mudanças no hash da URL (para navegação via notificações)
+  useEffect(() => {
+    const hash = location.hash.replace('#', '')
+    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos']
+    if (validTabs.includes(hash)) {
+      setActiveTab(hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos')
+    }
+  }, [location.hash]);
 
   // Listener para mudanças no estado de full screen
   useEffect(() => {

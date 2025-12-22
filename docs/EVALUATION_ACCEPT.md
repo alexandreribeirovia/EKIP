@@ -8,11 +8,12 @@ O **Aceite de Avaliação** é uma funcionalidade que permite ao funcionário co
 
 - ✅ **Token seguro**: 64 caracteres hexadecimais (256 bits)
 - ✅ **Armazenamento hash**: Token é hasheado com SHA-256 antes de salvar no banco
-- ✅ **Expiração**: Link válido por 24 horas
-- ✅ **Uso único**: Token invalidado após primeiro uso
+- ✅ **Expiração configurável**: Link válido por tempo definido pelo gestor (padrão 24h)
+- ✅ **Acessos configuráveis**: Número máximo de acessos definido pelo gestor (padrão 1)
 - ✅ **Um token ativo por vez**: Ao gerar novo link, o anterior é automaticamente invalidado
 - ✅ **Histórico completo**: Todas as sessões de aceite são preservadas para auditoria
 - ✅ **Página isolada**: Carrega apenas o necessário (lazy loading otimizado)
+- ✅ **Tabela genérica**: Usa `temp_session` compartilhada com outros fluxos de aceite
 
 ---
 
@@ -96,26 +97,29 @@ EKIP/
 | `accepted` | `boolean` | Se a avaliação foi aceita (default: `false`) |
 | `accepted_at` | `timestamptz` | Data/hora do aceite |
 
-### Tabela `evaluation_accept_session`
+### Tabela `temp_session`
 
-Armazena o histórico de todas as sessões de aceite geradas.
+Armazena o histórico de todas as sessões temporárias (aceite de avaliação, feedback, etc).
 
 ```sql
-CREATE TABLE IF NOT EXISTS evaluation_accept_session (
+CREATE TABLE IF NOT EXISTS temp_session (
   id SERIAL PRIMARY KEY,
-  evaluation_id INTEGER NOT NULL REFERENCES employee_evaluations(id) ON DELETE CASCADE,
+  entity_id INTEGER NOT NULL,                -- ID da entidade (avaliação, feedback, etc)
+  type VARCHAR(50) NOT NULL,                 -- Tipo: 'accept_evaluation', 'accept_feedback', etc
   token_hash VARCHAR(64) NOT NULL,           -- SHA-256 do token (64 chars hex)
-  expires_at TIMESTAMPTZ NOT NULL,           -- Expiração (24h após criação)
+  expires_at TIMESTAMPTZ NOT NULL,           -- Expiração configurável
   created_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id), -- Quem gerou o link
   used_at TIMESTAMPTZ,                       -- Quando foi usado (NULL = não usado)
-  is_active BOOLEAN DEFAULT true             -- Se está ativo (false = invalidado)
+  is_active BOOLEAN DEFAULT true,            -- Se está ativo (false = invalidado)
+  max_access INTEGER DEFAULT 1,              -- Máximo de acessos permitidos
+  access_count INTEGER DEFAULT 0             -- Contador de acessos
 );
 
 -- Índices para performance
-CREATE INDEX idx_eval_accept_token_hash ON evaluation_accept_session(token_hash);
-CREATE INDEX idx_eval_accept_eval_id ON evaluation_accept_session(evaluation_id);
-CREATE INDEX idx_eval_accept_active ON evaluation_accept_session(evaluation_id, is_active) 
+CREATE INDEX idx_temp_session_token ON temp_session(token_hash);
+CREATE INDEX idx_temp_session_entity ON temp_session(entity_id, type);
+CREATE INDEX idx_temp_session_active ON temp_session(entity_id, type, is_active) 
   WHERE is_active = true;
 ```
 
@@ -123,11 +127,21 @@ CREATE INDEX idx_eval_accept_active ON evaluation_accept_session(evaluation_id, 
 
 ```
 ┌─────────────────────────┐       ┌─────────────────────────┐
-│   employee_evaluations  │       │ evaluation_accept_session│
+│   employee_evaluations  │       │      temp_session       │
 ├─────────────────────────┤       ├─────────────────────────┤
-│ id (PK)                 │◄──────│ evaluation_id (FK)      │
+│ id (PK)                 │◄──────│ entity_id               │
 │ user_id                 │       │ id (PK)                 │
-│ owner_id                │       │ token_hash              │
+│ owner_id                │       │ type = 'accept_evaluation'│
+│ evaluation_id           │       │ token_hash              │
+│ period_start            │       │ expires_at              │
+│ period_end              │       │ created_at              │
+│ is_closed               │       │ created_by (FK → users) │
+│ accepted ◄──────────────│───────│ used_at                 │
+│ accepted_at             │       │ is_active               │
+└─────────────────────────┘       │ max_access              │
+                                  │ access_count            │
+                                  └─────────────────────────┘
+```
 │ evaluation_id           │       │ expires_at              │
 │ period_start            │       │ created_at              │
 │ period_end              │       │ created_by (FK → users) │
@@ -226,14 +240,29 @@ POST /api/evaluation-accept/:id/generate
 **Request:**
 - `id`: ID da avaliação (employee_evaluation)
 
+**Request Body (opcional):**
+```json
+{
+  "maxAccess": 1,       // Opcional, default: 1
+  "expiresInHours": 24  // Opcional, default: 24
+}
+```
+
 **Response (Sucesso):**
 ```json
 {
   "success": true,
   "data": {
+    "token": "a1b2c3d4e5f6...",
     "url": "http://localhost:3000/evaluation-accept/a1b2c3d4e5f6...",
     "expiresAt": "2024-12-19T15:45:00.000Z",
-    "expiresIn": "24 horas"
+    "expiresInHours": 24,
+    "maxAccess": 1,
+    "evaluation": {
+      "id": 123,
+      "name": "Avaliação Trimestral",
+      "userName": "João Silva"
+    }
   }
 }
 ```

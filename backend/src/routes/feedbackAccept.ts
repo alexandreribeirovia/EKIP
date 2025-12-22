@@ -1,7 +1,8 @@
 /**
- * Rotas de Aceite de Avaliação
+ * Rotas de Aceite de Feedback
  * 
- * Este módulo gerencia o fluxo de aceite de avaliação pelo funcionário:
+ * Este módulo gerencia o fluxo de aceite de feedback pelo funcionário:
+ * - Encerramento do feedback (bloqueia edição)
  * - Geração de token temporário para aceite (configurável)
  * - Validação de token (rota pública)
  * - Confirmação de aceite (rota pública)
@@ -11,9 +12,10 @@
  * - Token armazenado como hash SHA-256 no banco (tabela temp_session)
  * - Token expira conforme configurado (default 24h)
  * - Controle de quantidade de acessos (max_access)
+ * - Apenas owner_user_id pode encerrar e gerar link
  * - Apenas UPDATE em campos accepted e accepted_at
  * 
- * @module routes/evaluationAccept
+ * @module routes/feedbackAccept
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -27,7 +29,7 @@ const router = Router()
 // CONSTANTES
 // ============================================================================
 
-const SESSION_TYPE = 'accept_evaluation'
+const SESSION_TYPE = 'accept_feedback'
 const DEFAULT_EXPIRY_HOURS = 24
 const DEFAULT_MAX_ACCESS = 1
 const TOKEN_BYTES = 32 // 64 caracteres hex
@@ -39,10 +41,10 @@ const TOKEN_BYTES = 32 // 64 caracteres hex
 
 /**
  * @swagger
- * /api/evaluation-accept/verify/{token}:
+ * /api/feedback-accept/verify/{token}:
  *   get:
  *     summary: Verifica se um token de aceite é válido (rota pública)
- *     tags: [Evaluation Accept]
+ *     tags: [Feedback Accept]
  *     parameters:
  *       - in: path
  *         name: token
@@ -52,7 +54,7 @@ const TOKEN_BYTES = 32 // 64 caracteres hex
  *         description: Token de aceite (64 caracteres hex)
  *     responses:
  *       200:
- *         description: Token válido - retorna dados da avaliação
+ *         description: Token válido - retorna dados do feedback
  *       400:
  *         description: Token inválido, expirado ou já utilizado
  */
@@ -128,191 +130,53 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
       .update({ access_count: accessCount + 1 })
       .eq('id', session.id)
 
-    // Buscar dados da avaliação com modelo vinculado
-    const { data: evaluation, error: evalError } = await supabaseAdmin
-      .from('evaluations')
+    // Buscar dados do feedback
+    const { data: feedback, error: feedbackError } = await supabaseAdmin
+      .from('feedbacks')
       .select(`
         id,
-        name,
-        user_name,
-        owner_name,
-        period_start,
-        period_end,
+        feedback_user_id,
+        feedback_user_name,
+        owner_user_id,
+        owner_user_name,
+        feedback_date,
+        type,
+        type_id,
+        public_comment,
+        is_closed,
         accepted,
-        accepted_at,
-        evaluation_model_id,
-        evaluations_questions_reply (
-          question_id,
-          score,
-          reply,
-          yes_no,
-          weight,
-          category,
-          subcategory
-        )
+        accepted_at
       `)
       .eq('id', session.entity_id)
       .single()
 
-    if (evalError || !evaluation) {
+    if (feedbackError || !feedback) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Avaliação não encontrada', code: 'EVALUATION_NOT_FOUND' }
+        error: { message: 'Feedback não encontrado', code: 'FEEDBACK_NOT_FOUND' }
       })
     }
 
-    // Verificar se já foi aceita
-    if (evaluation.accepted) {
+    // Verificar se já foi aceito
+    if (feedback.accepted) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Esta avaliação já foi aceita anteriormente', code: 'ALREADY_ACCEPTED' }
+        error: { message: 'Este feedback já foi aceito anteriormente', code: 'ALREADY_ACCEPTED' }
       })
-    }
-
-    // Calcular média ponderada dos scores
-    let averageScore: number | null = null
-    const replies = evaluation.evaluations_questions_reply || []
-    if (replies.length > 0) {
-      const validReplies = replies.filter((r: any) => r.score !== null && r.weight !== null)
-      if (validReplies.length > 0) {
-        let totalWeightedScore = 0
-        let totalWeight = 0
-        validReplies.forEach((r: any) => {
-          totalWeightedScore += r.score * r.weight
-          totalWeight += r.weight
-        })
-        if (totalWeight > 0) {
-          averageScore = Math.round((totalWeightedScore / totalWeight) * 10) / 10
-        }
-      }
-    }
-
-    // Buscar perguntas do modelo (se existir modelo vinculado)
-    let questions: any[] = []
-    let categories: any[] = []
-
-    if (evaluation.evaluation_model_id) {
-      // Buscar perguntas do modelo
-      const { data: evalQuestions, error: questionsError } = await supabaseAdmin
-        .from('evaluations_questions_model')
-        .select(`
-          id,
-          question_id,
-          category_order,
-          question_order,
-          subcategory_order,
-          questions_model (
-            id,
-            question,
-            description,
-            category_id,
-            subcategory_id,
-            reply_type_id,
-            weight,
-            required
-          )
-        `)
-        .eq('evaluation_id', evaluation.evaluation_model_id)
-        .order('category_order', { ascending: true })
-        .order('subcategory_order', { ascending: true })
-        .order('question_order', { ascending: true })
-
-      if (!questionsError && evalQuestions) {
-        // Extrair IDs únicos de categorias, subcategorias e tipos de resposta
-        const categoryIds = new Set<number>()
-        const subcategoryIds = new Set<number>()
-        const replyTypeIds = new Set<number>()
-
-        evalQuestions.forEach((item: any) => {
-          if (item.questions_model?.category_id) {
-            categoryIds.add(item.questions_model.category_id)
-          }
-          if (item.questions_model?.subcategory_id) {
-            subcategoryIds.add(item.questions_model.subcategory_id)
-          }
-          if (item.questions_model?.reply_type_id) {
-            replyTypeIds.add(item.questions_model.reply_type_id)
-          }
-        })
-
-        const allDomainIds = [...Array.from(categoryIds), ...Array.from(subcategoryIds), ...Array.from(replyTypeIds)]
-
-        // Buscar todos os domains necessários
-        let domainsMap = new Map<number, any>()
-        if (allDomainIds.length > 0) {
-          const { data: domainsData } = await supabaseAdmin
-            .from('domains')
-            .select('*')
-            .in('id', allDomainIds)
-
-          if (domainsData) {
-            domainsData.forEach((d: any) => {
-              domainsMap.set(d.id, d)
-            })
-          }
-        }
-
-        // Criar mapa de respostas por question_id
-        const responsesMap = new Map<number, any>()
-        replies.forEach((r: any) => {
-          responsesMap.set(r.question_id, r)
-        })
-
-        // Processar perguntas com respostas
-        questions = evalQuestions
-          .map((item: any) => {
-            const q = item.questions_model
-            if (!q) return null
-
-            const categoryDomain = domainsMap.get(q.category_id)
-            const subcategoryDomain = domainsMap.get(q.subcategory_id)
-            const replyTypeDomain = domainsMap.get(q.reply_type_id)
-            const response = responsesMap.get(q.id)
-
-            return {
-              question_id: q.id,
-              question: q.question,
-              description: q.description,
-              category_id: q.category_id,
-              category: categoryDomain?.value || '',
-              subcategory_id: q.subcategory_id,
-              subcategory: subcategoryDomain?.value || '',
-              reply_type_id: q.reply_type_id,
-              reply_type: replyTypeDomain?.value || '',
-              weight: q.weight || 1,
-              required: q.required ?? true,
-              category_order: item.category_order,
-              subcategory_order: item.subcategory_order,
-              question_order: item.question_order,
-              // Resposta
-              score: response?.score ?? null,
-              reply: response?.reply ?? null,
-              yes_no: response?.yes_no ?? null
-            }
-          })
-          .filter((q: any) => q !== null)
-
-        // Extrair categorias únicas
-        const categoriesArray = Array.from(categoryIds).map(catId => domainsMap.get(catId)).filter(Boolean)
-        const subcategoriesArray = Array.from(subcategoryIds).map(subId => domainsMap.get(subId)).filter(Boolean)
-        categories = [...categoriesArray, ...subcategoriesArray]
-      }
     }
 
     return res.json({
       success: true,
       data: {
-        evaluation: {
-          id: evaluation.id,
-          name: evaluation.name,
-          userName: evaluation.user_name,
-          ownerName: evaluation.owner_name,
-          periodStart: evaluation.period_start,
-          periodEnd: evaluation.period_end,
-          averageScore
+        feedback: {
+          id: feedback.id,
+          feedbackUserName: feedback.feedback_user_name,
+          ownerName: feedback.owner_user_name,
+          feedbackDate: feedback.feedback_date,
+          type: feedback.type,
+          typeId: feedback.type_id,
+          publicComment: feedback.public_comment
         },
-        questions,
-        categories,
         expiresAt: session.expires_at
       }
     })
@@ -323,10 +187,10 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
 
 /**
  * @swagger
- * /api/evaluation-accept/confirm/{token}:
+ * /api/feedback-accept/confirm/{token}:
  *   post:
- *     summary: Confirma o aceite de uma avaliação usando o token (rota pública)
- *     tags: [Evaluation Accept]
+ *     summary: Confirma o aceite de um feedback usando o token (rota pública)
+ *     tags: [Feedback Accept]
  *     parameters:
  *       - in: path
  *         name: token
@@ -336,7 +200,7 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
  *         description: Token de aceite (64 caracteres hex)
  *     responses:
  *       200:
- *         description: Avaliação aceita com sucesso
+ *         description: Feedback aceito com sucesso
  *       400:
  *         description: Token inválido, expirado ou já utilizado
  */
@@ -387,24 +251,24 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
       })
     }
 
-    // Verificar se avaliação já foi aceita e buscar dados para notificação
-    const { data: evaluation, error: evalCheckError } = await supabaseAdmin
-      .from('evaluations')
-      .select('id, accepted, owner_id, user_id, user_name, name, period_start, period_end')
+    // Verificar se feedback já foi aceito e buscar dados para notificação
+    const { data: feedback, error: feedbackCheckError } = await supabaseAdmin
+      .from('feedbacks')
+      .select('id, accepted, owner_user_id, feedback_user_id, feedback_user_name, type, feedback_date')
       .eq('id', session.entity_id)
       .single()
 
-    if (evalCheckError || !evaluation) {
+    if (feedbackCheckError || !feedback) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Avaliação não encontrada', code: 'EVALUATION_NOT_FOUND' }
+        error: { message: 'Feedback não encontrado', code: 'FEEDBACK_NOT_FOUND' }
       })
     }
 
-    if (evaluation.accepted) {
+    if (feedback.accepted) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Esta avaliação já foi aceita anteriormente', code: 'ALREADY_ACCEPTED' }
+        error: { message: 'Este feedback já foi aceito anteriormente', code: 'ALREADY_ACCEPTED' }
       })
     }
 
@@ -413,19 +277,19 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
     // ========================================================================
     // OPERAÇÃO CRÍTICA: Atualizar APENAS os campos accepted e accepted_at
     // ========================================================================
-    const { error: updateEvalError } = await supabaseAdmin
-      .from('evaluations')
+    const { error: updateFeedbackError } = await supabaseAdmin
+      .from('feedbacks')
       .update({
         accepted: true,
         accepted_at: now
       })
       .eq('id', session.entity_id)
 
-    if (updateEvalError) {
-      console.error('Erro ao aceitar avaliação:', updateEvalError)
+    if (updateFeedbackError) {
+      console.error('Erro ao aceitar feedback:', updateFeedbackError)
       return res.status(500).json({
         success: false,
-        error: { message: 'Erro ao aceitar avaliação', code: 'SUPABASE_ERROR' }
+        error: { message: 'Erro ao aceitar feedback', code: 'SUPABASE_ERROR' }
       })
     }
 
@@ -437,7 +301,7 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
 
     if (updateSessionError) {
       console.error('Erro ao marcar token como usado:', updateSessionError)
-      // Não retorna erro pois a avaliação já foi aceita
+      // Não retorna erro pois o feedback já foi aceito
     }
 
     // ========================================================================
@@ -448,7 +312,7 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
       const { data: ownerUser, error: ownerError } = await supabaseAdmin
         .from('users')
         .select('email')
-        .eq('user_id', evaluation.owner_id)
+        .eq('user_id', feedback.owner_user_id)
         .single()
 
       if (ownerError || !ownerUser?.email) {
@@ -465,44 +329,41 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
         if (sessionError || !ownerSession?.user_id) {
           console.error('Erro ao buscar user_id na tabela sessions:', sessionError)
         } else {
-          // Formatar período para exibição
-          const periodStart = evaluation.period_start 
-            ? new Date(evaluation.period_start).toLocaleDateString('pt-BR')
-            : 'N/A'
-          const periodEnd = evaluation.period_end 
-            ? new Date(evaluation.period_end).toLocaleDateString('pt-BR')
+          // Formatar data do feedback para exibição
+          const feedbackDateFormatted = feedback.feedback_date 
+            ? new Date(feedback.feedback_date).toLocaleDateString('pt-BR')
             : 'N/A'
           
-          const notificationMessage = `${evaluation.user_name} aceitou a avaliação "${evaluation.name || 'N/A'}" (${periodStart} a ${periodEnd})`
+          const notificationMessage = `${feedback.feedback_user_name} aceitou o feedback do tipo "${feedback.type || 'N/A'}" de ${feedbackDateFormatted}`
           
           const { error: notifError } = await supabaseAdmin
             .from('notifications')
             .insert({
-              title: 'Avaliação Aceita',
+              title: 'Feedback Aceito',
               message: notificationMessage,
               type_id: 76,
               type: 'info',
               audience: 'user',
               auth_user_id: ownerSession.user_id,
-              link_url: `/employees/${evaluation.user_id}#avaliacoes`,
-              source_type: 132,
+              link_url: `/employees/${feedback.feedback_user_id}#feedbacks`,
+              source_type: 80,
               source_id: session.entity_id.toString()
             })
 
           if (notifError) {
-            console.error('Erro ao criar notificação de aceite de avaliação:', notifError)
+            console.error('Erro ao criar notificação de aceite de feedback:', notifError)
           }
         }
       }
     } catch (notifErr) {
-      console.error('Erro ao criar notificação de aceite de avaliação:', notifErr)
+      console.error('Erro ao criar notificação de aceite de feedback:', notifErr)
       // Não bloqueia o fluxo principal
     }
 
     return res.json({
       success: true,
       data: {
-        message: 'Avaliação aceita com sucesso!',
+        message: 'Feedback aceito com sucesso!',
         acceptedAt: now
       }
     })
@@ -518,73 +379,167 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
 
 /**
  * @swagger
- * /api/evaluation-accept/{evaluationId}/generate:
- *   post:
- *     summary: Gera um novo token de aceite para uma avaliação (requer autenticação)
- *     tags: [Evaluation Accept]
+ * /api/feedback-accept/{feedbackId}/close:
+ *   patch:
+ *     summary: Encerra um feedback para permitir geração de link de aceite (requer autenticação)
+ *     tags: [Feedback Accept]
  *     security:
  *       - sessionAuth: []
  *     parameters:
  *       - in: path
- *         name: evaluationId
+ *         name: feedbackId
  *         required: true
  *         schema:
  *           type: integer
  *     responses:
  *       200:
- *         description: Token gerado com sucesso
- *       400:
- *         description: Avaliação não está fechada ou já foi aceita
+ *         description: Feedback encerrado com sucesso
+ *       403:
+ *         description: Apenas o criador do feedback pode encerrá-lo
  *       404:
- *         description: Avaliação não encontrada
+ *         description: Feedback não encontrado
  */
-router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:feedbackId/close', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { evaluationId } = req.params
-    const userId = req.session?.userId
+    const { feedbackId } = req.params
 
-    if (!evaluationId) {
+    if (!feedbackId) {
       return res.status(400).json({
         success: false,
-        error: { message: 'ID da avaliação é obrigatório', code: 'INVALID_REQUEST' }
+        error: { message: 'ID do feedback é obrigatório', code: 'INVALID_REQUEST' }
       })
     }
 
-    const evalId = parseInt(evaluationId)
-    if (isNaN(evalId)) {
+    const fbId = parseInt(feedbackId)
+    if (isNaN(fbId)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'ID da avaliação inválido', code: 'INVALID_REQUEST' }
+        error: { message: 'ID do feedback inválido', code: 'INVALID_REQUEST' }
       })
     }
 
-    // Verificar se avaliação existe e está fechada
-    const { data: evaluation, error: evalError } = await supabaseAdmin
-      .from('evaluations')
-      .select('id, name, user_name, is_closed, accepted')
-      .eq('id', evalId)
+    const now = new Date().toISOString()
+
+    // Encerrar o feedback
+    const { error: updateError } = await supabaseAdmin
+      .from('feedbacks')
+      .update({
+        is_closed: true,
+        closed_at: now
+      })
+      .eq('id', fbId)
+      .select()
       .single()
 
-    if (evalError || !evaluation) {
+    if (updateError) {
+      if (updateError.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Feedback não encontrado', code: 'NOT_FOUND' }
+        })
+      }
+      console.error('Erro ao encerrar feedback:', updateError)
+      return res.status(500).json({
+        success: false,
+        error: { message: 'Erro ao encerrar feedback', code: 'SUPABASE_ERROR' }
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        message: 'Feedback encerrado com sucesso!',
+        closedAt: now
+      }
+    })
+  } catch (err) {
+    return next(err)
+  }
+})
+
+/**
+ * @swagger
+ * /api/feedback-accept/{feedbackId}/generate:
+ *   post:
+ *     summary: Gera um novo token de aceite para um feedback (requer autenticação)
+ *     tags: [Feedback Accept]
+ *     security:
+ *       - sessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: feedbackId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               maxAccess:
+ *                 type: integer
+ *                 default: 1
+ *               expiresInHours:
+ *                 type: integer
+ *                 default: 24
+ *     responses:
+ *       200:
+ *         description: Token gerado com sucesso
+ *       400:
+ *         description: Feedback não está fechado ou já foi aceito
+ *       403:
+ *         description: Apenas o criador do feedback pode gerar link
+ *       404:
+ *         description: Feedback não encontrado
+ */
+router.post('/:feedbackId/generate', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { feedbackId } = req.params
+    const userId = req.session?.userId
+
+    if (!feedbackId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'ID do feedback é obrigatório', code: 'INVALID_REQUEST' }
+      })
+    }
+
+    const fbId = parseInt(feedbackId)
+    if (isNaN(fbId)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'ID do feedback inválido', code: 'INVALID_REQUEST' }
+      })
+    }
+
+    // Verificar se feedback existe e está fechado
+    const { data: feedback, error: feedbackError } = await supabaseAdmin
+      .from('feedbacks')
+      .select('id, feedback_user_name, is_closed, accepted')
+      .eq('id', fbId)
+      .single()
+
+    if (feedbackError || !feedback) {
       return res.status(404).json({
         success: false,
-        error: { message: 'Avaliação não encontrada', code: 'NOT_FOUND' }
+        error: { message: 'Feedback não encontrado', code: 'NOT_FOUND' }
       })
     }
 
-    // Verificar se está fechada
-    if (!evaluation.is_closed) {
+    // Verificar se está fechado
+    if (!feedback.is_closed) {
       return res.status(400).json({
         success: false,
-        error: { message: 'A avaliação precisa estar encerrada para gerar link de aceite', code: 'NOT_CLOSED' }
+        error: { message: 'O feedback precisa estar encerrado para gerar link de aceite', code: 'NOT_CLOSED' }
       })
     }
 
-    // Verificar se já foi aceita
-    if (evaluation.accepted) {
+    // Verificar se já foi aceito
+    if (feedback.accepted) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Esta avaliação já foi aceita', code: 'ALREADY_ACCEPTED' }
+        error: { message: 'Este feedback já foi aceito', code: 'ALREADY_ACCEPTED' }
       })
     }
 
@@ -592,11 +547,11 @@ router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Re
     const maxAccess = req.body.maxAccess || DEFAULT_MAX_ACCESS
     const expiresInHours = req.body.expiresInHours || DEFAULT_EXPIRY_HOURS
 
-    // Desativar tokens anteriores para esta avaliação
+    // Desativar tokens anteriores para este feedback
     await supabaseAdmin
       .from('temp_session')
       .update({ is_active: false })
-      .eq('entity_id', evalId)
+      .eq('entity_id', fbId)
       .eq('type', SESSION_TYPE)
       .eq('is_active', true)
 
@@ -611,7 +566,7 @@ router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Re
     const { error: insertError } = await supabaseAdmin
       .from('temp_session')
       .insert({
-        entity_id: evalId,
+        entity_id: fbId,
         type: SESSION_TYPE,
         token_hash: tokenHash,
         expires_at: expiresAt.toISOString(),
@@ -631,7 +586,7 @@ router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Re
 
     // Gerar URL completa
     const frontendUrl = process.env['FRONTEND_URL'] || 'http://localhost:3000'
-    const acceptUrl = `${frontendUrl}/evaluation-accept/${token}`
+    const acceptUrl = `${frontendUrl}/feedback-accept/${token}`
 
     return res.json({
       success: true,
@@ -641,10 +596,9 @@ router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Re
         expiresAt: expiresAt.toISOString(),
         expiresInHours: expiresInHours,
         maxAccess: maxAccess,
-        evaluation: {
-          id: evaluation.id,
-          name: evaluation.name,
-          userName: evaluation.user_name
+        feedback: {
+          id: feedback.id,
+          feedbackUserName: feedback.feedback_user_name
         }
       }
     })
@@ -655,15 +609,15 @@ router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Re
 
 /**
  * @swagger
- * /api/evaluation-accept/{evaluationId}/link:
+ * /api/feedback-accept/{feedbackId}/link:
  *   get:
- *     summary: Obtém o link de aceite ativo para uma avaliação (requer autenticação)
- *     tags: [Evaluation Accept]
+ *     summary: Obtém o link de aceite ativo para um feedback (requer autenticação)
+ *     tags: [Feedback Accept]
  *     security:
  *       - sessionAuth: []
  *     parameters:
  *       - in: path
- *         name: evaluationId
+ *         name: feedbackId
  *         required: true
  *         schema:
  *           type: integer
@@ -671,36 +625,36 @@ router.post('/:evaluationId/generate', sessionAuth, async (req: Request, res: Re
  *       200:
  *         description: Retorna informações do link ativo ou null se não houver
  */
-router.get('/:evaluationId/link', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:feedbackId/link', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { evaluationId } = req.params
+    const { feedbackId } = req.params
 
-    if (!evaluationId) {
+    if (!feedbackId) {
       return res.status(400).json({
         success: false,
-        error: { message: 'ID da avaliação é obrigatório', code: 'INVALID_REQUEST' }
+        error: { message: 'ID do feedback é obrigatório', code: 'INVALID_REQUEST' }
       })
     }
 
-    const evalId = parseInt(evaluationId)
-    if (isNaN(evalId)) {
+    const fbId = parseInt(feedbackId)
+    if (isNaN(fbId)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'ID da avaliação inválido', code: 'INVALID_REQUEST' }
+        error: { message: 'ID do feedback inválido', code: 'INVALID_REQUEST' }
       })
     }
 
-    // Buscar avaliação para status de aceite
-    const { data: evaluation, error: evalError } = await supabaseAdmin
-      .from('evaluations')
+    // Buscar feedback para status de aceite
+    const { data: feedback, error: feedbackError } = await supabaseAdmin
+      .from('feedbacks')
       .select('id, accepted, accepted_at, is_closed')
-      .eq('id', evalId)
+      .eq('id', fbId)
       .single()
 
-    if (evalError || !evaluation) {
+    if (feedbackError || !feedback) {
       return res.status(404).json({
         success: false,
-        error: { message: 'Avaliação não encontrada', code: 'NOT_FOUND' }
+        error: { message: 'Feedback não encontrado', code: 'NOT_FOUND' }
       })
     }
 
@@ -708,7 +662,7 @@ router.get('/:evaluationId/link', sessionAuth, async (req: Request, res: Respons
     const { data: session, error: sessionError } = await supabaseAdmin
       .from('temp_session')
       .select('id, expires_at, used_at, created_at, is_active, max_access, access_count')
-      .eq('entity_id', evalId)
+      .eq('entity_id', fbId)
       .eq('type', SESSION_TYPE)
       .eq('is_active', true)
       .is('used_at', null)
@@ -724,9 +678,9 @@ router.get('/:evaluationId/link', sessionAuth, async (req: Request, res: Respons
     return res.json({
       success: true,
       data: {
-        accepted: evaluation.accepted || false,
-        acceptedAt: evaluation.accepted_at,
-        isClosed: evaluation.is_closed,
+        accepted: feedback.accepted || false,
+        acceptedAt: feedback.accepted_at,
+        isClosed: feedback.is_closed || false,
         hasValidLink,
         linkExpiresAt: hasValidLink ? session.expires_at : null,
         linkCreatedAt: hasValidLink ? session.created_at : null
@@ -739,15 +693,15 @@ router.get('/:evaluationId/link', sessionAuth, async (req: Request, res: Respons
 
 /**
  * @swagger
- * /api/evaluation-accept/{evaluationId}/status:
+ * /api/feedback-accept/{feedbackId}/status:
  *   get:
- *     summary: Obtém status de aceite de uma avaliação (requer autenticação)
- *     tags: [Evaluation Accept]
+ *     summary: Obtém status de aceite de um feedback (requer autenticação)
+ *     tags: [Feedback Accept]
  *     security:
  *       - sessionAuth: []
  *     parameters:
  *       - in: path
- *         name: evaluationId
+ *         name: feedbackId
  *         required: true
  *         schema:
  *           type: integer
@@ -755,44 +709,46 @@ router.get('/:evaluationId/link', sessionAuth, async (req: Request, res: Respons
  *       200:
  *         description: Status do aceite
  */
-router.get('/:evaluationId/status', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:feedbackId/status', sessionAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { evaluationId } = req.params
+    const { feedbackId } = req.params
 
-    if (!evaluationId) {
+    if (!feedbackId) {
       return res.status(400).json({
         success: false,
-        error: { message: 'ID da avaliação é obrigatório', code: 'INVALID_REQUEST' }
+        error: { message: 'ID do feedback é obrigatório', code: 'INVALID_REQUEST' }
       })
     }
 
-    const evalId = parseInt(evaluationId)
-    if (isNaN(evalId)) {
+    const fbId = parseInt(feedbackId)
+    if (isNaN(fbId)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'ID da avaliação inválido', code: 'INVALID_REQUEST' }
+        error: { message: 'ID do feedback inválido', code: 'INVALID_REQUEST' }
       })
     }
 
-    // Buscar avaliação
-    const { data: evaluation, error: evalError } = await supabaseAdmin
-      .from('evaluations')
-      .select('id, accepted, accepted_at')
-      .eq('id', evalId)
+    // Buscar feedback
+    const { data: feedback, error: feedbackError } = await supabaseAdmin
+      .from('feedbacks')
+      .select('id, accepted, accepted_at, is_closed, closed_at')
+      .eq('id', fbId)
       .single()
 
-    if (evalError || !evaluation) {
+    if (feedbackError || !feedback) {
       return res.status(404).json({
         success: false,
-        error: { message: 'Avaliação não encontrada', code: 'NOT_FOUND' }
+        error: { message: 'Feedback não encontrado', code: 'NOT_FOUND' }
       })
     }
 
     return res.json({
       success: true,
       data: {
-        accepted: evaluation.accepted || false,
-        acceptedAt: evaluation.accepted_at
+        isClosed: feedback.is_closed || false,
+        closedAt: feedback.closed_at,
+        accepted: feedback.accepted || false,
+        acceptedAt: feedback.accepted_at
       }
     })
   } catch (err) {

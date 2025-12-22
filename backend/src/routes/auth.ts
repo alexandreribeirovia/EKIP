@@ -190,6 +190,23 @@ router.get('/me', sessionAuth, async (req, res) => {
 
     const user = userData.user
 
+    // Buscar dados adicionais da tabela public.users (avatar_large_url, runrun_user_id)
+    let avatar_large_url: string | undefined
+    let runrun_user_id: string | undefined
+
+    if (user.email) {
+      const { data: profileData } = await supabase
+        .from('users')
+        .select('avatar_large_url, runrun_user_id')
+        .eq('email', user.email)
+        .maybeSingle()
+
+      if (profileData) {
+        avatar_large_url = profileData.avatar_large_url || undefined
+        runrun_user_id = profileData.runrun_user_id || undefined
+      }
+    }
+
     return res.json({
       success: true,
       data: {
@@ -199,7 +216,8 @@ router.get('/me', sessionAuth, async (req, res) => {
           name: user.user_metadata?.['name'] || user.email,
           role: user.user_metadata?.['role'] || 'user',
           avatar: user.user_metadata?.['avatar'],
-          runrun_user_id: user.user_metadata?.['runrun_user_id'],
+          avatar_large_url,
+          runrun_user_id,
         },
       },
     })
