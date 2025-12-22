@@ -10,6 +10,70 @@ export interface User {
   updatedAt: string
 }
 
+// ============================================================================
+// EVALUATION ACCEPT TYPES
+// ============================================================================
+
+/**
+ * Dados da avaliação retornados pelo endpoint de verificação de token
+ */
+export interface EvaluationAcceptInfo {
+  id: number
+  name: string
+  userName: string
+  ownerName: string
+  periodStart: string
+  periodEnd: string
+  averageScore: number | null
+}
+
+/**
+ * Pergunta da avaliação com resposta (read-only)
+ */
+export interface EvaluationAcceptQuestion {
+  question_id: number
+  question: string
+  description: string | null
+  category_id: number
+  category: string
+  subcategory_id: number | null
+  subcategory: string
+  reply_type_id: number
+  reply_type: string // 'Escala', 'Texto', 'Sim/Não'
+  weight: number
+  required: boolean
+  category_order: number
+  subcategory_order: number
+  question_order: number
+  // Resposta
+  score: number | null
+  reply: string | null
+  yes_no: boolean | null
+}
+
+/**
+ * Categoria/Subcategoria da avaliação
+ */
+export interface EvaluationAcceptCategory {
+  id: number
+  type: string
+  value: string
+  is_active: boolean
+  parent_id: number | null
+}
+
+/**
+ * Resposta completa do endpoint /api/evaluation-accept/verify/:token
+ */
+export interface EvaluationAcceptVerifyResponse {
+  evaluation: EvaluationAcceptInfo
+  questions: EvaluationAcceptQuestion[]
+  categories: EvaluationAcceptCategory[]
+  expiresAt: string
+}
+
+// ============================================================================
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER',

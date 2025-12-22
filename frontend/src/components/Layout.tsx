@@ -81,7 +81,7 @@ const Layout = ({ children }: LayoutProps) => {
       {/* Sidebar */}
       <div className={`bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-56'
         }`}>
-        <div className="flex items-center justify-between plogo border-b border-gray-200 dark:border-gray-700 py-2">
+        <div className="flex items-center justify-between  border-b border-gray-200 dark:border-gray-700 py-2 pl-2">
           <div className="flex items-center">
             <img
               src="./img/logo.png"

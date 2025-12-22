@@ -105,7 +105,7 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
       })
     }
 
-    // Buscar dados da avaliação
+    // Buscar dados da avaliação com modelo vinculado
     const { data: evaluation, error: evalError } = await supabaseAdmin
       .from('evaluations')
       .select(`
@@ -116,7 +116,17 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
         period_start,
         period_end,
         accepted,
-        accepted_at
+        accepted_at,
+        evaluation_model_id,
+        evaluations_questions_reply (
+          question_id,
+          score,
+          reply,
+          yes_no,
+          weight,
+          category,
+          subcategory
+        )
       `)
       .eq('id', session.evaluation_id)
       .single()
@@ -136,6 +146,136 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
       })
     }
 
+    // Calcular média ponderada dos scores
+    let averageScore: number | null = null
+    const replies = evaluation.evaluations_questions_reply || []
+    if (replies.length > 0) {
+      const validReplies = replies.filter((r: any) => r.score !== null && r.weight !== null)
+      if (validReplies.length > 0) {
+        let totalWeightedScore = 0
+        let totalWeight = 0
+        validReplies.forEach((r: any) => {
+          totalWeightedScore += r.score * r.weight
+          totalWeight += r.weight
+        })
+        if (totalWeight > 0) {
+          averageScore = Math.round((totalWeightedScore / totalWeight) * 10) / 10
+        }
+      }
+    }
+
+    // Buscar perguntas do modelo (se existir modelo vinculado)
+    let questions: any[] = []
+    let categories: any[] = []
+
+    if (evaluation.evaluation_model_id) {
+      // Buscar perguntas do modelo
+      const { data: evalQuestions, error: questionsError } = await supabaseAdmin
+        .from('evaluations_questions_model')
+        .select(`
+          id,
+          question_id,
+          category_order,
+          question_order,
+          subcategory_order,
+          questions_model (
+            id,
+            question,
+            description,
+            category_id,
+            subcategory_id,
+            reply_type_id,
+            weight,
+            required
+          )
+        `)
+        .eq('evaluation_id', evaluation.evaluation_model_id)
+        .order('category_order', { ascending: true })
+        .order('subcategory_order', { ascending: true })
+        .order('question_order', { ascending: true })
+
+      if (!questionsError && evalQuestions) {
+        // Extrair IDs únicos de categorias, subcategorias e tipos de resposta
+        const categoryIds = new Set<number>()
+        const subcategoryIds = new Set<number>()
+        const replyTypeIds = new Set<number>()
+
+        evalQuestions.forEach((item: any) => {
+          if (item.questions_model?.category_id) {
+            categoryIds.add(item.questions_model.category_id)
+          }
+          if (item.questions_model?.subcategory_id) {
+            subcategoryIds.add(item.questions_model.subcategory_id)
+          }
+          if (item.questions_model?.reply_type_id) {
+            replyTypeIds.add(item.questions_model.reply_type_id)
+          }
+        })
+
+        const allDomainIds = [...Array.from(categoryIds), ...Array.from(subcategoryIds), ...Array.from(replyTypeIds)]
+
+        // Buscar todos os domains necessários
+        let domainsMap = new Map<number, any>()
+        if (allDomainIds.length > 0) {
+          const { data: domainsData } = await supabaseAdmin
+            .from('domains')
+            .select('*')
+            .in('id', allDomainIds)
+
+          if (domainsData) {
+            domainsData.forEach((d: any) => {
+              domainsMap.set(d.id, d)
+            })
+          }
+        }
+
+        // Criar mapa de respostas por question_id
+        const responsesMap = new Map<number, any>()
+        replies.forEach((r: any) => {
+          responsesMap.set(r.question_id, r)
+        })
+
+        // Processar perguntas com respostas
+        questions = evalQuestions
+          .map((item: any) => {
+            const q = item.questions_model
+            if (!q) return null
+
+            const categoryDomain = domainsMap.get(q.category_id)
+            const subcategoryDomain = domainsMap.get(q.subcategory_id)
+            const replyTypeDomain = domainsMap.get(q.reply_type_id)
+            const response = responsesMap.get(q.id)
+
+            return {
+              question_id: q.id,
+              question: q.question,
+              description: q.description,
+              category_id: q.category_id,
+              category: categoryDomain?.value || '',
+              subcategory_id: q.subcategory_id,
+              subcategory: subcategoryDomain?.value || '',
+              reply_type_id: q.reply_type_id,
+              reply_type: replyTypeDomain?.value || '',
+              weight: q.weight || 1,
+              required: q.required ?? true,
+              category_order: item.category_order,
+              subcategory_order: item.subcategory_order,
+              question_order: item.question_order,
+              // Resposta
+              score: response?.score ?? null,
+              reply: response?.reply ?? null,
+              yes_no: response?.yes_no ?? null
+            }
+          })
+          .filter((q: any) => q !== null)
+
+        // Extrair categorias únicas
+        const categoriesArray = Array.from(categoryIds).map(catId => domainsMap.get(catId)).filter(Boolean)
+        const subcategoriesArray = Array.from(subcategoryIds).map(subId => domainsMap.get(subId)).filter(Boolean)
+        categories = [...categoriesArray, ...subcategoriesArray]
+      }
+    }
+
     return res.json({
       success: true,
       data: {
@@ -145,8 +285,11 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
           userName: evaluation.user_name,
           ownerName: evaluation.owner_name,
           periodStart: evaluation.period_start,
-          periodEnd: evaluation.period_end
+          periodEnd: evaluation.period_end,
+          averageScore
         },
+        questions,
+        categories,
         expiresAt: session.expires_at
       }
     })
