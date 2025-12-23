@@ -599,38 +599,38 @@ router.get('/users', sessionAuth, async (req, res) => {
 
 /**
  * @swagger
-        * / api / auth / users:
- * post:
- * summary: Criar novo usuário(requer admin)
-      * tags: [Auth]
-      * security:
- * - bearerAuth: []
-      * requestBody:
- * required: true
-      * content:
- * application / json:
- * schema:
- * type: object
-      * required:
- * - email
-        * - name
-        * properties:
- * email:
- * type: string
-      * name:
- * type: string
-      * role:
- * type: string
-      * runrun_user_id:
- * type: string
-      * responses:
- * 201:
- * description: Usuário criado com sucesso
-      * 401:
- * description: Não autorizado
-      * 403:
- * description: Acesso negado(requer admin)
-      */
+ * /api/auth/users:
+ *   post:
+ *     summary: Criar novo usuário (requer admin)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - name
+ *             properties:
+ *               email:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               runrun_user_id:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Usuário criado com sucesso
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Acesso negado (requer admin)
+ */
 router.post('/users', sessionAuth, async (req, res) => {
   try {
     // Verificar se o usuário é admin usando o cliente autenticado

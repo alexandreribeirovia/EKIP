@@ -1,6 +1,7 @@
 {
   "name": "team-frontend",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

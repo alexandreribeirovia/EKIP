@@ -476,7 +476,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
  * @swagger
  * /api/employee-evaluations/{id}:
  *   delete:
- *     summary: Deleta uma avaliação (cascade: respostas e projetos)
+ *     summary: Deleta uma avaliação com cascade de respostas e projetos
  *     tags: [Employee Evaluations]
  *     parameters:
  *       - in: path
