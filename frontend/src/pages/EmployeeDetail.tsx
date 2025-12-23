@@ -402,8 +402,10 @@ const EmployeeDetail = () => {
     // Busca todos os registros de time_worked de uma vez via API
     let allTimeWorked: Array<{ time: number; time_worked_date: string }> = [];
     try {
-      const startMonth_num = startMonth.getMonth() + 1;
-      const result_api = await apiClient.get<Array<{time: number; time_worked_date: string}>>(`/api/employee-detail/${userId}/time-worked?month=${startMonth_num}&year=${startMonth.getFullYear()}`);
+      // Formata datas para enviar como range (yyyy-MM-dd)
+      const startDateStr = `${startMonth.getFullYear()}-${(startMonth.getMonth() + 1).toString().padStart(2, '0')}-01`;
+      const endDateStr = `${endMonth.getFullYear()}-${(endMonth.getMonth() + 1).toString().padStart(2, '0')}-01`;
+      const result_api = await apiClient.get<Array<{time: number; time_worked_date: string}>>(`/api/employee-detail/${userId}/time-worked?startDate=${startDateStr}&endDate=${endDateStr}`);
       allTimeWorked = result_api.data || [];
     } catch (error) {
       console.error("Erro ao buscar horas:", error);

@@ -52,30 +52,37 @@ router.get('/:id/tasks', async (req: Request, res: Response, next: NextFunction)
 router.get('/:id/time-worked', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params
-    const { month, year } = req.query
+    const { month, year, startDate, endDate } = req.query
 
     let query = supabaseAdmin
       .from('time_worked')
       .select('*, task_title, project_name, client_name')
       .eq('user_id', id)
 
-    // Filtrar por mês/ano se fornecido
-    if (month && year) {
+    // Filtrar por range de datas (novo formato)
+    if (startDate && endDate) {
+      query = query
+        .gte('time_worked_date', startDate as string)
+        .lt('time_worked_date', endDate as string)
+        .gt('time', 0)
+    }
+    // Filtrar por mês/ano se fornecido (formato legado)
+    else if (month && year) {
       const monthNum = parseInt(month as string, 10)
       const yearNum = parseInt(year as string, 10)
-      const startDate = `${yearNum}-${monthNum.toString().padStart(2, '0')}-01`
+      const filterStartDate = `${yearNum}-${monthNum.toString().padStart(2, '0')}-01`
       
-      let endYear = yearNum
-      let endMonth = monthNum + 1
-      if (endMonth > 12) {
-        endMonth = 1
-        endYear = yearNum + 1
+      let filterEndYear = yearNum
+      let filterEndMonth = monthNum + 1
+      if (filterEndMonth > 12) {
+        filterEndMonth = 1
+        filterEndYear = yearNum + 1
       }
-      const endDate = `${endYear}-${endMonth.toString().padStart(2, '0')}-01`
+      const filterEndDate = `${filterEndYear}-${filterEndMonth.toString().padStart(2, '0')}-01`
 
       query = query
-        .gte('time_worked_date', startDate)
-        .lt('time_worked_date', endDate)
+        .gte('time_worked_date', filterStartDate)
+        .lt('time_worked_date', filterEndDate)
         .gt('time', 0)
     }
 
