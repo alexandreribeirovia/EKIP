@@ -42,17 +42,19 @@ const Feedbacks = () => {
   const [feedbackToEdit, setFeedbackToEdit] = useState<FeedbackData | null>(null);
   
   // Filtros
-  const [periodType, setPeriodType] = useState<'current_month' | 'previous_month' | 'current_year' | 'custom'>('current_year');
+  const [periodType, setPeriodType] = useState<'all' | 'current_month' | 'previous_month' | 'current_year' | 'custom'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedConsultants, setSelectedConsultants] = useState<ConsultantOption[]>([]);
   
   // Função para calcular o intervalo de datas baseado no tipo de período
-  const getDateRange = () => {
+  const getDateRange = (): { start: string; end: string } | null => {
     const now = new Date();
     let start: Date, end: Date;
 
     switch (periodType) {
+      case 'all':
+        return null; // Sem filtro de data - retorna todos os registros
       case 'current_month':
         start = new Date(now.getFullYear(), now.getMonth(), 1);
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -70,13 +72,11 @@ const Feedbacks = () => {
           start = new Date(startDate);
           end = new Date(endDate);
         } else {
-          start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          return null; // Datas customizadas não preenchidas
         }
         break;
       default:
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return null;
     }
 
     return {
@@ -116,10 +116,13 @@ const Feedbacks = () => {
       const dateRange = getDateRange();
       
       // Construir query params
-      const params = new URLSearchParams({
-        startDate: dateRange.start,
-        endDate: dateRange.end,
-      });
+      const params = new URLSearchParams();
+
+      // Adicionar filtro de datas apenas se houver intervalo definido
+      if (dateRange) {
+        params.append('startDate', dateRange.start);
+        params.append('endDate', dateRange.end);
+      }
 
       // Adicionar consultores selecionados
       if (selectedConsultants.length > 0) {
@@ -407,6 +410,7 @@ const Feedbacks = () => {
               onChange={(e) => setPeriodType(e.target.value as any)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
             >
+              <option value="all">Todos</option>
               <option value="current_month">Mês Atual</option>
               <option value="previous_month">Mês Anterior</option>
               <option value="current_year">Ano Atual</option>

@@ -8,7 +8,7 @@ import { ArrowLeft, Loader2, Search, Plus, CheckCircle, XCircle, X, Trash2, Cloc
 import Select from 'react-select';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine, ReferenceArea, BarChart, Bar, LabelList } from 'recharts';
 import * as apiClient from '../lib/apiClient';
-import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase, DbAccessPlatform, DbAccessPlatformGrouped } from '../types';
+import { DbProject, DbTask, DbRisk, DbDomain, DbProjectOwner, DbUser, DbProjectPhase, DbAccessPlatform, DbAccessPlatformGrouped, TimeEntryGrouped } from '../types';
 import AssigneeCellRenderer from '../components/AssigneeCellRenderer.tsx';
 import ProjectOwnerRenderer from '../components/ProjectOwnerRenderer.tsx';
 import ProjectProgressModal from '../components/ProjectProgressModal.tsx';
@@ -571,6 +571,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   // useRefs para controlar se já foi carregado (evita chamadas duplicadas)
   const hasLoadedTasks = useRef(false);
   const hasLoadedTimeWorked = useRef(false);
+  const hasLoadedTimeEntriesGrouped = useRef(false);
   const hasLoadedPhases = useRef(false);
   const hasLoadedRisks = useRef(false);
   const hasLoadedAccesses = useRef(false);
@@ -585,6 +586,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
   const [successNotification, setSuccessNotification] = useState<string | null>(null);
   const [, setTimeWorkedData] = useState<ConsultorHours[]>([]);
+  const [timeEntriesGrouped, setTimeEntriesGrouped] = useState<TimeEntryGrouped[]>([]);
   
   // Estados para o modal de risco
   const [isRiskModalOpen, setIsRiskModalOpen] = useState(false);
@@ -731,6 +733,32 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.project_id]);
 
+  // Buscar dados de time_entries agrupados por usuário e tarefa
+  useEffect(() => {
+    if (!hasLoadedTimeEntriesGrouped.current) {
+      hasLoadedTimeEntriesGrouped.current = true;
+      
+      void (async () => {
+        if (!project.project_id) return;
+
+        try {
+          const result = await apiClient.get<TimeEntryGrouped[]>(`/api/projects/${project.project_id}/time-entries-grouped`);
+
+          if (!result.success) {
+            console.error('Erro ao buscar time-entries-grouped:', result.error);
+            setTimeEntriesGrouped([]);
+          } else {
+            setTimeEntriesGrouped(result.data || []);
+          }
+        } catch (error) {
+          console.error('Erro na requisição de time-entries-grouped:', error);
+          setTimeEntriesGrouped([]);
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.project_id]);
+
   // Buscar fases do projeto via Backend API
   useEffect(() => {
     if (!hasLoadedPhases.current) {
@@ -764,10 +792,24 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const filteredTrackingData = useMemo(() => {
     const filteredTasks = getFilteredTasks(tasks);
     
-    // Calcular horas por tipo de tarefa com detalhamento por consultor (dados filtrados)
+    // Criar Set de task_ids filtrados para filtrar timeEntriesGrouped
+    const filteredTaskIds = new Set(filteredTasks.map(t => t.task_id));
+    
+    // Filtrar timeEntriesGrouped pelos task_ids das tarefas filtradas
+    const filteredTimeEntries = timeEntriesGrouped.filter(entry => filteredTaskIds.has(entry.task_id));
+    
+    // Criar mapa de task_id -> type_name para lookup rápido
+    const taskTypeMap = new Map<number, string>();
+    filteredTasks.forEach(task => {
+      if (task.task_id) {
+        taskTypeMap.set(task.task_id, task.type_name || 'Sem tipo');
+      }
+    });
+    
+    // Calcular horas por tipo de tarefa com detalhamento por consultor (baseado em quem lançou horas)
     const typeHoursMap = new Map<string, { estimated: number; worked: number; consultors: Map<string, { name: string; worked: number }> }>();
     
-    // Primeiro, calcular totais por tipo
+    // Primeiro, calcular totais por tipo (estimado e trabalhado total da tarefa)
     filteredTasks.forEach(task => {
       const typeName = task.type_name || 'Sem tipo';
       const estimatedHours = (task.current_estimate_seconds || 0) / 3600;
@@ -777,23 +819,22 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       current.estimated += estimatedHours;
       current.worked += workedHours;
       
-      // Adicionar consultores por tipo
-      if (task.assignments && task.time_worked && task.time_worked > 0) {
-        task.assignments.forEach(assignment => {
-          if (assignment.users) {
-            const userId = assignment.users.user_id;
-            const userName = assignment.users.name;
-            const numAssignees = task.assignments!.length;
-            const hoursPerConsultor = (task.time_worked! / 3600) / numAssignees;
-            
-            const consultorInType = current.consultors.get(userId) || { name: userName, worked: 0 };
-            consultorInType.worked += hoursPerConsultor;
-            current.consultors.set(userId, consultorInType);
-          }
-        });
-      }
-      
       typeHoursMap.set(typeName, current);
+    });
+    
+    // Adicionar consultores por tipo baseado em quem efetivamente lançou horas
+    filteredTimeEntries.forEach(entry => {
+      const typeName = taskTypeMap.get(entry.task_id) || 'Sem tipo';
+      const current = typeHoursMap.get(typeName);
+      if (current) {
+        const userId = entry.user_id;
+        const userName = entry.user_name;
+        const hoursWorked = entry.time_seconds / 3600;
+        
+        const consultorInType = current.consultors.get(userId) || { name: userName, worked: 0 };
+        consultorInType.worked += hoursWorked;
+        current.consultors.set(userId, consultorInType);
+      }
     });
 
     // Converter para array e ordenar por tipo
@@ -830,25 +871,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       }))
       .sort((a, b) => a.status.localeCompare(b.status));
 
-    // Calcular consultores (dados filtrados)
+    // Calcular horas lançadas por consultor (baseado em quem efetivamente lançou horas)
     const consultorHoursMap = new Map<string, { name: string; total_hours: number }>();
     
-    filteredTasks.forEach(task => {
-      if (task.assignments && task.time_worked) {
-        task.assignments.forEach(assignment => {
-          if (assignment.users) {
-            const userId = assignment.users.user_id;
-            const userName = assignment.users.name;
-            const currentHours = consultorHoursMap.get(userId)?.total_hours || 0;
-            const taskHours = task.time_worked! / 3600; // Converter segundos para horas
-            
-            consultorHoursMap.set(userId, {
-              name: userName,
-              total_hours: currentHours + taskHours
-            });
-          }
-        });
-      }
+    filteredTimeEntries.forEach(entry => {
+      const userId = entry.user_id;
+      const userName = entry.user_name;
+      const currentHours = consultorHoursMap.get(userId)?.total_hours || 0;
+      const entryHours = entry.time_seconds / 3600;
+      
+      consultorHoursMap.set(userId, {
+        name: userName,
+        total_hours: currentHours + entryHours
+      });
     });
     
     // Converter o map para array e ordenar alfabeticamente
@@ -860,31 +895,48 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    // Calcular contagem de tarefas por consultor
-    const consultorTaskCountMap = new Map<string, { name: string; task_count: number }>();
+    // Calcular contagem de tarefas por consultor (baseado em quem lançou horas na tarefa)
+    const consultorTaskCountMap = new Map<string, { name: string; task_count: number; taskIds: Set<number> }>();
     
-    filteredTasks.forEach(task => {
-      if (task.assignments) {
-        task.assignments.forEach(assignment => {
-          if (assignment.users) {
-            const userId = assignment.users.user_id;
-            const userName = assignment.users.name;
-            const current = consultorTaskCountMap.get(userId) || { name: userName, task_count: 0 };
-            current.task_count += 1;
-            consultorTaskCountMap.set(userId, current);
-          }
-        });
+    // Contar tarefas por usuário que lançou horas
+    filteredTimeEntries.forEach(entry => {
+      const userId = entry.user_id;
+      const userName = entry.user_name;
+      const taskId = entry.task_id;
+      
+      const current = consultorTaskCountMap.get(userId) || { name: userName, task_count: 0, taskIds: new Set() };
+      if (!current.taskIds.has(taskId)) {
+        current.taskIds.add(taskId);
+        current.task_count += 1;
       }
+      consultorTaskCountMap.set(userId, current);
     });
+    
+    // Contar tarefas sem lançamento de horas (Sem responsável)
+    const taskIdsWithTimeEntries = new Set(filteredTimeEntries.map(e => e.task_id));
+    const tasksWithoutResponsible = filteredTasks.filter(t => t.task_id && !taskIdsWithTimeEntries.has(t.task_id));
+    
+    if (tasksWithoutResponsible.length > 0) {
+      consultorTaskCountMap.set('_unassigned', {
+        name: 'Sem responsável',
+        task_count: tasksWithoutResponsible.length,
+        taskIds: new Set(tasksWithoutResponsible.map(t => t.task_id!))
+      });
+    }
     
     // Converter para array
     const consultorTaskCountList = Array.from(consultorTaskCountMap.entries())
       .map(([user_id, data]) => ({
-        user_id: parseInt(user_id),
+        user_id: user_id === '_unassigned' ? -1 : parseInt(user_id),
         name: data.name,
         task_count: data.task_count
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        // "Sem responsável" sempre por último
+        if (a.user_id === -1) return 1;
+        if (b.user_id === -1) return -1;
+        return a.name.localeCompare(b.name);
+      });
 
     return {
       taskTypeHours: typeHoursList,
@@ -892,7 +944,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       consultors: consultorsList,
       consultorTaskCounts: consultorTaskCountList
     };
-  }, [tasks, getFilteredTasks]);
+  }, [tasks, getFilteredTasks, timeEntriesGrouped]);
 
   useEffect(() => {
     if (!hasLoadedRisks.current) {
@@ -1874,6 +1926,72 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     return { dataPoints, currentWeek: currentWeekLabel, phaseBars };
   }, [calculateSCurveData, projectPhases, calculateProjectWeeks, tasks]);
 
+  // Função auxiliar para buscar o último progresso real conhecido (carry-forward)
+  // Busca retroativamente a partir da semana anterior até encontrar um valor de progresso
+  const findLastKnownProgress = useCallback((targetWeek: number, phaseSchedule: any, cumulativeWeights: any): number => {
+    // Iterar de targetWeek-1 até 1, buscando o último progresso conhecido
+    for (let week = targetWeek - 1; week >= 1; week--) {
+      const phasesForWeek = projectPhases.filter(phase => 
+        phase.period === week && phase.progress !== null
+      );
+
+      if (phasesForWeek.length > 0) {
+        // Encontrou fases com progresso, calcular o valor ponderado
+        const allScheduledPhases = Object.keys(phaseSchedule)
+          .filter(phase => phaseSchedule[phase].startDate && phaseSchedule[phase].endDate);
+
+        const registeredPhaseNames = phasesForWeek.map(phase => phase.phase_name);
+        const registeredPhases = allScheduledPhases.filter(phase => 
+          registeredPhaseNames.includes(phase)
+        );
+
+        if (registeredPhases.length === 0) continue;
+
+        // Calcular pesos das fases
+        let totalRegisteredWeight = 0;
+        let totalScheduledWeight = 0;
+        const phaseWeights: Record<string, number> = {};
+        const sortedPhases = allScheduledPhases.sort((a, b) => 
+          (cumulativeWeights[a] || 0) - (cumulativeWeights[b] || 0)
+        );
+
+        for (let i = 0; i < sortedPhases.length; i++) {
+          const phase = sortedPhases[i];
+          const currentWeight = cumulativeWeights[phase] || 0;
+          const previousWeight = i > 0 ? (cumulativeWeights[sortedPhases[i - 1]] || 0) : 0;
+          const phaseWeight = currentWeight - previousWeight;
+          
+          phaseWeights[phase] = phaseWeight;
+          totalScheduledWeight += phaseWeight;
+          
+          if (registeredPhases.includes(phase)) {
+            totalRegisteredWeight += phaseWeight;
+          }
+        }
+
+        // Calcular progresso ponderado
+        let weightedProgress = 0;
+        for (const registeredPhase of phasesForWeek) {
+          const phaseName = registeredPhase.phase_name;
+          const phaseProgress = registeredPhase.progress || 0;
+          
+          if (phaseName && phaseWeights[phaseName]) {
+            const adjustedWeight = totalRegisteredWeight > 0 
+              ? (phaseWeights[phaseName] * totalScheduledWeight) / totalRegisteredWeight
+              : phaseWeights[phaseName];
+            
+            weightedProgress += (adjustedWeight * phaseProgress) / 100;
+          }
+        }
+
+        return Math.min(100, Math.max(0, weightedProgress));
+      }
+    }
+
+    // Nenhum progresso encontrado em semanas anteriores
+    return 0;
+  }, [projectPhases]);
+
   // Função para calcular progresso real baseado nos valores cadastrados na tabela projects_phase
   const calculateRealProgressForDate = useCallback((targetDate: Date, phaseSchedule: any, cumulativeWeights: any) => {
     // Calcular qual semana corresponde à data target
@@ -1895,9 +2013,9 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       phase.period === targetWeek && phase.progress !== null
     );
 
-    // Se não há fases cadastradas para esta semana, retorna 0
+    // Se não há fases cadastradas para esta semana, buscar último progresso conhecido (carry-forward)
     if (registeredPhasesForWeek.length === 0) {
-      return 0;
+      return findLastKnownProgress(targetWeek, phaseSchedule, cumulativeWeights);
     }
 
     // Obter todas as fases disponíveis no cronograma
@@ -1957,7 +2075,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     }
 
     return Math.min(100, Math.max(0, weightedProgress));
-  }, [projectPhases, tasks]);
+  }, [projectPhases, tasks, findLastKnownProgress]);
 
   // Função para calcular progresso planejado acumulativo por semana
   const calculateWeeklyAccumulativePlannedProgress = useCallback((currentDate: Date, projectStartDate: Date, projectEndDate: Date, phaseSchedule: any, cumulativeWeights: any) => {

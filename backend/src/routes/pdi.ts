@@ -51,21 +51,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate, consultantIds, managerIds, statusIds } = req.query
 
-    // Validar datas obrigatórias
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'startDate e endDate são obrigatórios', code: 'VALIDATION_ERROR' }
-      })
-    }
-
     // Buscar PDIs
     let query = supabaseAdmin
       .from('pdi')
       .select('*')
-      .gte('updated_at', startDate as string)
-      .lte('updated_at', (endDate as string) + 'T23:59:59')
       .order('updated_at', { ascending: false })
+
+    // Filtrar por datas se fornecidas (opcional)
+    if (startDate && typeof startDate === 'string') {
+      query = query.gte('updated_at', startDate)
+    }
+    if (endDate && typeof endDate === 'string') {
+      query = query.lte('updated_at', endDate + 'T23:59:59')
+    }
 
     // Filtrar por consultores se fornecido
     if (consultantIds && typeof consultantIds === 'string' && consultantIds.trim() !== '') {

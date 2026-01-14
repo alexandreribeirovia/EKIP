@@ -217,6 +217,17 @@ export interface TaskAssignment {
   users: AssigneeUser | null; 
 }
 
+/**
+ * Tempo trabalhado agrupado por usuário e tarefa
+ * Usado para calcular horas lançadas e tarefas por consultor baseado em quem efetivamente lançou horas
+ */
+export interface TimeEntryGrouped {
+  user_id: string;
+  user_name: string;
+  task_id: number;
+  time_seconds: number;
+}
+
 export interface DbProject {
   id: number;
   project_id: number;

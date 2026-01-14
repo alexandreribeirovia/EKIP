@@ -239,6 +239,73 @@ router.get('/:id/time-worked', async (req: Request, res: Response, next: NextFun
 
 /**
  * @swagger
+ * /api/projects/{id}/time-entries-grouped:
+ *   get:
+ *     summary: Busca tempo trabalhado agrupado por usuário e tarefa
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: ID do projeto
+ *     responses:
+ *       200:
+ *         description: Lista de tempo trabalhado por usuário e tarefa
+ */
+router.get('/:id/time-entries-grouped', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params['id'] as string
+    if (!id) {
+      return res.status(400).json({ success: false, error: { message: 'ID do projeto é obrigatório', code: 'MISSING_ID' } })
+    }
+
+    const supabase = getSupabaseClient(req)
+    const { data, error } = await supabase
+      .from('time_worked')
+      .select('user_id, user_name, task_id, time')
+      .eq('project_id', parseInt(id))
+
+    if (error) {
+      console.error('Erro ao buscar time_worked agrupado:', error)
+      return res.status(500).json({
+        success: false,
+        error: { message: error.message, code: 'SUPABASE_ERROR' }
+      })
+    }
+
+    // Agrupar por user_id + task_id e somar o time (que está em segundos)
+    const groupedData = new Map<string, { user_id: string; user_name: string; task_id: number; time_seconds: number }>()
+    
+    ;(data || []).forEach((record: any) => {
+      const userId = record.user_id
+      const userName = record.user_name
+      const taskId = record.task_id
+      const time = record.time || 0
+      
+      const key = `${userId}_${taskId}`
+      const current = groupedData.get(key) || { user_id: userId, user_name: userName, task_id: taskId, time_seconds: 0 }
+      current.time_seconds += time
+      groupedData.set(key, current)
+    })
+
+    // Converter para array
+    const entriesList = Array.from(groupedData.values())
+      .filter(e => e.time_seconds > 0)
+      .sort((a, b) => a.user_name.localeCompare(b.user_name))
+
+    return res.json({
+      success: true,
+      data: entriesList
+    })
+  } catch (err) {
+    return next(err)
+  }
+})
+
+/**
+ * @swagger
  * /api/projects/{id}/phases:
  *   get:
  *     summary: Busca fases do projeto com nomes de domínio

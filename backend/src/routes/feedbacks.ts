@@ -41,14 +41,6 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate, consultantIds } = req.query
 
-    // Validar datas obrigatórias
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'startDate e endDate são obrigatórios', code: 'VALIDATION_ERROR' }
-      })
-    }
-
     // Buscar feedbacks - usa campo is_pdi existente na tabela
     let query = supabaseAdmin
       .from('feedbacks')
@@ -69,9 +61,15 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         accepted,
         accepted_at
       `)
-      .gte('feedback_date', startDate as string)
-      .lte('feedback_date', endDate as string)
       .order('feedback_date', { ascending: false })
+
+    // Filtrar por datas se fornecidas (opcional)
+    if (startDate && typeof startDate === 'string') {
+      query = query.gte('feedback_date', startDate)
+    }
+    if (endDate && typeof endDate === 'string') {
+      query = query.lte('feedback_date', endDate)
+    }
 
     // Filtrar por consultores se fornecido
     if (consultantIds && typeof consultantIds === 'string' && consultantIds.trim() !== '') {

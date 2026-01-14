@@ -36,7 +36,7 @@ const PDI = () => {
   }, []);
   
   // Filtros
-  const [periodType, setPeriodType] = useState<'current_month' | 'previous_month' | 'current_year' | 'custom'>('current_year');
+  const [periodType, setPeriodType] = useState<'all' | 'current_month' | 'previous_month' | 'current_year' | 'custom'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedConsultants, setSelectedConsultants] = useState<ConsultantOption[]>([]);
@@ -44,11 +44,13 @@ const PDI = () => {
   const [selectedStatus, setSelectedStatus] = useState<ConsultantOption[]>([]);
 
   // Função para calcular o intervalo de datas baseado no tipo de período
-  const getDateRange = () => {
+  const getDateRange = (): { start: string; end: string } | null => {
     const now = new Date();
     let start: Date, end: Date;
 
     switch (periodType) {
+      case 'all':
+        return null; // Sem filtro de data - retorna todos os registros
       case 'current_month':
         start = new Date(now.getFullYear(), now.getMonth(), 1);
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -66,13 +68,11 @@ const PDI = () => {
           start = new Date(startDate);
           end = new Date(endDate);
         } else {
-          start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          return null; // Datas customizadas não preenchidas
         }
         break;
       default:
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return null;
     }
 
     return {
@@ -84,14 +84,14 @@ const PDI = () => {
   // Buscar consultores para o filtro
   const fetchConsultants = async () => {
     try {
-      const response = await apiClient.get('/api/lookups/users');
+      const response = await apiClient.get<{ user_id: string; name: string }[]>('/api/lookups/users');
 
       if (!response.success) {
         console.error('Erro ao buscar consultores:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
+      const options: ConsultantOption[] = (response.data || []).map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -105,14 +105,14 @@ const PDI = () => {
   // Buscar gestores (usuários com posição contendo "Gestor")
   const fetchManagers = async () => {
     try {
-      const response = await apiClient.get('/api/lookups/managers');
+      const response = await apiClient.get<{ user_id: string; name: string }[]>('/api/lookups/managers');
 
       if (!response.success) {
         console.error('Erro ao buscar gestores:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
+      const options: ConsultantOption[] = (response.data || []).map((user) => ({
         value: user.user_id,
         label: user.name,
       }));
@@ -126,17 +126,14 @@ const PDI = () => {
   // Buscar status disponíveis
   const fetchStatus = async () => {
     try {
-      const response = await apiClient.get('/api/domains?type=pdi_status&is_active=true');
+      const response = await apiClient.get<{ id: number; value: string }[]>('/api/domains?type=pdi_status&is_active=true');
 
-      const error = !response.success;
-      const data = response.data;
-
-      if (error) {
-        console.error('Erro ao buscar status:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar status:', response.error);
         return;
       }
 
-      const options: ConsultantOption[] = (data || []).map((status) => ({
+      const options: ConsultantOption[] = (response.data || []).map((status) => ({
         value: status.id.toString(),
         label: status.value,
       }));
@@ -157,10 +154,13 @@ const PDI = () => {
       const dateRange = getDateRange();
       
       // Montar query params para a API
-      const queryParams = new URLSearchParams({
-        startDate: dateRange.start,
-        endDate: dateRange.end,
-      });
+      const queryParams = new URLSearchParams();
+
+      // Adicionar filtro de datas apenas se houver intervalo definido
+      if (dateRange) {
+        queryParams.append('startDate', dateRange.start);
+        queryParams.append('endDate', dateRange.end);
+      }
 
       // Filtrar por consultores selecionados
       if (selectedConsultants.length > 0) {
@@ -180,7 +180,7 @@ const PDI = () => {
         queryParams.append('statusIds', selectedIds.join(','));
       }
 
-      const response = await apiClient.get(`/api/pdi?${queryParams.toString()}`);
+      const response = await apiClient.get<PdiData[]>(`/api/pdi?${queryParams.toString()}`);
 
       if (!response.success) {
         console.error('Erro ao buscar PDIs:', response.error);
@@ -246,7 +246,7 @@ const PDI = () => {
 
     try {
       // Deletar o PDI (cascade deleta itens automaticamente)
-      const response = await apiClient.del(`/api/pdi/${pdiToDelete.id}`);
+      const response = await apiClient.delete(`/api/pdi/${pdiToDelete.id}`);
 
       if (!response.success) {
         console.error('Erro ao deletar PDI:', response.error);
@@ -424,6 +424,7 @@ const PDI = () => {
               onChange={(e) => setPeriodType(e.target.value as any)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
             >
+              <option value="all">Todos</option>
               <option value="current_month">Mês Atual</option>
               <option value="previous_month">Mês Anterior</option>
               <option value="current_year">Ano Atual</option>
