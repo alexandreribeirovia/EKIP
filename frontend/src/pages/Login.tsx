@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
 import logo from '../../img/logo.png'
+import loginBackground from '../../img/login_background.png'
 import { Link } from 'react-router-dom'
 
 const Login = () => {
@@ -34,8 +35,13 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
+    <div 
+      className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: `url(${loginBackground})` }}
+    >
+      {/* Overlay escuro para melhorar legibilidade */}
+      <div className="absolute inset-0 bg-black/0 dark:bg-black/0"></div>
+      <div className="max-w-md w-full relative z-10">
         {/* Card flutuante com sombra */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
           
