@@ -60,6 +60,46 @@ interface CompetencyItem {
   isExpanded: boolean;
 }
 
+// Interfaces para respostas da API
+interface UserLookup {
+  user_id: string;
+  name: string;
+}
+
+interface DomainItem {
+  id: number;
+  value: string;
+  type: string;
+  is_active: boolean;
+}
+
+interface PDIItemData {
+  id: number;
+  competency_id: number | null;
+  level_current: number | null;
+  level_target: number | null;
+  goal_description: string;
+  actions: string;
+  due_date: string;
+  progress: number;
+}
+
+interface PDIData {
+  id: number;
+  user_id: string;
+  user_name: string;
+  owner_id: string;
+  owner_name: string;
+  status_id: number;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  comments: string | null;
+  evaluation_id: number | null;
+  feedback_id: number | null;
+  items: PDIItemData[];
+}
+
 const PDIModal = ({ 
   isOpen, 
   onClose, 
@@ -106,14 +146,14 @@ const PDIModal = ({
   }, [onSuccessMessage]);
 
   const fetchConsultants = async () => {
-    const response = await apiClient.get('/api/lookups/users');
+    const response = await apiClient.get<UserLookup[]>('/api/lookups/users');
 
     if (!response.success) {
       console.error('❌ Erro ao buscar consultores:', response.error);
       return;
     }
 
-    const options: UserOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
+    const options: UserOption[] = (response.data || []).map((user) => ({
       value: user.user_id,
       label: user.name,
     }));
@@ -122,14 +162,14 @@ const PDIModal = ({
   };
 
   const fetchManagers = async () => {
-    const response = await apiClient.get('/api/lookups/managers');
+    const response = await apiClient.get<UserLookup[]>('/api/lookups/managers');
 
     if (!response.success) {
       console.error('❌ Erro ao buscar gestores:', response.error);
       return;
     }
 
-    const options: UserOption[] = (response.data || []).map((user: { user_id: string; name: string }) => ({
+    const options: UserOption[] = (response.data || []).map((user) => ({
       value: user.user_id,
       label: user.name,
     }));
@@ -138,14 +178,14 @@ const PDIModal = ({
   };
 
   const fetchCompetencies = async () => {
-    const response = await apiClient.get('/api/domains?type=pdi_competencies&is_active=true');
+    const response = await apiClient.get<DomainItem[]>('/api/domains?type=pdi_competencies&is_active=true');
 
     if (!response.success) {
       console.error('Erro ao buscar competências:', response.error);
       return;
     }
 
-    const options: CompetencyOption[] = (response.data || []).map((comp: { id: number; value: string }) => ({
+    const options: CompetencyOption[] = (response.data || []).map((comp) => ({
       value: comp.id,
       label: comp.value,
     }));
@@ -154,14 +194,14 @@ const PDIModal = ({
   };
 
   const fetchStatus = async () => {
-    const response = await apiClient.get('/api/domains?type=pdi_status&is_active=true');
+    const response = await apiClient.get<DomainItem[]>('/api/domains?type=pdi_status&is_active=true');
 
     if (!response.success) {
       console.error('Erro ao buscar status:', response.error);
       return;
     }
 
-    const options = (response.data || []).map((status: { id: number; value: string }) => ({
+    const options: { value: number; label: string }[] = (response.data || []).map((status) => ({
       value: status.id,
       label: status.value,
     }));
@@ -184,9 +224,9 @@ const PDIModal = ({
     setIsLoading(true);
     
     // Buscar dados do PDI via API
-    const response = await apiClient.get(`/api/pdi/${id}`);
+    const response = await apiClient.get<PDIData>(`/api/pdi/${id}`);
 
-    if (!response.success) {
+    if (!response.success || !response.data) {
       console.error('Erro ao buscar dados do PDI:', response.error);
       showErrorNotification('Erro ao carregar dados do PDI. Tente novamente.');
       setIsLoading(false);
@@ -249,7 +289,7 @@ const PDIModal = ({
   const fetchPDIByEvaluationId = async (evalId: number) => {
     setIsLoading(true);
     
-    const response = await apiClient.get(`/api/pdi/by-evaluation/${evalId}`);
+    const response = await apiClient.get<{ id: number } | null>(`/api/pdi/by-evaluation/${evalId}`);
 
     if (!response.success) {
       console.error('Erro ao buscar PDI por evaluation_id:', response.error);
@@ -272,7 +312,7 @@ const PDIModal = ({
   const fetchPDIByFeedbackId = async (fbId: number) => {
     setIsLoading(true);
     
-    const response = await apiClient.get(`/api/pdi/by-feedback/${fbId}`);
+    const response = await apiClient.get<{ id: number } | null>(`/api/pdi/by-feedback/${fbId}`);
 
     if (!response.success) {
       console.error('Erro ao buscar PDI por feedback_id:', response.error);

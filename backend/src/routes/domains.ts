@@ -24,14 +24,24 @@ const getSupabaseClient = (req: Request) => {
  *         schema:
  *           type: string
  *           enum: [active, inactive, all]
- *         description: Filtrar por status do domínio
+ *         description: Filtrar por status do domínio (legado)
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Filtrar por tipo do domínio (ex: pdi_competencies, pdi_status)
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: boolean
+ *         description: Filtrar por domínios ativos/inativos
  *     responses:
  *       200:
  *         description: Lista de domínios com informações do parent
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status } = req.query
+    const { status, type, is_active } = req.query
     const supabase = getSupabaseClient(req)
 
     let query = supabase
@@ -40,7 +50,17 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       .order('type')
       .order('value')
 
-    // Filtro por status
+    // Filtro por type (ex: pdi_competencies, pdi_status)
+    if (type && typeof type === 'string') {
+      query = query.eq('type', type)
+    }
+
+    // Filtro por is_active (query param direto)
+    if (is_active !== undefined) {
+      query = query.eq('is_active', is_active === 'true')
+    }
+
+    // Filtro por status (mantém compatibilidade com chamadas existentes)
     if (status === 'active') {
       query = query.eq('is_active', true)
     } else if (status === 'inactive') {
