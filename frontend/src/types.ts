@@ -608,3 +608,235 @@ export interface DbAccessPlatformGrouped {
   accesses: DbAccessPlatform[];
   expanded?: boolean;
 }
+
+// ============================================================================
+// QUIZ TYPES
+// ============================================================================
+
+/**
+ * Quiz - Modelo de teste de conhecimento
+ */
+export interface QuizData {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  title: string;
+  description: string | null;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  about_id: number | null;
+  about: string | null;
+  shuffle_questions: boolean;
+  shuffle_options: boolean;
+  attempt_limit: number | null;
+  pass_score: number | null;
+  owner_user_id: string | null;
+  // Contagens (preenchidas no GET /api/quiz)
+  question_count?: number;
+  participant_count?: number;
+}
+
+/**
+ * Pergunta do Quiz
+ */
+export interface QuizQuestionData {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  quiz_id: number;
+  question_text: string;
+  hint: string | null;
+  explanation: string | null;
+  question_type: 'single_choice' | 'multiple_choice';
+  points: number;
+  question_order: number;
+  is_active: boolean;
+  // Opções (preenchidas no GET)
+  options?: QuizQuestionOptionData[];
+}
+
+/**
+ * Opção de resposta de uma pergunta
+ */
+export interface QuizQuestionOptionData {
+  id: number;
+  created_at?: string;
+  updated_at?: string;
+  question_id: number;
+  option_text: string;
+  is_correct: boolean;
+  rationale: string | null;
+  option_order: number;
+  is_active: boolean;
+}
+
+/**
+ * Participante do Quiz (com status e resultados)
+ */
+export interface QuizParticipantData {
+  id: number;
+  quiz_id: number;
+  user_id: string;
+  user_name: string;
+  user_email: string | null;
+  created_at: string;
+  // Status do link
+  link_status: 'not_generated' | 'active' | 'expired' | 'used';
+  link_expires_at: string | null;
+  link_created_at: string | null;
+  // Estatísticas de tentativas
+  attempts_used: number;
+  attempt_limit: number | null;
+  // Melhor resultado
+  best_score: number | null;
+  best_score_percentage: number | null;
+  total_points: number;
+  correct_count: number | null;
+  wrong_count: number | null;
+  // Última tentativa
+  last_attempt_at: string | null;
+  // Status geral
+  status: 'completed' | 'in_progress' | 'not_started';
+  passed: boolean | null;
+}
+
+/**
+ * Tentativa de quiz
+ */
+export interface QuizAttemptData {
+  id: number;
+  created_at: string;
+  quiz_id: number;
+  user_id: string;
+  started_at: string;
+  submitted_at: string | null;
+  status: 'in_progress' | 'completed' | 'abandoned';
+  score: number | null;
+  total_points: number | null;
+  correct_count: number | null;
+  wrong_count: number | null;
+  time_spent_seconds: number | null;
+  metadata: Record<string, any> | null;
+}
+
+/**
+ * Dados do Quiz para a página de resposta (sem is_correct nas opções)
+ */
+export interface QuizAnswerSession {
+  quiz: {
+    id: number;
+    title: string;
+    description: string | null;
+    attempt_limit: number | null;
+    pass_score: number | null;
+    total_points: number;
+    total_questions: number;
+  };
+  participant: {
+    id: number;
+    user_id: string;
+    user_name: string;
+  };
+  attempts: {
+    count: number;
+    limit: number | null;
+    has_in_progress: boolean;
+    in_progress_id: number | null;
+  };
+  questions: QuizAnswerQuestion[];
+  link_expires_at: string;
+  attempt_id?: number; // ID da tentativa atual (preenchido após start)
+}
+
+/**
+ * Pergunta para resposta (sem indicação de resposta correta)
+ */
+export interface QuizAnswerQuestion {
+  id: number;
+  question_text: string;
+  hint: string | null;
+  question_type: 'single_choice' | 'multiple_choice';
+  points: number;
+  question_order: number;
+  options: QuizAnswerOption[];
+}
+
+/**
+ * Opção para resposta (sem is_correct)
+ */
+export interface QuizAnswerOption {
+  id: number;
+  option_text: string;
+  option_order: number;
+}
+
+/**
+ * Resultado de uma pergunta após submissão
+ */
+export interface QuizAnswerResult {
+  question_id: number;
+  question_text: string;
+  question_type: 'single_choice' | 'multiple_choice';
+  points: number;
+  points_earned: number;
+  is_correct: boolean;
+  explanation: string | null;
+  selected_option_ids: number[];
+  options: QuizAnswerResultOption[];
+}
+
+/**
+ * Opção com resultado (mostra is_correct após submissão)
+ */
+export interface QuizAnswerResultOption {
+  id: number;
+  option_text: string;
+  is_correct: boolean;
+  rationale: string | null;
+  was_selected: boolean;
+}
+
+/**
+ * Resposta completa após submissão do quiz
+ */
+export interface QuizSubmitResponse {
+  score: number;
+  total_points: number;
+  percentage: number;
+  correct_count: number;
+  wrong_count: number;
+  total_questions: number;
+  passed: boolean | null;
+  pass_score: number | null;
+  time_spent_seconds: number | null;
+  results: QuizAnswerResult[];
+}
+
+/**
+ * Quiz no histórico do funcionário
+ */
+export interface EmployeeQuizData {
+  participation_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  quiz_description: string | null;
+  quiz_is_active: boolean;
+  added_at: string;
+  // Estatísticas
+  attempts_used: number;
+  attempt_limit: number | null;
+  // Melhor resultado
+  best_score: number | null;
+  best_total_points: number | null;
+  best_percentage: number | null;
+  best_correct_count: number | null;
+  best_wrong_count: number | null;
+  pass_score: number | null;
+  passed: boolean | null;
+  // Última tentativa
+  last_attempt_at: string | null;
+  last_attempt_status: string | null;
+  // Status geral
+  status: 'completed' | 'in_progress' | 'not_started';
+}

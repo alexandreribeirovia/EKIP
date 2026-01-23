@@ -18,7 +18,9 @@ import {
   LogOut,
   Target,
   Database,
-  Bell
+  Bell,
+  ClipboardCheck,
+  HelpCircle
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -58,6 +60,7 @@ const Layout = ({ children }: LayoutProps) => {
       submenu: [
         { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare },
         { name: 'Avaliação', href: '/employee-evaluations', icon: FileCheck },
+        { name: 'Quizzes', href: '/employee-quizzes', icon: HelpCircle },
         { name: 'PDI', href: '/pdi', icon: Target }
       ]
     },
@@ -70,6 +73,7 @@ const Layout = ({ children }: LayoutProps) => {
       hasSubmenu: true,
       submenu: [
         { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList },
+        { name: 'Quizzes', href: '/quizzes', icon: ClipboardCheck },
         { name: 'Usuários', href: '/users', icon: Users },
         { name: 'Domínios', href: '/domains', icon: Database }
       ]

@@ -894,4 +894,153 @@ router.get('/projects/by-client/:clientId', async (req: Request, res: Response, 
   }
 })
 
+// ==================== QUIZZES DO FUNCIONÁRIO ====================
+
+/**
+ * @swagger
+ * /api/employee-detail/{userId}/quizzes:
+ *   get:
+ *     summary: Busca histórico de quizzes do funcionário
+ *     tags: [Employee Detail]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de quizzes com resultados
+ */
+router.get('/:userId/quizzes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.params
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'ID do usuário é obrigatório', code: 'INVALID_REQUEST' }
+      })
+    }
+
+    // Buscar participações em quizzes
+    const { data: participations, error: participationsError } = await supabaseAdmin
+      .from('quiz_participant')
+      .select(`
+        id,
+        quiz_id,
+        created_at,
+        quiz (
+          id,
+          title,
+          description,
+          is_active,
+          attempt_limit,
+          pass_score
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (participationsError) {
+      console.error('Erro ao buscar participações:', participationsError)
+      return res.status(500).json({
+        success: false,
+        error: { message: participationsError.message, code: 'SUPABASE_ERROR' }
+      })
+    }
+
+    // Buscar todas as tentativas do usuário
+    const { data: attempts, error: attemptsError } = await supabaseAdmin
+      .from('quiz_attempt')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (attemptsError) {
+      console.error('Erro ao buscar tentativas:', attemptsError)
+    }
+
+    // Criar mapa de tentativas por quiz_id
+    const attemptsMap = new Map<number, any[]>()
+    attempts?.forEach((a: any) => {
+      const quizAttempts = attemptsMap.get(a.quiz_id) || []
+      quizAttempts.push(a)
+      attemptsMap.set(a.quiz_id, quizAttempts)
+    })
+
+    // Formatar resposta
+    const formattedData = (participations || []).map((p: any) => {
+      const quiz = p.quiz
+      const userAttempts = attemptsMap.get(p.quiz_id) || []
+      const completedAttempts = userAttempts.filter((a: any) => a.status === 'completed')
+      
+      // Melhor tentativa
+      const bestAttempt = completedAttempts.length > 0
+        ? completedAttempts.reduce((best: any, curr: any) => {
+            const currPercentage = curr.total_points > 0 
+              ? (curr.score / curr.total_points) * 100 
+              : 0
+            const bestPercentage = best?.total_points > 0 
+              ? (best.score / best.total_points) * 100 
+              : 0
+            return currPercentage > bestPercentage ? curr : best
+          }, completedAttempts[0])
+        : null
+
+      // Última tentativa
+      const lastAttempt = userAttempts.length > 0 ? userAttempts[0] : null
+
+      // Calcular percentual
+      const bestPercentage = bestAttempt && bestAttempt.total_points > 0
+        ? Math.round((bestAttempt.score / bestAttempt.total_points) * 100)
+        : null
+
+      // Verificar se passou
+      const passed = quiz?.pass_score && bestPercentage !== null
+        ? bestPercentage >= quiz.pass_score
+        : null
+
+      // Determinar status geral
+      let status: 'completed' | 'in_progress' | 'not_started' = 'not_started'
+      if (completedAttempts.length > 0) {
+        status = 'completed'
+      } else if (userAttempts.some((a: any) => a.status === 'in_progress')) {
+        status = 'in_progress'
+      }
+
+      return {
+        participation_id: p.id,
+        quiz_id: p.quiz_id,
+        quiz_title: quiz?.title || 'Quiz não encontrado',
+        quiz_description: quiz?.description || null,
+        quiz_is_active: quiz?.is_active || false,
+        added_at: p.created_at,
+        // Estatísticas
+        attempts_used: userAttempts.length,
+        attempt_limit: quiz?.attempt_limit || null,
+        // Melhor resultado
+        best_score: bestAttempt?.score || null,
+        best_total_points: bestAttempt?.total_points || null,
+        best_percentage: bestPercentage,
+        best_correct_count: bestAttempt?.correct_count || null,
+        best_wrong_count: bestAttempt?.wrong_count || null,
+        pass_score: quiz?.pass_score || null,
+        passed: passed,
+        // Última tentativa
+        last_attempt_at: lastAttempt?.submitted_at || lastAttempt?.started_at || null,
+        last_attempt_status: lastAttempt?.status || null,
+        // Status geral
+        status: status
+      }
+    })
+
+    return res.json({
+      success: true,
+      data: formattedData
+    })
+  } catch (err) {
+    return next(err)
+  }
+})
+
 export default router

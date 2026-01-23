@@ -35,6 +35,9 @@ import feedbackAcceptRoutes from './routes/feedbackAccept'
 import feedbacksRoutes from './routes/feedbacks'
 import pdiRoutes from './routes/pdi'
 import notificationsRoutes from './routes/notifications'
+import quizRoutes from './routes/quiz'
+import quizParticipantsRoutes from './routes/quizParticipants'
+import quizAnswerRoutes from './routes/quizAnswer'
 
 const app = express()
 const httpServer = createServer(app)
@@ -134,6 +137,9 @@ app.use('/api/feedback-accept', feedbackAcceptRoutes) // Aceite de feedbacks (ro
 app.use('/api/feedbacks', feedbacksRoutes) // Feedbacks de consultores
 app.use('/api/pdi', pdiRoutes) // PDI de consultores
 app.use('/api/notifications', notificationsRoutes) // Notificações
+app.use('/api/quiz', quizRoutes) // Quiz - CRUD de quizzes, perguntas e opções
+app.use('/api/quiz-participants', quizParticipantsRoutes) // Participantes do Quiz
+app.use('/api/quiz-answer', quizAnswerRoutes) // Resposta do Quiz (rotas públicas e autenticadas)
 
 // Error handling
 app.use(notFound)

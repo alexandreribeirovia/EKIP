@@ -5,7 +5,7 @@ import { ColDef } from 'ag-grid-community'
 import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy, CheckCircle, Eye } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform } from '../types'
+import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform, EmployeeQuizData } from '../types'
 import FeedbackModal from '../components/FeedbackModal'
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal'
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating'
@@ -32,16 +32,16 @@ const EmployeeDetail = () => {
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   
   // Determinar aba inicial baseado no hash da URL
-  const getInitialTab = (): 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' => {
+  const getInitialTab = (): 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes' => {
     const hash = location.hash.replace('#', '')
-    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos']
+    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos', 'quizzes']
     if (validTabs.includes(hash)) {
-      return hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos'
+      return hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes'
     }
     return 'tarefas'
   }
   
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos'>(getInitialTab())
+  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes'>(getInitialTab())
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -100,6 +100,10 @@ const EmployeeDetail = () => {
   // Estados para acessos do funcionário
   const [accesses, setAccesses] = useState<DbAccessPlatform[]>([])
   const [isLoadingAccesses, setIsLoadingAccesses] = useState(false)
+
+  // Estados para quizzes do funcionário
+  const [quizzes, setQuizzes] = useState<EmployeeQuizData[]>([])
+  const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(false)
   const [expandedAccessClients, setExpandedAccessClients] = useState<Set<string>>(new Set())
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false)
   const [selectedAccess, setSelectedAccess] = useState<DbAccessPlatform | null>(null)
@@ -120,6 +124,7 @@ const EmployeeDetail = () => {
   const offDaysCache = useRef<Map<string, Set<string>>>(new Map())
   const timeWorkedCache = useRef<Map<string, any[]>>(new Map())
   const hasLoadedAccesses = useRef(false)
+  const hasLoadedQuizzes = useRef(false)
 
   // Funções auxiliares (copiadas do EmployeeModal)
   const getInitials = (name: string): string => {
@@ -828,6 +833,20 @@ const EmployeeDetail = () => {
   const reloadAccesses = async () => {
     if (employee?.user_id) {
       await loadEmployeeAccesses(employee.user_id);
+    }
+  };
+
+  // Função para carregar quizzes do funcionário
+  const loadQuizzes = async (userId: string) => {
+    setIsLoadingQuizzes(true);
+    try {
+      const result = await apiClient.get<EmployeeQuizData[]>(`/api/employee-detail/${userId}/quizzes`);
+      setQuizzes(result.data || []);
+    } catch (error) {
+      console.error('Erro ao carregar quizzes:', error);
+      setQuizzes([]);
+    } finally {
+      setIsLoadingQuizzes(false);
     }
   };
 
@@ -2229,9 +2248,9 @@ const EmployeeDetail = () => {
   // Listener para mudanças no hash da URL (para navegação via notificações)
   useEffect(() => {
     const hash = location.hash.replace('#', '')
-    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos']
+    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos', 'quizzes']
     if (validTabs.includes(hash)) {
-      setActiveTab(hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos')
+      setActiveTab(hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes')
     }
   }, [location.hash]);
 
@@ -2274,6 +2293,7 @@ const EmployeeDetail = () => {
       hasLoadedEmployee.current = false;
       hasLoadedEmployeeData.current = false;
       hasLoadedAccesses.current = false;
+      hasLoadedQuizzes.current = false;
       loadedTimeRecordsKeys.current.clear();
       offDaysCache.current.clear();
       timeWorkedCache.current.clear();
@@ -2367,6 +2387,12 @@ const EmployeeDetail = () => {
         if (!hasLoadedAccesses.current) {
           hasLoadedAccesses.current = true;
           void loadEmployeeAccesses(employee.user_id);
+        }
+        break;
+      case 'quizzes':
+        if (!hasLoadedQuizzes.current) {
+          hasLoadedQuizzes.current = true;
+          void loadQuizzes(employee.user_id);
         }
         break;
     }
@@ -2707,13 +2733,23 @@ const EmployeeDetail = () => {
                   
                     <button
                       onClick={() => setActiveTab('acessos')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
                         activeTab === 'acessos'
                           ? 'border-primary-500 text-primary-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
                       Acessos
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('quizzes')}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'quizzes'
+                          ? 'border-primary-500 text-primary-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Quizzes
                     </button>
                   </div>
                   <button
@@ -3369,6 +3405,117 @@ const EmployeeDetail = () => {
                         </div>
                       </div>
                     </>
+                  )}
+                </>
+              )}
+
+              {/* Aba Quizzes */}
+              {activeTab === 'quizzes' && (
+                <>
+                  {isLoadingQuizzes ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+                      <p className="ml-4 text-gray-600 dark:text-gray-400">Carregando quizzes...</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col h-full overflow-hidden">
+                      <div className="px-6 pt-4 pb-3 flex items-center justify-between text-sm text-gray-600 flex-shrink-0">
+                        <div className="flex items-center gap-6">
+                          <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{quizzes.length} Quiz{quizzes.length !== 1 ? 'zes' : ''}</span></span>
+                        </div>
+                      </div>
+
+                      <div className="px-6 pb-6 flex-1 overflow-y-auto">
+                        {quizzes.length === 0 ? (
+                          <div className="py-40 text-center text-sm text-gray-500 dark:text-gray-400">
+                            Nenhum quiz encontrado para este funcionário.
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {quizzes.map((quiz) => (
+                              <div 
+                                key={quiz.participation_id}
+                                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                      {quiz.quiz_title}
+                                    </h4>
+                                    {quiz.quiz_description && (
+                                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                        {quiz.quiz_description}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-4 mt-3 text-sm">
+                                      {/* Status */}
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        quiz.status === 'completed'
+                                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                          : quiz.status === 'in_progress'
+                                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                      }`}>
+                                        {quiz.status === 'completed' ? 'Concluído' : 
+                                         quiz.status === 'in_progress' ? 'Em andamento' : 'Não iniciado'}
+                                      </span>
+                                      
+                                      {/* Tentativas */}
+                                      <span className="text-gray-500 dark:text-gray-400">
+                                        Tentativas: {quiz.attempts_used}/{quiz.attempt_limit ?? '∞'}
+                                      </span>
+                                      
+                                      {/* Data de adição */}
+                                      <span className="text-gray-500 dark:text-gray-400">
+                                        Adicionado: {new Date(quiz.added_at).toLocaleDateString('pt-BR')}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Score */}
+                                  {quiz.best_score !== null && quiz.best_total_points !== null && (
+                                    <div className="text-right ml-4">
+                                      <div className={`text-2xl font-bold ${
+                                        quiz.passed 
+                                          ? 'text-green-600 dark:text-green-400' 
+                                          : quiz.passed === false
+                                          ? 'text-red-600 dark:text-red-400'
+                                          : 'text-gray-600 dark:text-gray-400'
+                                      }`}>
+                                        {quiz.best_percentage}%
+                                      </div>
+                                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                                        {quiz.best_score}/{quiz.best_total_points} pts
+                                      </div>
+                                      {quiz.pass_score && (
+                                        <div className={`text-xs mt-1 ${
+                                          quiz.passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                                        }`}>
+                                          {quiz.passed ? '✓ Aprovado' : `Min: ${quiz.pass_score}%`}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Última tentativa */}
+                                {quiz.last_attempt_at && (
+                                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                                    Última tentativa: {new Date(quiz.last_attempt_at).toLocaleDateString('pt-BR', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </>
               )}

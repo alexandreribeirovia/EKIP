@@ -34,6 +34,12 @@ const EvaluationResponse = lazy(() => import('@/pages/EvaluationResponse'))
 const Users = lazy(() => import('@/pages/Users'))
 const Domains = lazy(() => import('@/pages/Domains'))
 const Notifications = lazy(() => import('@/pages/Notifications'))
+// Quiz - Configuração (menu Configurações)
+const QuizModel = lazy(() => import('@/pages/QuizModel'))
+const QuizModelDetail = lazy(() => import('@/pages/QuizModelDetail'))
+// Quiz - Uso/Acompanhamento (menu Funcionários)
+const EmployeeQuizzes = lazy(() => import('@/pages/EmployeeQuizzes'))
+const EmployeeQuizDetail = lazy(() => import('@/pages/EmployeeQuizDetail'))
 
 // Fallback de loading
 const LazyLoadingFallback = () => (
@@ -121,6 +127,12 @@ function AuthenticatedApp() {
               <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
               <Route path="/domains" element={<ProtectedRoute><Domains /></ProtectedRoute>} />
               <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+              {/* Quiz - Configuração (menu Configurações) */}
+              <Route path="/quizzes" element={<ProtectedRoute><QuizModel /></ProtectedRoute>} />
+              <Route path="/quizzes/:id" element={<ProtectedRoute><QuizModelDetail /></ProtectedRoute>} />
+              {/* Quiz - Uso/Acompanhamento (menu Funcionários) */}
+              <Route path="/employee-quizzes" element={<ProtectedRoute><EmployeeQuizzes /></ProtectedRoute>} />
+              <Route path="/employee-quizzes/:id" element={<ProtectedRoute><EmployeeQuizDetail /></ProtectedRoute>} />
             </Routes>
           </Layout>
         } />

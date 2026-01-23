@@ -17,6 +17,9 @@ const EvaluationAccept = lazy(() => import('@/pages/EvaluationAccept'))
 // Lazy loading do FeedbackAccept - completamente isolado
 const FeedbackAccept = lazy(() => import('@/pages/FeedbackAccept'))
 
+// Lazy loading do QuizAnswer - completamente isolado (página pública de resposta)
+const QuizAnswer = lazy(() => import('@/pages/QuizAnswer'))
+
 // Lazy loading do AuthenticatedApp - contém toda lógica de auth e páginas
 const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'))
 
@@ -54,6 +57,17 @@ function App() {
       <Suspense fallback={<LazyLoadingFallback />}>
         <Routes>
           <Route path="/feedback-accept/:token" element={<FeedbackAccept />} />
+        </Routes>
+      </Suspense>
+    )
+  }
+
+  // Rota pública isolada - carrega APENAS o QuizAnswer
+  if (location.pathname.startsWith('/quiz-answer/')) {
+    return (
+      <Suspense fallback={<LazyLoadingFallback />}>
+        <Routes>
+          <Route path="/quiz-answer/:token" element={<QuizAnswer />} />
         </Routes>
       </Suspense>
     )
