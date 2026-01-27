@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
-import { Edit, X, Plus, GripVertical, Trash2, Upload, FileText } from 'lucide-react';
+import { Edit, X, Plus, GripVertical, Trash2, Upload, FileText, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { DbProject, DbProjectPhase, DbDomain } from '../types';
 
@@ -36,6 +36,10 @@ const ProjectProgressModal = ({
   const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
   const [phaseToDelete, setPhaseToDelete] = useState<DbProjectPhase | null>(null);
   
+  // Estados para pré-preenchimento baseado em semana anterior
+  const [isBasedOnPreviousWeek, setIsBasedOnPreviousWeek] = useState(false);
+  const [baseWeekNumber, setBaseWeekNumber] = useState<number | null>(null);
+
   // Estados para upload de CSV
   const [showUploadInterface, setShowUploadInterface] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -81,35 +85,59 @@ const ProjectProgressModal = ({
 
       setAvailablePhases((domainsData || []) as DbDomain[]);
 
-      // Se não há fases para esta semana, copiar as fases da semana 1 (ou criar fases padrão)
+      // Se não há fases para esta semana, buscar da última semana que tem dados
       if (!phasesData || phasesData.length === 0) {
-        // Buscar fases da semana 1 como template
-        const { data: week1Phases } = await supabase
+        // Buscar todas as semanas que têm fases cadastradas para este projeto
+        const { data: allProjectPhases } = await supabase
           .from('projects_phase')
-          .select('*')
-          .eq('project_id', project.project_id)
-          .eq('period', 1)
-          .order('order', { ascending: true });
+          .select('period')
+          .eq('project_id', project.project_id);
 
-        if (week1Phases && week1Phases.length > 0) {
-          // Criar novas fases baseadas na semana 1, mas sem dados de progresso
-          const templatePhases = week1Phases.map((phase: any, index: number) => ({
-            id: Date.now() + index, // ID temporário
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            project_id: project.project_id,
-            domains_id: phase.domains_id,
-            progress: 0,
-            expected_progress: 0,
-            order: phase.order,
-            period: week,
-            phase_name: phase.phase_name,
-            isNew: true // Flag para indicar que é uma nova fase
-          }));
-          setEditingPhases(templatePhases as DbProjectPhase[]);
-        } else {
-          setEditingPhases([]);
+        // Encontrar a semana mais recente que tem dados e é menor que a semana selecionada
+        const availableWeeks = [...new Set(allProjectPhases?.map(p => p.period) || [])];
+        const previousWeekWithData = availableWeeks
+          .filter(w => w < week)
+          .sort((a, b) => b - a)[0]; // Pegar a maior semana menor que a atual
+
+        if (previousWeekWithData) {
+          // Buscar fases da última semana com dados como template
+          const { data: previousWeekPhases } = await supabase
+            .from('projects_phase')
+            .select('*')
+            .eq('project_id', project.project_id)
+            .eq('period', previousWeekWithData)
+            .order('order', { ascending: true });
+
+          if (previousWeekPhases && previousWeekPhases.length > 0) {
+            // Criar novas fases baseadas na última semana COM dados de progresso
+            const templatePhases = previousWeekPhases.map((phase: any, index: number) => {
+              const domain = domainsData?.find(d => d.id === phase.domains_id);
+              return {
+                id: Date.now() + index, // ID temporário
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                project_id: project.project_id,
+                domains_id: phase.domains_id,
+                progress: phase.progress, // Manter progresso da semana anterior
+                expected_progress: phase.expected_progress, // Manter progresso esperado
+                order: phase.order,
+                period: week,
+                phase_name: domain?.value || phase.phase_name || 'Fase desconhecida',
+                isNew: true, // Flag para indicar que é uma nova fase
+                isFromPreviousWeek: true // Flag para indicar que é pré-preenchimento
+              };
+            });
+            setEditingPhases(templatePhases as DbProjectPhase[]);
+            setIsBasedOnPreviousWeek(true);
+            setBaseWeekNumber(previousWeekWithData);
+            return;
+          }
         }
+
+        // Se não há semana anterior com dados, deixar vazio para preenchimento manual
+        setEditingPhases([]);
+        setIsBasedOnPreviousWeek(false);
+        setBaseWeekNumber(null);
       } else {
         // Enriquecer com nomes das fases dos domínios
         const phasesWithNames = phasesData.map((phase: any) => {
@@ -120,10 +148,15 @@ const ProjectProgressModal = ({
           };
         });
         setEditingPhases(phasesWithNames as DbProjectPhase[]);
+        // Limpar estado de pré-preenchimento pois esses dados já existem no banco
+        setIsBasedOnPreviousWeek(false);
+        setBaseWeekNumber(null);
       }
     } catch (error) {
       console.error('Erro ao carregar fases da semana:', error);
       setEditingPhases([]);
+      setIsBasedOnPreviousWeek(false);
+      setBaseWeekNumber(null);
     }
   }, [project.project_id]);
 
@@ -306,6 +339,10 @@ const ProjectProgressModal = ({
       // Salvar as fases
       await saveCurrentWeekPhases(selectedWeek);
       onSuccess(`Progresso da Semana ${selectedWeek} salvo com sucesso!`);
+      
+      // Limpar estado de pré-preenchimento após salvar
+      setIsBasedOnPreviousWeek(false);
+      setBaseWeekNumber(null);
       
       // Recarregar fases da semana atual para refletir mudanças
       await loadPhasesForWeek(selectedWeek);
@@ -983,7 +1020,11 @@ const ProjectProgressModal = ({
       onCellValueChanged: (event) => {
         const updatedPhases = editingPhases.map(phase => 
           phase.id === event.data.id 
-            ? { ...phase, progress: Math.min(100, Math.max(0, event.newValue)) }
+            ? { 
+                ...phase, 
+                progress: Math.min(100, Math.max(0, event.newValue)),
+                isFromPreviousWeek: false // Remover indicação visual após edição
+              }
             : phase
         );
         setEditingPhases(updatedPhases);
@@ -1005,7 +1046,11 @@ const ProjectProgressModal = ({
       onCellValueChanged: (event) => {
         const updatedPhases = editingPhases.map(phase => 
           phase.id === event.data.id 
-            ? { ...phase, expected_progress: Math.min(100, Math.max(0, event.newValue)) }
+            ? { 
+                ...phase, 
+                expected_progress: Math.min(100, Math.max(0, event.newValue)),
+                isFromPreviousWeek: false // Remover indicação visual após edição
+              }
             : phase
         );
         setEditingPhases(updatedPhases);
@@ -1174,6 +1219,22 @@ const ProjectProgressModal = ({
                   </p>
                 </div>
 
+                {/* Banner de aviso quando dados são pré-preenchidos de semana anterior */}
+                {isBasedOnPreviousWeek && baseWeekNumber && (
+                  <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        Pré-preenchimento baseado na Semana {baseWeekNumber}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Esta semana ainda não foi salva. Os valores exibidos foram copiados da última semana com dados.
+                        Clique em "Salvar" para gravar os valores desta semana.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="ag-theme-alpine w-full h-96">
                   <AgGridReact
                     columnDefs={phaseColumnDefs}
@@ -1193,6 +1254,16 @@ const ProjectProgressModal = ({
                     onRowDragEnd={handleRowDragEnd}
                     suppressRowClickSelection={true}
                     overlayNoRowsTemplate="<span class='text-gray-500 text-sm'>Não há fases cadastradas</span>"
+                    getRowStyle={(params) => {
+                      // Aplicar estilo visual para linhas pré-preenchidas de semana anterior
+                      if (params.data?.isFromPreviousWeek) {
+                        return { 
+                          backgroundColor: 'rgba(251, 191, 36, 0.15)', // amber-400 com 15% opacidade
+                          fontStyle: 'italic'
+                        };
+                      }
+                      return undefined;
+                    }}
                   />
                 </div>
               </>

@@ -1750,36 +1750,53 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     // Mapeamento dos tipos de tarefa para fases
     const taskTypeMapping: Record<string, string[]> = {
       'Levantamento': ['02.Desenho Funcional', '03.Desenho Técnico'],
-      'Desenvolvimento': ['04.Desenvolvimento'], // Removido '05.Prova Integrada' que não existe
-      'Homologacao': ['06.Certificação'], // Mantido mesmo não tendo tarefas cadastradas
-      'Deploy': ['07.Implantação'], // Mantido mesmo não tendo tarefas cadastradas
-      'Acompanhamento': ['08.Acompanhamento'] // Corrigido para o tipo real
+      'Desenvolvimento': ['04.Desenvolvimento'],
+      'Homologação': ['06.Certificação'],
+      'Go-live': ['07.Implantação'],
+      'Acompanhamento': ['08.Acompanhamento', '103.Manutenção Corretiva'],
+      'Gestão': ['09.Gestão e Controle'] // Informativo apenas, sem peso
     };
 
-    // Pesos padrão das fases
+    // Pesos padrão das fases (soma = 100) - Gestão não tem peso, é apenas informativo
     const defaultWeights: Record<string, number> = {
       'Levantamento': 10,
-      'Desenvolvimento': 50,
-      'Homologacao': 20,
-      'Deploy': 10,
-      'Acompanhamento': 10
+      'Desenvolvimento': 45,
+      'Homologação': 20,
+      'Go-live': 15,
+      'Acompanhamento': 10,
+      'Gestão': 0 // Informativo, não contribui para o cálculo de progresso
     };
 
-    // Encontrar quais fases existem no projeto (usar fases consolidadas)
-    const existingPhases = getConsolidatedPhases.map(phase => phase.phase_name).filter(Boolean);
+    // DETECTAR FASES DINAMICAMENTE baseado nos tipos de tarefas existentes no projeto
+    const taskTypesInProject = [...new Set(tasks.map(t => t.type_name).filter(Boolean))];
     
-    // Distribuir pesos entre fases existentes
-    const totalWeight = Object.keys(defaultWeights).reduce((sum, phase) => {
-      return existingPhases.includes(phase) ? sum + defaultWeights[phase as keyof typeof defaultWeights] : sum;
+    // Encontrar quais fases têm tarefas no projeto
+    const phasesWithTasks: string[] = [];
+    Object.entries(taskTypeMapping).forEach(([phase, taskTypes]) => {
+      const hasTasksForPhase = taskTypesInProject.some(taskType => 
+        taskTypes.some(mappedType => taskType?.includes(mappedType))
+      );
+      if (hasTasksForPhase) {
+        phasesWithTasks.push(phase);
+      }
+    });
+    
+    // Distribuir pesos entre fases que têm tarefas
+    const totalWeight = phasesWithTasks.reduce((sum, phase) => {
+      return sum + (defaultWeights[phase] || 0);
     }, 0);
 
     const distributedWeights: Record<string, number> = {};
     let cumulativeWeight = 0;
     const cumulativeWeights: Record<string, number> = {};
 
-    existingPhases.forEach(phase => {
-      if (phase && defaultWeights[phase as keyof typeof defaultWeights]) {
-        const weight = totalWeight > 0 ? (defaultWeights[phase as keyof typeof defaultWeights] / totalWeight) * 100 : 0;
+    // Ordenar fases pela ordem natural do projeto
+    const phaseOrder = ['Levantamento', 'Desenvolvimento', 'Homologação', 'Go-live', 'Acompanhamento', 'Gestão'];
+    const orderedPhasesWithTasks = phaseOrder.filter(phase => phasesWithTasks.includes(phase));
+
+    orderedPhasesWithTasks.forEach(phase => {
+      if (defaultWeights[phase]) {
+        const weight = totalWeight > 0 ? (defaultWeights[phase] / totalWeight) * 100 : 0;
         distributedWeights[phase] = weight;
         cumulativeWeight += weight;
         cumulativeWeights[phase] = cumulativeWeight;
@@ -1790,40 +1807,34 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     // Calcular datas planejadas por agrupamento de tarefas
     const phaseSchedule: Record<string, { startDate?: Date; endDate?: Date; progress: number }> = {};
 
-    Object.keys(taskTypeMapping).forEach(phase => {
-      if (!existingPhases.includes(phase)) return;
-
-      const taskTypes = taskTypeMapping[phase as keyof typeof taskTypeMapping];
+    orderedPhasesWithTasks.forEach(phase => {
+      const taskTypes = taskTypeMapping[phase];
       const phaseTasks = tasks.filter(task => 
         task.type_name && taskTypes.some(type => task.type_name?.includes(type))
       );
 
-
       // Só processar se houver tarefas desta fase
       if (phaseTasks.length > 0) {
         // Usar APENAS as datas do Gantt (gantt_bar_start_date e gantt_bar_end_date)
-        // Se essas datas estiverem vazias, a tarefa não está planejada e deve ser desconsiderada
-        const getAllStartDates = (tasks: DbTask[]) => {
-          return tasks.map(task => {
-            // Usar SOMENTE a data de início do Gantt
-            if (task.gantt_bar_start_date) return new Date(task.gantt_bar_start_date);
-            return null;
-          }).filter(Boolean) as Date[];
-        };
+        const startDates = phaseTasks
+          .map(task => task.gantt_bar_start_date ? new Date(task.gantt_bar_start_date) : null)
+          .filter(Boolean) as Date[];
 
-        const getAllEndDates = (tasks: DbTask[]) => {
-          return tasks.map(task => {
-            // Usar SOMENTE a data de fim do Gantt
-            if (task.gantt_bar_end_date) return new Date(task.gantt_bar_end_date);
-            return null;
-          }).filter(Boolean) as Date[];
-        };
-
-        const startDates = getAllStartDates(phaseTasks);
-        const endDates = getAllEndDates(phaseTasks);
+        const endDates = phaseTasks
+          .map(task => task.gantt_bar_end_date ? new Date(task.gantt_bar_end_date) : null)
+          .filter(Boolean) as Date[];
         
-
-        const phaseData = getConsolidatedPhases.find(p => p.phase_name === phase);
+        // Buscar progresso da fase na tabela projects_phase (se existir)
+        // Mapear nome da fase para o nome no banco (sem acento)
+        const phaseNameMapping: Record<string, string> = {
+          'Homologação': 'Homologacao',
+          'Gestão': 'Gestao',
+          'Go-live': 'Deploy'
+        };
+        const dbPhaseName = phaseNameMapping[phase] || phase;
+        const phaseData = getConsolidatedPhases.find(p => 
+          p.phase_name === phase || p.phase_name === dbPhaseName
+        );
 
         // Só adicionar ao schedule se houver pelo menos uma data de início e fim
         if (startDates.length > 0 && endDates.length > 0) {
@@ -1835,9 +1846,6 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         }
       }
     });
-
-    // Não criar cronogramas estimados - mostrar apenas fases com tarefas reais
-
 
     return {
       phaseSchedule,
@@ -1862,6 +1870,17 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     const projectEndDate = new Date(Math.max(...allDates.map(d => d.getTime())));
     const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
 
+    // --- CORREÇÃO: Calcular total de semanas ANTES do loop para garantir consistência ---
+    // Contar quantas semanas o loop vai gerar (mesma lógica do while)
+    let realTotalWeeks = 0;
+    const tempDate = new Date(projectStartDate);
+    while (tempDate <= projectEndDate) {
+      realTotalWeeks++;
+      tempDate.setDate(tempDate.getDate() + 7);
+    }
+    // Garantir pelo menos 1 semana
+    realTotalWeeks = Math.max(1, realTotalWeeks);
+
     // --- CORREÇÃO APLICADA AQUI ---
     // Calcular semana atual com a lógica unificada
     const today = new Date();
@@ -1877,7 +1896,8 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       // Calcular rótulo da semana com a lógica unificada
       const weekNumber = Math.floor((currentDate.getTime() - projectStartDate.getTime()) / oneWeekInMs) + 1;
 
-      const plannedProgress = calculateWeeklyAccumulativePlannedProgress(currentDate, projectStartDate, projectEndDate, phaseSchedule, cumulativeWeights);
+      // Passar realTotalWeeks para garantir que a última semana chegue a 100%
+      const plannedProgress = calculateWeeklyAccumulativePlannedProgress(currentDate, projectStartDate, projectEndDate, phaseSchedule, cumulativeWeights, realTotalWeeks);
       const actualProgress = calculateRealProgressForDate(currentDate, phaseSchedule, cumulativeWeights);
 
       dataPoints.push({
@@ -2078,18 +2098,25 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   }, [projectPhases, tasks, findLastKnownProgress]);
 
   // Função para calcular progresso planejado acumulativo por semana
-  const calculateWeeklyAccumulativePlannedProgress = useCallback((currentDate: Date, projectStartDate: Date, projectEndDate: Date, phaseSchedule: any, cumulativeWeights: any) => {
+  const calculateWeeklyAccumulativePlannedProgress = useCallback((currentDate: Date, projectStartDate: Date, projectEndDate: Date, phaseSchedule: any, cumulativeWeights: any, realTotalWeeks?: number) => {
     // Calcular qual semana estamos
     const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
     const timeDiff = currentDate.getTime() - projectStartDate.getTime();
     const currentWeek = Math.floor(timeDiff / oneWeekInMs) + 1;
+    
+    // Usar realTotalWeeks se fornecido, senão calcular (fallback)
+    let totalWeeks = realTotalWeeks;
+    if (!totalWeeks) {
+      const totalProjectDuration = projectEndDate.getTime() - projectStartDate.getTime();
+      totalWeeks = Math.max(1, Math.ceil(totalProjectDuration / oneWeekInMs) + 1);
+    }
     
     // Buscar fases cadastradas para a semana atual com expected_progress
     const registeredPhasesForWeek = projectPhases.filter(phase => 
       phase.period === currentWeek && phase.expected_progress !== null && phase.expected_progress !== undefined
     );
 
-    // Se há fases cadastradas com expected_progress para esta semana, usar essa lógica
+    // Se há fases cadastradas com expected_progress para esta semana, usar cálculo ponderado
     if (registeredPhasesForWeek.length > 0) {
       // Obter todas as fases disponíveis no cronograma
       const allScheduledPhases = Object.keys(phaseSchedule)
@@ -2103,7 +2130,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
 
       // Se nenhuma fase cadastrada corresponde ao cronograma, usar cálculo padrão
       if (registeredPhases.length === 0) {
-        return calculateDefaultPlannedProgress(currentDate, projectStartDate, projectEndDate);
+        return calculateDefaultPlannedProgress(currentWeek, totalWeeks, projectPhases);
       }
 
       // Calcular peso total das fases cadastradas
@@ -2150,25 +2177,65 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       return Math.min(100, Math.max(0, weightedPlannedProgress));
     }
 
-    // Se não há fases cadastradas com expected_progress, usar cálculo padrão
-    return calculateDefaultPlannedProgress(currentDate, projectStartDate, projectEndDate);
+    // Se não há fases cadastradas com expected_progress para esta semana,
+    // usar cálculo que distribui o restante até 100% nas semanas que faltam
+    return calculateDefaultPlannedProgress(currentWeek, totalWeeks, projectPhases);
   }, [projectPhases]);
 
-  // Função auxiliar para cálculo padrão do progresso planejado
-  const calculateDefaultPlannedProgress = useCallback((currentDate: Date, projectStartDate: Date, projectEndDate: Date) => {
-    // Calcular qual semana estamos
-    const weeksDiff = Math.ceil((currentDate.getTime() - projectStartDate.getTime()) / (1000 * 3600 * 24 * 7));
-    const currentWeek = Math.max(1, weeksDiff);
+  // Função auxiliar para cálculo do progresso planejado quando não há dados na semana
+  // Pega o último valor conhecido e distribui o restante até 100% nas semanas que faltam
+  const calculateDefaultPlannedProgress = useCallback((currentWeek: number, totalWeeks: number, phases: DbProjectPhase[]) => {
+    // Encontrar a última semana que tem expected_progress preenchido
+    const weeksWithExpectedProgress = phases
+      .filter(phase => phase.expected_progress !== null && phase.expected_progress !== undefined && phase.period !== null)
+      .map(phase => phase.period as number);
     
-    // Calcular total de semanas do projeto
-    const totalProjectDuration = projectEndDate.getTime() - projectStartDate.getTime();
-    const totalWeeks = Math.ceil(totalProjectDuration / (1000 * 3600 * 24 * 7));
+    const uniqueWeeks = [...new Set(weeksWithExpectedProgress)].sort((a, b) => a - b);
     
-    if (totalWeeks <= 0) return 0;
+    // Encontrar a última semana preenchida que é menor que a semana atual
+    const lastFilledWeek = uniqueWeeks.filter(w => w < currentWeek).pop() || 0;
     
-    // Progresso planejado acumulativo: cada semana adiciona uma porcentagem igual
-    const progressPerWeek = 100 / totalWeeks;
-    return Math.min(100, currentWeek * progressPerWeek);
+    // Se não há nenhuma semana preenchida, fazer cálculo linear do zero
+    if (lastFilledWeek === 0 && uniqueWeeks.length === 0) {
+      // Progresso linear: distribui 100% igualmente entre todas as semanas
+      const progressPerWeek = 100 / totalWeeks;
+      return Math.min(100, currentWeek * progressPerWeek);
+    }
+    
+    // Calcular o progresso da última semana preenchida
+    // (usando média simples dos expected_progress daquela semana)
+    let lastKnownProgress = 0;
+    if (lastFilledWeek > 0) {
+      const phasesOfLastWeek = phases.filter(p => 
+        p.period === lastFilledWeek && p.expected_progress !== null && p.expected_progress !== undefined
+      );
+      if (phasesOfLastWeek.length > 0) {
+        lastKnownProgress = phasesOfLastWeek.reduce((sum, p) => sum + (p.expected_progress || 0), 0) / phasesOfLastWeek.length;
+      }
+    }
+    
+    // Se a semana atual é igual ou anterior à última preenchida, retornar o valor linear
+    if (currentWeek <= lastFilledWeek) {
+      const progressPerWeek = 100 / totalWeeks;
+      return Math.min(100, currentWeek * progressPerWeek);
+    }
+    
+    // Calcular quantas semanas faltam a partir da última semana preenchida
+    const remainingWeeks = totalWeeks - lastFilledWeek;
+    
+    // Calcular quanto falta para chegar a 100%
+    const remainingProgress = 100 - lastKnownProgress;
+    
+    // Distribui o restante igualmente entre as semanas que faltam
+    const progressPerRemainingWeek = remainingWeeks > 0 ? remainingProgress / remainingWeeks : 0;
+    
+    // Calcular quantas semanas se passaram desde a última preenchida
+    const weeksSinceLastFilled = currentWeek - lastFilledWeek;
+    
+    // Progresso = último conhecido + (semanas passadas * progresso por semana)
+    const calculatedProgress = lastKnownProgress + (weeksSinceLastFilled * progressPerRemainingWeek);
+    
+    return Math.min(100, Math.max(0, calculatedProgress));
   }, []);
 
 
