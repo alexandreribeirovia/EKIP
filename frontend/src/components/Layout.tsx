@@ -60,8 +60,8 @@ const Layout = ({ children }: LayoutProps) => {
       submenu: [
         { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare },
         { name: 'Avaliação', href: '/employee-evaluations', icon: FileCheck },
-        { name: 'Quizzes', href: '/employee-quizzes', icon: HelpCircle },
-        { name: 'PDI', href: '/pdi', icon: Target }
+        { name: 'PDI', href: '/pdi', icon: Target },
+        { name: 'Quiz', href: '/employee-quizzes', icon: HelpCircle }
       ]
     },
     { name: 'Projetos', href: '/projects', icon: ClipboardList },
@@ -73,7 +73,7 @@ const Layout = ({ children }: LayoutProps) => {
       hasSubmenu: true,
       submenu: [
         { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList },
-        { name: 'Quizzes', href: '/quizzes', icon: ClipboardCheck },
+        { name: 'Quiz', href: '/quizzes', icon: ClipboardCheck },
         { name: 'Usuários', href: '/users', icon: Users },
         { name: 'Domínios', href: '/domains', icon: Database }
       ]
