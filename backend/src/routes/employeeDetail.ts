@@ -1030,7 +1030,18 @@ router.get('/:userId/quizzes', async (req: Request, res: Response, next: NextFun
         last_attempt_at: lastAttempt?.submitted_at || lastAttempt?.started_at || null,
         last_attempt_status: lastAttempt?.status || null,
         // Status geral
-        status: status
+        status: status,
+        // Todas as tentativas completas (para gráfico)
+        attempts: completedAttempts.map((a: any, index: number) => ({
+          attempt_number: completedAttempts.length - index,
+          score: a.score,
+          total_points: a.total_points,
+          percentage: a.total_points > 0 ? Math.round((a.score / a.total_points) * 100) : 0,
+          correct_count: a.correct_count,
+          wrong_count: a.wrong_count,
+          submitted_at: a.submitted_at,
+          time_spent_seconds: a.time_spent_seconds
+        })).reverse() // Ordenar da primeira para a última tentativa
       }
     })
 

@@ -814,6 +814,20 @@ export interface QuizSubmitResponse {
 }
 
 /**
+ * Tentativa individual de quiz (para gráfico)
+ */
+export interface EmployeeQuizAttempt {
+  attempt_number: number;
+  score: number | null;
+  total_points: number | null;
+  percentage: number;
+  correct_count: number | null;
+  wrong_count: number | null;
+  submitted_at: string | null;
+  time_spent_seconds: number | null;
+}
+
+/**
  * Quiz no histórico do funcionário
  */
 export interface EmployeeQuizData {
@@ -839,4 +853,6 @@ export interface EmployeeQuizData {
   last_attempt_status: string | null;
   // Status geral
   status: 'completed' | 'in_progress' | 'not_started';
+  // Todas as tentativas completas (para gráfico)
+  attempts: EmployeeQuizAttempt[];
 }

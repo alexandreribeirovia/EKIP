@@ -4,7 +4,7 @@ import { AgGridReact } from 'ag-grid-react'
 import { ColDef } from 'ag-grid-community'
 import { ArrowLeft, Phone, Mail, Calendar, Clock, Award, Plus, X, Loader2, ExternalLink, MessageSquare, Maximize, Edit, Trash2, ChevronDown, ChevronRight, Copy, CheckCircle, Eye } from 'lucide-react'
 import Select, { StylesConfig } from 'react-select'
-import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts'
 import { DbUser, DbTask, SubcategoryEvaluationData, EvaluationMetadata, DbAccessPlatform, EmployeeQuizData } from '../types'
 import FeedbackModal from '../components/FeedbackModal'
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal'
@@ -2382,6 +2382,10 @@ const EmployeeDetail = () => {
         if (evaluationData.length === 0) void loadEvaluationData(employee.user_id);
         if (feedbacks.length === 0) void loadFeedbacks(employee.user_id);
         if (clientTimeHistory.length === 0) void loadClientTimeHistory(employee.user_id);
+        if (!hasLoadedQuizzes.current) {
+          hasLoadedQuizzes.current = true;
+          void loadQuizzes(employee.user_id);
+        }
         break;
       case 'acessos':
         if (!hasLoadedAccesses.current) {
@@ -3288,23 +3292,151 @@ const EmployeeDetail = () => {
                       )}
                     </div>
 
-                    {/* Card 3: Placeholder */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6">
+                    {/* Card 3: Desempenho nos Quizzes */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-6 pt-2">
                       <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
                           <Award className="w-5 h-5 text-green-500" />
-                          Análise Complementar
+                          Desempenho nos Quizzes
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Espaço para métricas adicionais
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          Pontuação de cada tentativa nos quizzes.
                         </p>
                       </div>
-                      <div className="flex justify-center items-center h-80">
-                        <div className="text-center text-gray-400 dark:text-gray-500">
-                          <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">Aguardando implementação</p>
+                      {isLoadingQuizzes ? (
+                        <div className="flex justify-center items-center h-96">
+                          <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
                         </div>
-                      </div>
+                      ) : quizzes.length === 0 ? (
+                        <div className="flex justify-center items-center h-96">
+                          <div className="text-center text-gray-400 dark:text-gray-500">
+                            <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                            <p className="text-sm">Nenhum quiz para exibir</p>
+                          </div>
+                        </div>
+                      ) : (() => {
+                        // Preparar dados do gráfico - cada tentativa é uma barra
+                        const chartData = quizzes
+                          .filter(q => (q.attempts && q.attempts.length > 0) || q.best_percentage !== null)
+                          .flatMap(q => {
+                            // Se tem attempts, usa eles
+                            if (q.attempts && q.attempts.length > 0) {
+                              return q.attempts.map((a) => ({
+                                name: q.attempts.length > 1 
+                                  ? `${q.quiz_title.length > 12 ? q.quiz_title.substring(0, 12) + '...' : q.quiz_title} #${a.attempt_number}`
+                                  : q.quiz_title.length > 15 ? q.quiz_title.substring(0, 15) + '...' : q.quiz_title,
+                                fullName: q.quiz_title,
+                                attemptNumber: a.attempt_number,
+                                percentage: a.percentage,
+                                score: a.score || 0,
+                                total: a.total_points || 0,
+                                correctCount: a.correct_count || 0,
+                                wrongCount: a.wrong_count || 0,
+                                passScore: q.pass_score,
+                                passed: q.pass_score ? a.percentage >= q.pass_score : null
+                              }));
+                            }
+                            // Fallback: usa best_percentage se não tem attempts
+                            return [{
+                              name: q.quiz_title.length > 15 ? q.quiz_title.substring(0, 15) + '...' : q.quiz_title,
+                              fullName: q.quiz_title,
+                              attemptNumber: 1,
+                              percentage: q.best_percentage || 0,
+                              score: q.best_score || 0,
+                              total: q.best_total_points || 0,
+                              correctCount: q.best_correct_count || 0,
+                              wrongCount: q.best_wrong_count || 0,
+                              passScore: q.pass_score,
+                              passed: q.passed
+                            }];
+                          });
+                        
+                        if (chartData.length === 0) {
+                          return (
+                            <div className="flex justify-center items-center h-96">
+                              <div className="text-center text-gray-400 dark:text-gray-500">
+                                <Award className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                                <p className="text-sm">Nenhum quiz completado para exibir</p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                        <div className="h-96">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart 
+                              data={chartData} 
+                              margin={{ top: 5, right: 20, left: -10, bottom: 80 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+                              <XAxis 
+                                dataKey="name" 
+                                tick={{ fill: '#6b7280', fontSize: 10 }}
+                                angle={-45}
+                                textAnchor="end"
+                                interval={0}
+                                height={100}
+                              />
+                              <YAxis 
+                                domain={[0, 100]}
+                                tick={{ fill: '#6b7280', fontSize: 12 }} 
+                                tickFormatter={(value) => `${value}%`}
+                              />
+                              <Tooltip
+                                cursor={{ fill: 'rgba(34, 197, 94, 0.1)' }}
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '0.5rem',
+                                  fontSize: '12px'
+                                }}
+                                formatter={(value: number, _name: string, props: any) => {
+                                  const item = props.payload;
+                                  return [
+                                    <span key="value">
+                                      <strong>{value}%</strong> ({item.score}/{item.total} pts)
+                                      <br />
+                                      <span className="text-xs text-gray-500">
+                                        ✓ {item.correctCount} certas • ✗ {item.wrongCount} erradas
+                                      </span>
+                                      {item.passed !== null && (
+                                        <>
+                                          <br />
+                                          <span className={`text-xs ${item.passed ? 'text-green-600' : 'text-red-600'}`}>
+                                            {item.passed ? '✓ Aprovado' : '✗ Reprovado'} (mín: {item.passScore}%)
+                                          </span>
+                                        </>
+                                      )}
+                                    </span>,
+                                    'Pontuação'
+                                  ];
+                                }}
+                                labelFormatter={(_label: any, payload: any) => {
+                                  if (payload && payload.length > 0) {
+                                    const item = payload[0].payload;
+                                    return `${item.fullName} - Tentativa ${item.attemptNumber}`;
+                                  }
+                                  return _label;
+                                }}
+                              />
+                              <Bar 
+                                dataKey="percentage" 
+                                name="Pontuação" 
+                                radius={[4, 4, 0, 0]}
+                              >
+                                {chartData.map((item: any, index: number) => (
+                                  <Cell 
+                                    key={`cell-${index}`} 
+                                    fill={item.passed === false ? '#ef4444' : '#22c55e'} 
+                                  />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      );
+                      })()}
                     </div>
 
                     
