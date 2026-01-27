@@ -20,7 +20,8 @@ import {
   TrendingUp,
   ListTodo,
   ClipboardCheck,
-  BarChart3
+  BarChart3,
+  Loader2
 } from 'lucide-react';
 import '../styles/main.css';
 
@@ -306,18 +307,7 @@ const EmployeeQuizzes = () => {
       <div className="card p-6 pt-3 pb-3">
         {/* Header com título e filtro */}
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-              <HelpCircle className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Quizzes</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Gerencie participantes e acompanhe resultados
-              </p>
-            </div>
-          </div>
-
+          
           {/* Filtro de Status */}
           <div className="w-full lg:w-48">
             <select
@@ -384,8 +374,8 @@ const EmployeeQuizzes = () => {
       {/* Card com Tabela */}
       <div className="card p-6 pt-3 flex-1 flex flex-col overflow-hidden">
         {isLoading ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Carregando...</p>
+          <div className="flex items-center justify-center h-96">
+            <Loader2 className="w-12 h-12 animate-spin text-orange-500" />
           </div>
         ) : (
           <div className="ag-theme-alpine dark:ag-theme-alpine-dark w-full mt-2 flex-1">

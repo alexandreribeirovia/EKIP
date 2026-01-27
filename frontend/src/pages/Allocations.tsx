@@ -196,11 +196,50 @@ const Allocations = () => {
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsPresentationMode(!!document.fullscreenElement);
-      setTimeout(() => calendarRef.current?.getApi().updateSize(), 100);
+      setTimeout(() => {
+        const api = calendarRef.current?.getApi();
+        if (api) {
+          api.updateSize();
+        }
+      }, 100);
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  // Ajusta o top do header sticky via JS (FullCalendar aplica inline styles)
+  useEffect(() => {
+    const adjustStickyHeader = () => {
+      const stickyHeader = document.querySelector('#calendar-container .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky') as HTMLElement;
+      if (stickyHeader) {
+        stickyHeader.style.top = '-25px';
+      }
+    };
+
+    // Aplica imediatamente e após um delay (para garantir que o FC renderizou)
+    adjustStickyHeader();
+    const initialTimeout = setTimeout(adjustStickyHeader, 500);
+
+    // Observer para reaplicar quando o FullCalendar re-renderiza
+    const observer = new MutationObserver(() => {
+      adjustStickyHeader();
+    });
+
+    const calendarContainer = document.getElementById('calendar-container');
+    if (calendarContainer) {
+      observer.observe(calendarContainer, { subtree: true, attributes: true, attributeFilter: ['style'] });
+    }
+
+    // Também aplica no scroll para garantir
+    const handleScroll = () => adjustStickyHeader();
+    calendarContainer?.addEventListener('scroll', handleScroll, true);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      observer.disconnect();
+      calendarContainer?.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [allEvents]); // Re-executa quando eventos mudam (calendar re-renderiza)
 
   // Torna o scroll horizontal do grid fixo na parte inferior
   useEffect(() => {
@@ -908,7 +947,7 @@ const handleDatesSet = () => {
               }
             }}
             businessHours={{ daysOfWeek: [1, 2, 3, 4, 5] }}
-            contentHeight="auto"
+            contentHeight={isPresentationMode ? undefined : "auto"}
             slotMinWidth={30}
             resources={filteredResources}
             events={allEvents}

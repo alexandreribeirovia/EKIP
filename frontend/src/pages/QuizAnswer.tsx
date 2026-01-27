@@ -26,10 +26,13 @@ import {
 import confetti from 'canvas-confetti';
 import {
   QuizAnswerSession,
-  QuizAnswerQuestion,
   QuizSubmitResponse,
   QuizAnswerResult,
 } from '../types';
+
+// Logos
+import logoWhite from '../../img/logo_white.png';
+import logo from '../../img/logo.png';
 
 // API base URL para chamadas públicas (sem auth)
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -39,17 +42,53 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 // ============================================================================
 
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 dark:from-gray-900 dark:to-gray-800">
-    <RefreshCw className="w-12 h-12 animate-spin text-orange-500 mb-4" />
-    <p className="text-gray-600 dark:text-gray-400 text-lg">Carregando quiz...</p>
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black py-6 px-4 sm:px-6 lg:px-8">
+    <div className="w-full max-w-lg">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        {/* Header com Logo */}
+        <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 px-8 py-6 text-center border-b border-gray-200 dark:border-gray-700">
+          <div className="mx-auto h-20 w-20 mb-3 flex items-center justify-center">
+            <img src={logo} alt="EKIP" className="h-full w-full object-contain" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Bem vindo ao EKIP</h2>
+        </div>
+        {/* Content */}
+        <div className="p-8 flex flex-col items-center">
+          <RefreshCw className="w-12 h-12 animate-spin text-orange-500 mb-4" />
+          <p className="text-gray-600 dark:text-gray-400 text-lg">Carregando quiz...</p>
+        </div>
+        {/* Footer */}
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-8 py-1 text-center">
+          <p className="text-sm text-white font-medium">Via Consulting</p>
+        </div>
+      </div>
+    </div>
   </div>
 );
 
 const ErrorPage = ({ title, message }: { title: string; message: string }) => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-orange-50 dark:from-gray-900 dark:to-gray-800 p-6">
-    <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-    <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2">{title}</h1>
-    <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">{message}</p>
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black py-6 px-4 sm:px-6 lg:px-8">
+    <div className="w-full max-w-lg">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        {/* Header com Logo */}
+        <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 px-8 py-6 text-center border-b border-gray-200 dark:border-gray-700">
+          <div className="mx-auto h-20 w-20 mb-3 flex items-center justify-center">
+            <img src={logo} alt="EKIP" className="h-full w-full object-contain" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">EKIP</h2>
+        </div>
+        {/* Content */}
+        <div className="p-8 flex flex-col items-center">
+          <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2">{title}</h1>
+          <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">{message}</p>
+        </div>
+        {/* Footer */}
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-8 py-1 text-center">
+          <p className="text-sm text-white font-medium">Via Consulting</p>
+        </div>
+      </div>
+    </div>
   </div>
 );
 
@@ -327,16 +366,28 @@ const QuizAnswer = () => {
     const isFailed = percentage < 50;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 dark:from-gray-900 dark:to-gray-800 py-8 px-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black py-8 px-4">
         <div className="max-w-3xl mx-auto">
           {/* Result Header */}
-          <div className={`rounded-2xl p-8 mb-6 text-center ${
+          <div className={`rounded-2xl overflow-hidden mb-6 text-center shadow-xl ${
             isExcellent 
               ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
               : isFailed 
               ? 'bg-gradient-to-r from-red-500 to-orange-500'
               : 'bg-gradient-to-r from-blue-500 to-indigo-500'
-          } text-white shadow-xl`}>
+          } text-white`}>
+            {/* Logo Header */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-black/10">
+              <div className="flex flex-col items-center gap-1">
+                <img src={logoWhite} alt="EKIP" className="h-10 w-10 object-contain" />
+                <span className="text-white font-bold text-xs">EKIP</span>
+              </div>
+              <div className="flex-1">
+                <h1 className="text-white text-xl font-bold">Resultado do Quiz</h1>
+              </div>
+            </div>
+            {/* Score Content */}
+            <div className="p-8">
             {/* Emoji/Icon */}
             <div className="mb-4">
               {isExcellent ? (
@@ -397,6 +448,7 @@ const QuizAnswer = () => {
                 Tempo: {formatTime(result.time_spent_seconds)}
               </div>
             )}
+            </div>
           </div>
 
           {/* Detailed Results */}
@@ -415,8 +467,11 @@ const QuizAnswer = () => {
           </div>
 
           {/* Footer */}
-          <div className="text-center mt-8 text-gray-500 dark:text-gray-400">
-            <p>Obrigado por participar!</p>
+          <div className="text-center mt-8">
+            <p className="text-gray-500 dark:text-gray-400 mb-4">Obrigado por participar!</p>
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl px-8 py-2 inline-block">
+              <p className="text-sm text-white font-medium">Via Consulting</p>
+            </div>
           </div>
         </div>
       </div>
@@ -433,19 +488,30 @@ const QuizAnswer = () => {
   const progress = getProgressPercentage();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 dark:from-gray-900 dark:to-gray-800 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Quiz Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2">
-            {quizSession.quiz.title}
-          </h1>
-          {quizSession.quiz.description && (
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {quizSession.quiz.description}
-            </p>
-          )}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden mb-6">
+          {/* Orange Header with Logo */}
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3 flex items-center gap-3">
+            <div className="flex flex-col items-center gap-1">
+              <img src={logoWhite} alt="EKIP" className="h-10 w-10 object-contain" />
+              <span className="text-white font-bold text-xs">EKIP</span>
+            </div>
+            <div className="flex-1">
+              <h1 className="text-white text-xl font-bold">
+                {quizSession.quiz.title}
+              </h1>
+              {quizSession.quiz.description && (
+                <p className="text-white/80 text-sm mt-1">
+                  {quizSession.quiz.description}
+                </p>
+              )}
+            </div>
+          </div>
           
+          {/* Info and Progress Section */}
+          <div className="p-6">
           {/* Info Bar */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
             <div className="flex items-center gap-1">
@@ -483,12 +549,13 @@ const QuizAnswer = () => {
               />
             </div>
           </div>
+          </div>
         </div>
 
         {/* Question Card */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden mb-6">
           {/* Question Header */}
-          <div className="p-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+          <div className="p-6 pt-2 pb-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
             <div className="flex items-center justify-between mb-2">
               <span className="text-orange-200">
                 Pergunta {currentQuestionIndex + 1} de {quizSession.questions.length}
@@ -509,26 +576,8 @@ const QuizAnswer = () => {
             </div>
           </div>
 
-          {/* Hint */}
-          {currentQuestion.hint && (
-            <div className="px-6 pt-4">
-              <button
-                onClick={() => setShowHint(!showHint)}
-                className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition-colors"
-              >
-                <Lightbulb className="w-4 h-4" />
-                {showHint ? 'Ocultar dica' : 'Ver dica'}
-              </button>
-              {showHint && (
-                <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-sm text-orange-800 dark:text-orange-200">
-                  💡 {currentQuestion.hint}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Options */}
-          <div className="p-6 space-y-3">
+          <div className="p-6 pb-2 space-y-3">
             {currentQuestion.question_type === 'multiple_choice' && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 Selecione todas as opções corretas
@@ -579,6 +628,28 @@ const QuizAnswer = () => {
                 </button>
               );
             })}
+
+            {/* Hint - após as opções */}
+            {currentQuestion.hint && (
+              <div className="pt-1 mt-2 ">
+                <button
+                  onClick={() => setShowHint(!showHint)}
+                  className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition-colors"
+                >
+                  <Lightbulb className="w-4 h-4" />
+                  {showHint ? 'Ocultar dica' : 'Ver dica'}
+                </button>
+                {showHint && (
+                  <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-sm text-orange-800 dark:text-orange-200">
+                    💡 {currentQuestion.hint}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Footer */}
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-8 py-1 text-center">
+            <p className="text-sm text-white font-medium">Via Consulting</p>
           </div>
         </div>
 

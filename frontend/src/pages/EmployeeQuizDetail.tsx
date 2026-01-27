@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Link,
   Users,
-  RefreshCw,
+  Loader2,
   CheckCircle,
   XCircle,
   X,
@@ -33,6 +33,7 @@ import {
   Target,
   Medal,
   Percent,
+  RefreshCw,
 } from 'lucide-react';
 import {
   BarChart,
@@ -45,8 +46,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   Legend,
 } from 'recharts';
 import apiClient from '../lib/apiClient';
@@ -62,6 +61,20 @@ import QuizGenerateAllLinksModal from '../components/QuizGenerateAllLinksModal';
 // ============================================================================
 // TYPES
 // ============================================================================
+
+interface QuestionAnalyticsItem {
+  question_id: number;
+  question_text: string;
+  correct_1st: number;
+  correct_2nd: number;
+  correct_3rd: number;
+  correct_4plus: number;
+  total_answers: number;
+  total_correct: number;
+  avg_attempts: number;
+  difficulty_index: number;
+  difficulty_level: 'easy' | 'medium' | 'hard';
+}
 
 interface AnalyticsData {
   quiz: {
@@ -84,6 +97,7 @@ interface AnalyticsData {
     score: number;
     total_points: number;
     percentage: number;
+    attempts: number;
     completed_at: string;
   }>;
   distribution: Array<{
@@ -96,6 +110,7 @@ interface AnalyticsData {
     count: number;
     avgScore: number;
   }>;
+  question_analytics: QuestionAnalyticsItem[];
 }
 
 // ============================================================================
@@ -377,7 +392,9 @@ const EmployeeQuizDetail = () => {
     setIsLoadingAnalytics(true);
     try {
       const response = await apiClient.get<AnalyticsData>(`/api/quiz-participants/${id}/analytics`);
+      console.log('[Analytics] Response:', response);
       if (response.success && response.data) {
+        console.log('[Analytics] question_analytics:', response.data.question_analytics);
         setAnalytics(response.data);
       }
     } catch (error) {
@@ -647,7 +664,7 @@ const EmployeeQuizDetail = () => {
   if (isLoadingQuiz) {
     return (
       <div className="flex items-center justify-center h-96">
-        <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-12 h-12 animate-spin text-orange-500" />
       </div>
     );
   }
@@ -925,7 +942,125 @@ const EmployeeQuizDetail = () => {
                     </div>
                   </div>
 
-                  {/* Charts Row */}
+                  {/* Row 1: Ranking + Pie Chart */}
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Completion Pie Chart */}
+                    <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                        Respondidos vs Pendentes
+                      </h3>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'Respondidos', value: analytics.summary.completed_count, color: '#3b82f6' },
+                              { name: 'Pendentes', value: analytics.summary.total_participants - analytics.summary.completed_count, color: '#b1b3b5' },
+                            ]}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={90}
+                            paddingAngle={2}
+                            dataKey="value"
+                          >
+                            <Cell fill="#3b82f6" />
+                            <Cell fill="#b1b3b5" />
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#ffffff', 
+                              border: '1px solid #e5e7eb', 
+                              borderRadius: '8px',
+                              color: '#374151'
+                            }}
+                          />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Ranking Table */}
+                    <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                        <Medal className="w-5 h-5 text-yellow-500" />
+                        Ranking de Participantes (Top 10)
+                      </h3>
+                      {analytics.ranking.length === 0 ? (
+                        <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                          Nenhum participante completou o quiz ainda
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {analytics.ranking.map((participant, index) => {
+                            const getMedalEmoji = (pos: number) => {
+                              if (pos === 0) return '🥇';
+                              if (pos === 1) return '🥈';
+                              if (pos === 2) return '🥉';
+                              return null;
+                            };
+                            const medal = getMedalEmoji(index);
+                            const progressColor = participant.percentage >= 80 ? 'from-green-400 to-green-500' :
+                              participant.percentage >= 60 ? 'from-yellow-400 to-yellow-500' :
+                              participant.percentage >= 40 ? 'from-orange-400 to-orange-500' :
+                              'from-red-400 to-red-500';
+                            
+                            return (
+                              <div 
+                                key={participant.user_id}
+                                className={`flex items-center gap-3 p-2.5 rounded-lg border ${
+                                  index < 3 
+                                    ? 'border-yellow-200 dark:border-yellow-700/50 bg-gradient-to-r from-yellow-50/50 to-transparent dark:from-yellow-900/10' 
+                                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'
+                                }`}
+                              >
+                                {/* Position/Medal */}
+                                <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
+                                  index === 0 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                                  index === 1 ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300' :
+                                  index === 2 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                                  'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                                }`}>
+                                  {medal || (index + 1)}
+                                </div>
+                                
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <p className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">
+                                      {participant.name}
+                                    </p>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2 whitespace-nowrap">
+                                      {participant.attempts === 1 ? '1 tentativa' : `${participant.attempts} tentativas`}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {/* Progress Bar */}
+                                    <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                      <div 
+                                        className={`h-full bg-gradient-to-r ${progressColor} rounded-full transition-all duration-500`}
+                                        style={{ width: `${participant.percentage}%` }}
+                                      />
+                                    </div>
+                                    {/* Percentage */}
+                                    <span className={`text-xs font-bold min-w-[36px] text-right ${
+                                      participant.percentage >= 80 ? 'text-green-600 dark:text-green-400' :
+                                      participant.percentage >= 60 ? 'text-yellow-600 dark:text-yellow-400' :
+                                      participant.percentage >= 40 ? 'text-orange-600 dark:text-orange-400' :
+                                      'text-red-600 dark:text-red-400'
+                                    }`}>
+                                      {participant.percentage}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2: Distribution Chart + Question Analytics */}
                   <div className="grid grid-cols-2 gap-6">
                     {/* Distribution Chart */}
                     <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -945,10 +1080,10 @@ const EmployeeQuizDetail = () => {
                           />
                           <Tooltip 
                             contentStyle={{ 
-                              backgroundColor: '#1F2937', 
-                              border: 'none', 
+                              backgroundColor: '#ffffff', 
+                              border: '1px solid #e5e7eb', 
                               borderRadius: '8px',
-                              color: '#F9FAFB'
+                              color: '#374151'
                             }}
                           />
                           <Bar 
@@ -964,168 +1099,140 @@ const EmployeeQuizDetail = () => {
                       </ResponsiveContainer>
                     </div>
 
-                    {/* Completion Pie Chart */}
-                    <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-                        Respondidos vs Pendentes
-                      </h3>
-                      <ResponsiveContainer width="100%" height={250}>
-                        <PieChart>
-                          <Pie
-                            data={[
-                              { name: 'Respondidos', value: analytics.summary.completed_count, color: '#22c55e' },
-                              { name: 'Pendentes', value: analytics.summary.total_participants - analytics.summary.completed_count, color: '#e5e7eb' },
-                            ]}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={90}
-                            paddingAngle={2}
-                            dataKey="value"
+                    {/* Question Analytics Chart */}
+                    {analytics.question_analytics && analytics.question_analytics.length > 0 ? (
+                      <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                          <HelpCircle className="w-5 h-5 text-purple-500" />
+                          Análise por Pergunta
+                          <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">
+                            (por dificuldade)
+                          </span>
+                        </h3>
+                        
+                        {/* Legend */}
+                        <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+                          <span className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded bg-red-500"></span>
+                            <span className="text-gray-500 dark:text-gray-400">Difícil</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded bg-yellow-500"></span>
+                            <span className="text-gray-500 dark:text-gray-400">Médio</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded bg-green-500"></span>
+                            <span className="text-gray-500 dark:text-gray-400">Fácil</span>
+                          </span>
+                        </div>
+
+                        <ResponsiveContainer width="100%" height={Math.min(250, Math.max(150, analytics.question_analytics.length * 35))}>
+                          <BarChart 
+                            data={analytics.question_analytics.map((q, idx) => ({
+                              ...q,
+                              name: `P${idx + 1}`,
+                              fill: q.difficulty_level === 'hard' ? '#ef4444' : 
+                                    q.difficulty_level === 'medium' ? '#eab308' : '#22c55e'
+                            }))}
+                            layout="vertical"
+                            margin={{ top: 5, right: 45, left: 50, bottom: 5 }}
                           >
-                            <Cell fill="#22c55e" />
-                            <Cell fill="#e5e7eb" />
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: '#1F2937', 
-                              border: 'none', 
-                              borderRadius: '8px',
-                              color: '#F9FAFB'
-                            }}
-                          />
-                          <Legend />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Temporal Evolution Chart */}
-                  <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-                      Evolução Temporal (últimos 30 dias)
-                    </h3>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={analytics.temporal_evolution}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                        <XAxis 
-                          dataKey="date" 
-                          tick={{ fill: '#6B7280', fontSize: 10 }}
-                          tickFormatter={(value) => {
-                            const date = new Date(value);
-                            return `${date.getDate()}/${date.getMonth() + 1}`;
-                          }}
-                        />
-                        <YAxis 
-                          yAxisId="left"
-                          tick={{ fill: '#6B7280', fontSize: 12 }}
-                          allowDecimals={false}
-                        />
-                        <YAxis 
-                          yAxisId="right"
-                          orientation="right"
-                          tick={{ fill: '#6B7280', fontSize: 12 }}
-                          domain={[0, 100]}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1F2937', 
-                            border: 'none', 
-                            borderRadius: '8px',
-                            color: '#F9FAFB'
-                          }}
-                          labelFormatter={(value) => {
-                            const date = new Date(value);
-                            return date.toLocaleDateString('pt-BR');
-                          }}
-                        />
-                        <Legend />
-                        <Line 
-                          yAxisId="left"
-                          type="monotone" 
-                          dataKey="count" 
-                          name="Respostas" 
-                          stroke="#8b5cf6" 
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line 
-                          yAxisId="right"
-                          type="monotone" 
-                          dataKey="avgScore" 
-                          name="Média %" 
-                          stroke="#f97316" 
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Ranking Table */}
-                  <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                      <Medal className="w-5 h-5 text-yellow-500" />
-                      Ranking de Participantes (Top 10)
-                    </h3>
-                    {analytics.ranking.length === 0 ? (
-                      <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                        Nenhum participante completou o quiz ainda
-                      </p>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={true} horizontal={false} />
+                            <XAxis 
+                              type="number" 
+                              tick={{ fill: '#6B7280', fontSize: 10 }}
+                              domain={[0, 'auto']}
+                              tickFormatter={(value) => `${value}`}
+                            />
+                            <YAxis 
+                              type="category" 
+                              dataKey="name"
+                              tick={({ x, y, payload }) => {
+                                const idx = parseInt(payload.value.replace('P', '')) - 1;
+                                const question = analytics.question_analytics?.[idx];
+                                const diffColor = question?.difficulty_level === 'hard' ? '#ef4444' : 
+                                  question?.difficulty_level === 'medium' ? '#eab308' : '#22c55e';
+                                return (
+                                  <g transform={`translate(${x},${y})`}>
+                                    <circle cx={-35} cy={0} r={4} fill={diffColor} />
+                                    <text x={-25} y={0} dy={4} textAnchor="start" fill="#6B7280" fontSize={11} fontWeight="500">
+                                      {payload.value}
+                                    </text>
+                                  </g>
+                                );
+                              }}
+                              width={45}
+                            />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: '#ffffff', 
+                                border: '1px solid #e5e7eb', 
+                                borderRadius: '8px',
+                                color: '#374151',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                padding: '12px',
+                                maxWidth: '400px',
+                                whiteSpace: 'normal'
+                              }}
+                              wrapperStyle={{ zIndex: 1000 }}
+                              formatter={(value: number) => [`${value} tentativas`, 'Média']}
+                              labelFormatter={(label) => {
+                                const idx = parseInt(label.replace('P', '')) - 1;
+                                const question = analytics.question_analytics?.[idx];
+                                if (question) {
+                                  const diffEmoji = question.difficulty_level === 'hard' ? '🔴' :
+                                    question.difficulty_level === 'medium' ? '🟡' : '🟢';
+                                  return (
+                                    <div style={{ maxWidth: '380px', wordWrap: 'break-word', whiteSpace: 'normal' }}>
+                                      <div style={{ marginBottom: '8px', lineHeight: '1.4' }}>
+                                        <strong>{label}</strong>: {question.question_text}
+                                      </div>
+                                      <div style={{ fontSize: '11px', color: '#6B7280', lineHeight: '1.3' }}>
+                                        {diffEmoji} {question.total_correct}/{question.total_answers} acertaram<br/>
+                                        1ª: {question.correct_1st} • 2ª: {question.correct_2nd} • 3ª: {question.correct_3rd} • 4+: {question.correct_4plus}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return label;
+                              }}
+                            />
+                            <Bar 
+                              dataKey="avg_attempts" 
+                              name="Média de Tentativas"
+                              radius={[0, 4, 4, 0]}
+                              label={({ x, y, width, value }) => (
+                                <text 
+                                  x={x + width + 5} 
+                                  y={y + 12} 
+                                  fill="#6B7280" 
+                                  fontSize={10}
+                                  fontWeight="600"
+                                >
+                                  {value}x
+                                </text>
+                              )}
+                            >
+                              {analytics.question_analytics.map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={entry.difficulty_level === 'hard' ? '#ef4444' : 
+                                        entry.difficulty_level === 'medium' ? '#eab308' : '#22c55e'} 
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left border-b border-gray-200 dark:border-gray-700">
-                              <th className="pb-3 font-medium text-gray-500 dark:text-gray-400 w-12">#</th>
-                              <th className="pb-3 font-medium text-gray-500 dark:text-gray-400">Participante</th>
-                              <th className="pb-3 font-medium text-gray-500 dark:text-gray-400 text-right">Pontuação</th>
-                              <th className="pb-3 font-medium text-gray-500 dark:text-gray-400 text-right">Percentual</th>
-                              <th className="pb-3 font-medium text-gray-500 dark:text-gray-400 text-right">Data</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {analytics.ranking.map((participant, index) => (
-                              <tr 
-                                key={participant.participant_id} 
-                                className="border-b border-gray-100 dark:border-gray-700/50"
-                              >
-                                <td className="py-3">
-                                  {index < 3 ? (
-                                    <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
-                                      index === 0 ? 'bg-yellow-100 text-yellow-700' :
-                                      index === 1 ? 'bg-gray-200 text-gray-700' :
-                                      'bg-orange-100 text-orange-700'
-                                    }`}>
-                                      {index + 1}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500 dark:text-gray-400 pl-2">{index + 1}</span>
-                                  )}
-                                </td>
-                                <td className="py-3 font-medium text-gray-900 dark:text-gray-100">
-                                  {participant.name}
-                                </td>
-                                <td className="py-3 text-right text-gray-600 dark:text-gray-400">
-                                  {participant.score}/{participant.total_points}
-                                </td>
-                                <td className="py-3 text-right">
-                                  <span className={`font-semibold ${
-                                    participant.percentage >= 80 ? 'text-green-600 dark:text-green-400' :
-                                    participant.percentage >= 60 ? 'text-yellow-600 dark:text-yellow-400' :
-                                    participant.percentage >= 40 ? 'text-orange-600 dark:text-orange-400' :
-                                    'text-red-600 dark:text-red-400'
-                                  }`}>
-                                    {participant.percentage}%
-                                  </span>
-                                </td>
-                                <td className="py-3 text-right text-gray-500 dark:text-gray-400">
-                                  {new Date(participant.completed_at).toLocaleDateString('pt-BR')}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                          <HelpCircle className="w-5 h-5 text-purple-500" />
+                          Análise por Pergunta
+                        </h3>
+                        <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                          Nenhuma resposta registrada para análise
+                        </p>
                       </div>
                     )}
                   </div>

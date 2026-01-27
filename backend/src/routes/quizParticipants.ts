@@ -138,13 +138,20 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
     const completionRate = totalParticipants > 0 ? Math.round((completedCount / totalParticipants) * 100) : 0
 
     // Média geral de acertos (usando a melhor tentativa de cada usuário)
+    // E contamos quantas tentativas cada usuário fez
     const bestAttemptsByUser = new Map<string, any>()
+    const attemptCountByUser = new Map<string, number>()
+    
     attempts?.forEach((attempt: any) => {
-      const existing = bestAttemptsByUser.get(attempt.user_id)
+      const userId = attempt.user_id
+      // Contar tentativas por usuário
+      attemptCountByUser.set(userId, (attemptCountByUser.get(userId) || 0) + 1)
+      
+      const existing = bestAttemptsByUser.get(userId)
       const currentPct = getPercentage(attempt)
       const existingPct = existing ? getPercentage(existing) : 0
       if (!existing || currentPct > existingPct) {
-        bestAttemptsByUser.set(attempt.user_id, attempt)
+        bestAttemptsByUser.set(userId, attempt)
       }
     })
 
@@ -153,7 +160,7 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
       ? Math.round(bestAttempts.reduce((sum, a) => sum + getPercentage(a), 0) / bestAttempts.length)
       : 0
 
-    // 5. Ranking de participantes (top 10 por melhor pontuação)
+    // 5. Ranking de participantes (top 10 por melhor pontuação, desempate por menos tentativas)
     const ranking = bestAttempts
       .map((attempt: any) => ({
         user_id: attempt.user_id,
@@ -161,9 +168,17 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
         score: attempt.score || 0,
         total_points: attempt.total_points || quiz.pass_score || 0,
         percentage: getPercentage(attempt),
+        attempts: attemptCountByUser.get(attempt.user_id) || 1,
         completed_at: attempt.submitted_at
       }))
-      .sort((a, b) => b.percentage - a.percentage)
+      .sort((a, b) => {
+        // Primeiro ordena por percentage (maior primeiro)
+        if (b.percentage !== a.percentage) {
+          return b.percentage - a.percentage
+        }
+        // Em caso de empate, ordena por número de tentativas (menor primeiro)
+        return a.attempts - b.attempts
+      })
       .slice(0, 10)
 
     // 6. Distribuição de notas por faixas (0-20%, 21-40%, 41-60%, 61-80%, 81-100%)
@@ -223,6 +238,160 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
       ? Math.round((totalAttempts / completedCount) * 10) / 10 
       : 0
 
+    // 9. Analytics por pergunta - acertos por número de tentativas
+    // Buscar todas as perguntas do quiz
+    const { data: questionsData, error: questionsError } = await supabaseAdmin
+      .from('quiz_question')
+      .select('id, question_text')
+      .eq('quiz_id', quizIdInt)
+      .eq('is_active', true)
+      .order('id', { ascending: true })
+
+    if (questionsError) {
+      console.error('Erro ao buscar perguntas para analytics:', questionsError)
+    }
+
+    console.log(`[Analytics] Quiz ${quizIdInt}: ${questionsData?.length || 0} perguntas encontradas`)
+
+    // Buscar todas as respostas de tentativas completadas
+    // Primeiro buscar os IDs das tentativas completadas deste quiz
+    const completedAttemptIds = attempts?.map((a: any) => a.id) || []
+    
+    let answersData: any[] = []
+    let answersError: any = null
+
+    if (completedAttemptIds.length > 0) {
+      const result = await supabaseAdmin
+        .from('quiz_attempt_answer')
+        .select(`
+          question_id,
+          is_correct,
+          attempt_id
+        `)
+        .in('attempt_id', completedAttemptIds)
+
+      answersData = result.data || []
+      answersError = result.error
+    }
+
+    console.log(`[Analytics] Quiz ${quizIdInt}: ${answersData?.length || 0} respostas encontradas de ${completedAttemptIds.length} tentativas`)
+
+    if (answersError) {
+      console.error('Erro ao buscar respostas para analytics:', answersError)
+    }
+
+    // Processar analytics por pergunta
+    // Para cada user_id + question_id, precisamos saber em qual tentativa (1ª, 2ª, etc.) acertou
+    interface QuestionStats {
+      question_id: number
+      question_text: string
+      correct_1st: number  // Acertou na 1ª tentativa
+      correct_2nd: number  // Acertou na 2ª tentativa
+      correct_3rd: number  // Acertou na 3ª tentativa
+      correct_4plus: number // Acertou na 4ª tentativa ou mais
+      total_answers: number // Total de respostas para esta pergunta
+      total_correct: number // Total que acertou (em qualquer tentativa)
+      avg_attempts: number // Média de tentativas para acertar
+      difficulty_index: number // % de erros (maior = mais difícil)
+      difficulty_level: 'easy' | 'medium' | 'hard'
+    }
+
+    const questionAnalytics: QuestionStats[] = []
+
+    if (questionsData && answersData && attempts) {
+      // Criar mapa de attempt_id -> { user_id, order } usando os attempts já carregados
+      const attemptInfoMap = new Map<number, { user_id: string, order: number }>()
+      const attemptsByUser = new Map<string, number[]>()
+
+      // Ordenar attempts por id (aproximação de ordem cronológica) e agrupar por user
+      const sortedAttempts = [...attempts].sort((a: any, b: any) => a.id - b.id)
+      
+      sortedAttempts.forEach((attempt: any) => {
+        const userId = attempt.user_id
+        const userAttempts = attemptsByUser.get(userId) || []
+        userAttempts.push(attempt.id)
+        attemptsByUser.set(userId, userAttempts)
+        attemptInfoMap.set(attempt.id, {
+          user_id: userId,
+          order: userAttempts.length // 1-based order for this user
+        })
+      })
+
+      console.log(`[Analytics] Mapa de tentativas criado: ${attemptInfoMap.size} tentativas de ${attemptsByUser.size} usuários`)
+
+      // Para cada pergunta, calcular estatísticas
+      for (const question of questionsData) {
+        const questionAnswers = answersData.filter((ans: any) => ans.question_id === question.id)
+        
+        // Agrupar por usuário para pegar apenas o primeiro acerto
+        const userFirstCorrect = new Map<string, number>() // userId -> attempt_order when first correct
+        const usersWhoAnswered = new Set<string>()
+        
+        questionAnswers.forEach((ans: any) => {
+          const attemptInfo = attemptInfoMap.get(ans.attempt_id)
+          if (!attemptInfo) return
+          
+          const userId = attemptInfo.user_id
+          usersWhoAnswered.add(userId)
+          
+          if (ans.is_correct && !userFirstCorrect.has(userId)) {
+            userFirstCorrect.set(userId, attemptInfo.order)
+          }
+        })
+
+        // Contar acertos por tentativa
+        let correct_1st = 0
+        let correct_2nd = 0
+        let correct_3rd = 0
+        let correct_4plus = 0
+        let sumAttempts = 0 // Soma das tentativas para calcular média
+
+        userFirstCorrect.forEach((attemptOrder) => {
+          sumAttempts += attemptOrder
+          if (attemptOrder === 1) correct_1st++
+          else if (attemptOrder === 2) correct_2nd++
+          else if (attemptOrder === 3) correct_3rd++
+          else correct_4plus++
+        })
+
+        // Total de usuários que responderam esta pergunta
+        const totalAnswers = usersWhoAnswered.size
+        const totalCorrect = userFirstCorrect.size
+        
+        // Média de tentativas para acertar (para quem acertou)
+        const avgAttempts = totalCorrect > 0 
+          ? Math.round((sumAttempts / totalCorrect) * 10) / 10 
+          : 0
+        
+        // Difficulty index = % de quem NÃO acertou na 1ª tentativa
+        const difficultyIndex = totalAnswers > 0 
+          ? Math.round(((totalAnswers - correct_1st) / totalAnswers) * 100)
+          : 0
+
+        // Determinar nível de dificuldade baseado na média de tentativas
+        let difficultyLevel: 'easy' | 'medium' | 'hard' = 'easy'
+        if (avgAttempts >= 2.5 || difficultyIndex > 70) difficultyLevel = 'hard'
+        else if (avgAttempts >= 1.5 || difficultyIndex >= 40) difficultyLevel = 'medium'
+
+        questionAnalytics.push({
+          question_id: question.id,
+          question_text: question.question_text,
+          correct_1st,
+          correct_2nd,
+          correct_3rd,
+          correct_4plus,
+          total_answers: totalAnswers,
+          total_correct: totalCorrect,
+          avg_attempts: avgAttempts,
+          difficulty_index: difficultyIndex,
+          difficulty_level: difficultyLevel
+        })
+      }
+
+      // Ordenar por dificuldade (mais difíceis primeiro)
+      questionAnalytics.sort((a, b) => b.difficulty_index - a.difficulty_index)
+    }
+
     return res.json({
       success: true,
       data: {
@@ -247,7 +416,8 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
           { range: '61-80%', count: distribution['61-80'], color: '#22c55e' },
           { range: '81-100%', count: distribution['81-100'], color: '#10b981' }
         ],
-        temporal_evolution: temporalEvolution
+        temporal_evolution: temporalEvolution,
+        question_analytics: questionAnalytics
       }
     })
   } catch (err) {

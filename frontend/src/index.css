@@ -345,6 +345,104 @@
   color: #f9fafb;
 }
 
+/* ===============================================
+   Fullscreen/Presentation Mode - Allocations
+   =============================================== */
+
+/* Main fullscreen card container */
+.fullscreen-card:fullscreen,
+.fullscreen-card:-webkit-full-screen,
+.fullscreen-card:-moz-full-screen {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: relative !important;
+  transform: none !important;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Calendar container in fullscreen */
+.fullscreen-card:fullscreen #calendar-container,
+.fullscreen-card:-webkit-full-screen #calendar-container,
+.fullscreen-card:-moz-full-screen #calendar-container {
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* FullCalendar root element */
+.fullscreen-card:fullscreen .fc,
+.fullscreen-card:-webkit-full-screen .fc,
+.fullscreen-card:-moz-full-screen .fc {
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* View harness - contains the timeline */
+.fullscreen-card:fullscreen .fc-view-harness,
+.fullscreen-card:-webkit-full-screen .fc-view-harness,
+.fullscreen-card:-moz-full-screen .fc-view-harness {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100% !important;
+}
+
+/* Scrollgrid - main grid container */
+.fullscreen-card:fullscreen .fc-scrollgrid,
+.fullscreen-card:-webkit-full-screen .fc-scrollgrid,
+.fullscreen-card:-moz-full-screen .fc-scrollgrid {
+  height: 100% !important;
+}
+
+/* Body section of scrollgrid */
+.fullscreen-card:fullscreen .fc-scrollgrid-section-body,
+.fullscreen-card:-webkit-full-screen .fc-scrollgrid-section-body,
+.fullscreen-card:-moz-full-screen .fc-scrollgrid-section-body {
+  height: 100%;
+}
+
+/* Scroller containers - enable vertical scroll */
+.fullscreen-card:fullscreen .fc-scroller-liquid-absolute,
+.fullscreen-card:-webkit-full-screen .fc-scroller-liquid-absolute,
+.fullscreen-card:-moz-full-screen .fc-scroller-liquid-absolute {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow: auto !important;
+}
+
+/* Timeline body scroller */
+.fullscreen-card:fullscreen .fc-timeline-body .fc-scroller,
+.fullscreen-card:-webkit-full-screen .fc-timeline-body .fc-scroller,
+.fullscreen-card:-moz-full-screen .fc-timeline-body .fc-scroller {
+  overflow: auto !important;
+}
+
+/* Resource area scroller (left side with consultant names) */
+.fullscreen-card:fullscreen .fc-datagrid-body .fc-scroller,
+.fullscreen-card:-webkit-full-screen .fc-datagrid-body .fc-scroller,
+.fullscreen-card:-moz-full-screen .fc-datagrid-body .fc-scroller {
+  overflow-y: auto !important;
+}
+
+/* Header sticky do calendário - ajusta gap entre toolbar e datas (global) */
+#calendar-container .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky {
+  top: -25px !important;
+}
+
+#calendar-container .fc-scrollgrid-section-header.fc-scrollgrid-section-sticky > * {
+  top: -25px !important;
+}
+
 .dark .prose strong {
   color: #f9fafb;
 }
