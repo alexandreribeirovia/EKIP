@@ -154,7 +154,7 @@ const Login = () => {
           {/* Rodapé laranja */}
           <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-8 py-1 text-center">
             <p className="text-sm text-white font-medium">
-              Desenvolvido por Via Consulting
+              Via Consulting
             </p>
           </div>
         </div>

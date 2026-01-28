@@ -1921,6 +1921,9 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
     
     const lastWeekInGraph = dataPoints.length;
     
+    // Ordem fixa das fases (de cima para baixo no gráfico)
+    const phaseOrder = ['Gestão', 'Levantamento', 'Desenvolvimento', 'Homologação', 'Go-live', 'Acompanhamento'];
+    
     const phaseBars = phasesWithDates
       .map(phase => {
         const phaseData = phaseSchedule[phase];
@@ -1941,7 +1944,15 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           endWeekNumber: endWeek
         };
       })
-      .sort((a, b) => a.startWeekNumber - b.startWeekNumber);
+      // Ordenar pela ordem fixa predefinida (fases não listadas vão para o final)
+      .sort((a, b) => {
+        const indexA = phaseOrder.indexOf(a.phase);
+        const indexB = phaseOrder.indexOf(b.phase);
+        // Se a fase não está na lista, colocar no final
+        const orderA = indexA === -1 ? phaseOrder.length : indexA;
+        const orderB = indexB === -1 ? phaseOrder.length : indexB;
+        return orderA - orderB;
+      });
 
     return { dataPoints, currentWeek: currentWeekLabel, phaseBars };
   }, [calculateSCurveData, projectPhases, calculateProjectWeeks, tasks]);
@@ -3293,18 +3304,21 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                               formatter={(value) => value === 'planned' ? 'Progresso Planejado' : 'Progresso Real'}
                             />
                             
-                            {/* Barras horizontais das fases em faixas separadas */}
+                            {/* Barras horizontais das fases começando do topo (100%) */}
                             {phaseBars && phaseBars.map((phaseBar, index) => {
-                              const colors = ['#FEF3C7', '#DBEAFE', '#D1FAE5', '#FCE7F3', '#F3E8FF'];
-                              const strokeColors = ['#F59E0B', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6'];
+                              const colors = ['#FEF3C7', '#DBEAFE', '#D1FAE5', '#FCE7F3', '#F3E8FF', '#E0E7FF'];
+                              const strokeColors = ['#F59E0B', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6', '#6366F1'];
                               const fillColor = colors[index % colors.length];
                               const strokeColor = strokeColors[index % strokeColors.length];
                               
-                              // Dividir o gráfico em faixas para cada fase
-                              const totalBars = phaseBars.length;
-                              const barHeight = (100 / totalBars)/3; // Dividir altura igualmente
-                              const yStart = (totalBars + 2.95 - index) * barHeight; // Inverter ordem (primeira fase no topo)
-                                const yEnd = yStart + barHeight;
+                              // Cada barra tem altura fixa de 8% do gráfico
+                              const barHeight = 8;
+                              // Começar do topo (100%) e ir descendo para cada fase
+                              // Primeira fase: 100 - 8 = 92 até 100
+                              // Segunda fase: 92 - 8 = 84 até 92
+                              // etc.
+                              const yEnd = 100 - (index * barHeight);
+                              const yStart = yEnd - barHeight;
                               
                               return (
                                 <ReferenceArea
@@ -3314,15 +3328,15 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                                   y1={yStart}
                                   y2={yEnd}
                                   fill={fillColor}
-                                  fillOpacity={0.6}
+                                  fillOpacity={0.7}
                                   stroke={strokeColor}
-                                  strokeOpacity={0.8}
+                                  strokeOpacity={0.9}
                                   strokeWidth={2}
                                   label={{
                                     value: phaseBar.phase,
                                     position: 'center',
                                     style: {
-                                      fontSize: '12px',
+                                      fontSize: '11px',
                                       fill: '#1F2937',
                                       fontWeight: 'bold',
                                       textAnchor: 'middle'

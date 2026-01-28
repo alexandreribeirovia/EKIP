@@ -1082,7 +1082,7 @@ const EmployeeDetail = () => {
     if (!employee?.user_id) return;
     
     try {
-      await apiClient.post(`/api/employees/${employee.user_id}/skills`, { skillId });
+      await apiClient.post(`/api/employees/${employee.user_id}/skills`, { skill_id: skillId });
       await loadUserSkills(employee.user_id);
     } catch (error) {
       console.error('Erro ao adicionar habilidade:', error);
