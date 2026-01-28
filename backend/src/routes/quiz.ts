@@ -1227,4 +1227,295 @@ router.patch('/:quizId/questions/:questionId/options/reorder', async (req: Reque
   }
 })
 
+// ============================================================================
+// BULK IMPORT QUESTIONS
+// ============================================================================
+
+/**
+ * Interface para pergunta no formato de importação
+ */
+interface ImportQuestion {
+  question: string;
+  answerOptions: Array<{
+    text: string;
+    isCorrect: boolean;
+    rationale?: string;
+  }>;
+  hint?: string;
+  explanation?: string;
+  points?: number;
+}
+
+/**
+ * @swagger
+ * /api/quiz/{quizId}/questions/bulk-import:
+ *   post:
+ *     summary: Importa múltiplas perguntas em lote
+ *     tags: [Quiz Questions]
+ *     parameters:
+ *       - in: path
+ *         name: quizId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - questions
+ *             properties:
+ *               questions:
+ *                 type: array
+ *                 maxItems: 100
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - question
+ *                     - answerOptions
+ *                   properties:
+ *                     question:
+ *                       type: string
+ *                     answerOptions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         required:
+ *                           - text
+ *                           - isCorrect
+ *                         properties:
+ *                           text:
+ *                             type: string
+ *                           isCorrect:
+ *                             type: boolean
+ *                           rationale:
+ *                             type: string
+ *                     hint:
+ *                       type: string
+ *                     explanation:
+ *                       type: string
+ *                     points:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Resultado da importação
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     imported:
+ *                       type: integer
+ *                     skipped:
+ *                       type: integer
+ *                     errors:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           index:
+ *                             type: integer
+ *                           message:
+ *                             type: string
+ */
+router.post('/:quizId/questions/bulk-import', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const quizId = req.params['quizId']
+    if (!quizId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'ID do quiz é obrigatório', code: 'INVALID_REQUEST' }
+      })
+    }
+
+    const { questions } = req.body as { questions: ImportQuestion[] }
+
+    // Validar se questions é um array
+    if (!questions || !Array.isArray(questions)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Lista de perguntas é obrigatória', code: 'INVALID_REQUEST' }
+      })
+    }
+
+    // Validar limite de 100 perguntas
+    if (questions.length > 100) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Limite máximo de 100 perguntas por importação', code: 'LIMIT_EXCEEDED' }
+      })
+    }
+
+    // Verificar se o quiz existe
+    const { data: quiz, error: quizError } = await supabaseAdmin
+      .from('quiz')
+      .select('id')
+      .eq('id', parseInt(quizId))
+      .single()
+
+    if (quizError || !quiz) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Quiz não encontrado', code: 'NOT_FOUND' }
+      })
+    }
+
+    // Buscar perguntas existentes para verificar duplicatas
+    const { data: existingQuestions } = await supabaseAdmin
+      .from('quiz_question')
+      .select('question_text')
+      .eq('quiz_id', parseInt(quizId))
+
+    const existingTexts = new Set(
+      (existingQuestions || []).map((q: { question_text: string }) => 
+        q.question_text.trim().toLowerCase()
+      )
+    )
+
+    // Buscar próximo question_order
+    const { data: maxOrderResult } = await supabaseAdmin
+      .from('quiz_question')
+      .select('question_order')
+      .eq('quiz_id', parseInt(quizId))
+      .order('question_order', { ascending: false })
+      .limit(1)
+      .single()
+
+    let nextOrder = (maxOrderResult?.question_order || 0) + 1
+
+    // Processar cada pergunta
+    const errors: Array<{ index: number; message: string }> = []
+    const skippedDuplicates: Array<{ index: number; question: string }> = []
+    let importedCount = 0
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]
+      
+      // Verificação de segurança
+      if (!q) {
+        errors.push({ index: i + 1, message: 'Pergunta inválida ou vazia' })
+        continue
+      }
+
+      // Validar estrutura da pergunta
+      if (!q.question || typeof q.question !== 'string' || !q.question.trim()) {
+        errors.push({ index: i + 1, message: 'Texto da pergunta é obrigatório' })
+        continue
+      }
+
+      if (!q.answerOptions || !Array.isArray(q.answerOptions) || q.answerOptions.length < 2) {
+        errors.push({ index: i + 1, message: 'Cada pergunta deve ter pelo menos 2 opções de resposta' })
+        continue
+      }
+
+      // Validar opções
+      let hasValidOptions = true
+      for (let j = 0; j < q.answerOptions.length; j++) {
+        const opt = q.answerOptions[j]
+        if (!opt) {
+          errors.push({ index: i + 1, message: `Opção ${j + 1}: opção inválida` })
+          hasValidOptions = false
+          break
+        }
+        if (!opt.text || typeof opt.text !== 'string' || !opt.text.trim()) {
+          errors.push({ index: i + 1, message: `Opção ${j + 1}: texto é obrigatório` })
+          hasValidOptions = false
+          break
+        }
+        if (typeof opt.isCorrect !== 'boolean') {
+          errors.push({ index: i + 1, message: `Opção ${j + 1}: isCorrect deve ser true ou false` })
+          hasValidOptions = false
+          break
+        }
+      }
+
+      if (!hasValidOptions) continue
+
+      // Verificar se há pelo menos uma resposta correta
+      const correctCount = q.answerOptions.filter(opt => opt?.isCorrect).length
+      if (correctCount === 0) {
+        errors.push({ index: i + 1, message: 'Cada pergunta deve ter pelo menos uma resposta correta' })
+        continue
+      }
+
+      // Verificar duplicata
+      const questionTextNormalized = q.question.trim().toLowerCase()
+      if (existingTexts.has(questionTextNormalized)) {
+        skippedDuplicates.push({ index: i + 1, question: q.question.substring(0, 50) + '...' })
+        continue
+      }
+
+      // Auto-detectar question_type baseado nas respostas corretas
+      const questionType = correctCount > 1 ? 'multiple_choice' : 'single_choice'
+
+      // Criar pergunta
+      const { data: newQuestion, error: questionError } = await supabaseAdmin
+        .from('quiz_question')
+        .insert({
+          quiz_id: parseInt(quizId),
+          question_text: q.question.trim(),
+          question_type: questionType,
+          hint: q.hint?.trim() || null,
+          explanation: q.explanation?.trim() || null,
+          points: q.points || 1,
+          question_order: nextOrder
+        })
+        .select()
+        .single()
+
+      if (questionError || !newQuestion) {
+        errors.push({ index: i + 1, message: `Erro ao inserir pergunta: ${questionError?.message || 'Erro desconhecido'}` })
+        continue
+      }
+
+      // Criar opções
+      const optionsToInsert = q.answerOptions
+        .filter((opt): opt is NonNullable<typeof opt> => opt != null)
+        .map((opt, index) => ({
+          question_id: newQuestion.id,
+          option_text: opt.text.trim(),
+          is_correct: opt.isCorrect,
+          rationale: opt.rationale?.trim() || null,
+          option_order: index + 1
+        }))
+
+      const { error: optionsError } = await supabaseAdmin
+        .from('quiz_question_option')
+        .insert(optionsToInsert)
+
+      if (optionsError) {
+        errors.push({ index: i + 1, message: `Pergunta criada mas erro ao inserir opções: ${optionsError.message}` })
+        // A pergunta foi criada, então conta como importada parcialmente
+      }
+
+      // Adicionar ao conjunto de existentes para evitar duplicatas no mesmo lote
+      existingTexts.add(questionTextNormalized)
+      importedCount++
+      nextOrder++
+    }
+
+    // Preparar mensagem de resultado
+    const skippedCount = skippedDuplicates.length
+    
+    return res.json({
+      success: true,
+      data: {
+        imported: importedCount,
+        skipped: skippedCount,
+        skippedDuplicates: skippedDuplicates,
+        errors: errors
+      }
+    })
+  } catch (err) {
+    return next(err)
+  }
+})
+
 export default router

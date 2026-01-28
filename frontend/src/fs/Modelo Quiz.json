@@ -1,0 +1,58 @@
+[
+  {
+    "question": "Qual é a capital do Brasil?",
+    "answerOptions": [
+      {
+        "text": "São Paulo",
+        "isCorrect": false,
+        "rationale": "São Paulo é a maior cidade, mas não é a capital"
+      },
+      {
+        "text": "Rio de Janeiro",
+        "isCorrect": false,
+        "rationale": "Foi a capital até 1960"
+      },
+      {
+        "text": "Brasília",
+        "isCorrect": true,
+        "rationale": "Correta! Brasília é a capital desde 1960"
+      },
+      {
+        "text": "Salvador",
+        "isCorrect": false,
+        "rationale": "Salvador foi a primeira capital do Brasil"
+      }
+    ],
+    "hint": "Pense na região Centro-Oeste",
+    "explanation": "Brasília é a capital federal desde 1960",
+    "points": 1
+  },
+  {
+    "question": "Quais são cores primárias?",
+    "answerOptions": [
+      {
+        "text": "Vermelho",
+        "isCorrect": true,
+        "rationale": "Cor primária"
+      },
+      {
+        "text": "Verde",
+        "isCorrect": false,
+        "rationale": "Verde é uma cor secundária"
+      },
+      {
+        "text": "Azul",
+        "isCorrect": true,
+        "rationale": "Cor primária"
+      },
+      {
+        "text": "Amarelo",
+        "isCorrect": true,
+        "rationale": "Cor primária"
+      }
+    ],
+    "hint": "São as cores básicas da pintura",
+    "explanation": "Vermelho, azul e amarelo são as cores primárias",
+    "points": 2
+  }
+]

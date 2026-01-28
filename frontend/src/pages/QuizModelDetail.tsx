@@ -22,6 +22,7 @@ import {
   X,
   HelpCircle,
   AlertCircle,
+  Upload,
 } from 'lucide-react';
 import {
   DndContext,
@@ -41,6 +42,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import apiClient from '../lib/apiClient';
+import QuizImportModal from '../components/QuizImportModal';
 import {
   QuizData,
   QuizQuestionData,
@@ -393,6 +395,9 @@ const QuizModelDetail = () => {
 
   // Notification
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Import modal
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -776,23 +781,32 @@ const QuizModelDetail = () => {
             <HelpCircle className="w-5 h-5 text-purple-500" />
             Perguntas
           </h2>
-          <button
-            onClick={() => {
-              setQuestionToEdit(null);
-              setQuestionForm({
-                question_text: '',
-                question_type: 'single_choice',
-                hint: '',
-                explanation: '',
-                points: 1,
-              });
-              setShowQuestionModal(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Pergunta
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-700 bg-white dark:bg-gray-800 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              Carregar Perguntas
+            </button>
+            <button
+              onClick={() => {
+                setQuestionToEdit(null);
+                setQuestionForm({
+                  question_text: '',
+                  question_type: 'single_choice',
+                  hint: '',
+                  explanation: '',
+                  points: 1,
+                });
+                setShowQuestionModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Nova Pergunta
+            </button>
+          </div>
         </div>
 
         {/* Questions List */}
@@ -1056,6 +1070,20 @@ const QuizModelDetail = () => {
           type={notification.type}
           message={notification.message}
           onClose={() => setNotification(null)}
+        />
+      )}
+
+      {/* Quiz Import Modal */}
+      {showImportModal && id && (
+        <QuizImportModal
+          quizId={id}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            void fetchQuestions();
+          }}
+          onNotification={(type, message) => {
+            setNotification({ type, message });
+          }}
         />
       )}
     </div>

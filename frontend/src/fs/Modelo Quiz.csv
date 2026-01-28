@@ -1,0 +1,9 @@
+Pergunta;Tipo;Dica;Explicacao;Pontos;Opcao;Correta;Justificativa
+"Qual é a capital do Brasil?";"single_choice";"Pense na região Centro-Oeste";"Brasília é a capital federal desde 1960";1;"São Paulo";"false";"São Paulo é a maior cidade, mas não é a capital"
+"Qual é a capital do Brasil?";"single_choice";"Pense na região Centro-Oeste";"Brasília é a capital federal desde 1960";1;"Rio de Janeiro";"false";"Foi a capital até 1960"
+"Qual é a capital do Brasil?";"single_choice";"Pense na região Centro-Oeste";"Brasília é a capital federal desde 1960";1;"Brasília";"true";"Correta! Brasília é a capital desde 1960"
+"Qual é a capital do Brasil?";"single_choice";"Pense na região Centro-Oeste";"Brasília é a capital federal desde 1960";1;"Salvador";"false";"Salvador foi a primeira capital do Brasil"
+"Quais são cores primárias?";"multiple_choice";"São as cores básicas da pintura";"Vermelho, azul e amarelo são as cores primárias";2;"Vermelho";"true";"Cor primária"
+"Quais são cores primárias?";"multiple_choice";"São as cores básicas da pintura";"Vermelho, azul e amarelo são as cores primárias";2;"Verde";"false";"Verde é uma cor secundária"
+"Quais são cores primárias?";"multiple_choice";"São as cores básicas da pintura";"Vermelho, azul e amarelo são as cores primárias";2;"Azul";"true";"Cor primária"
+"Quais são cores primárias?";"multiple_choice";"São as cores básicas da pintura";"Vermelho, azul e amarelo são as cores primárias";2;"Amarelo";"true";"Cor primária"
