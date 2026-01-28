@@ -2313,7 +2313,7 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       {!isFullScreen && (
         <div className="card px-6 pt-2 pb-4 mb-3">
         <h2 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">{project.name}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-6 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-8 gap-6 items-center">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Cliente</p>
             <p className="text-md font-medium text-gray-900 dark:text-gray-100">{project.client_name}</p>
@@ -2338,6 +2338,10 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Data de Início</p>
             <p className="text-md font-medium text-gray-900 dark:text-gray-100">{formatDate(project.start_date)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Data Fim Desejada</p>
+            <p className="text-md font-medium text-gray-900 dark:text-gray-100">{formatDate(project.desired_date)}</p>
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Data de Entrega</p>

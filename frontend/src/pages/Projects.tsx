@@ -80,6 +80,7 @@ const Projects = () => {
     { headerName: 'Projeto', field: 'name', flex: 2, minWidth: 200 },
     { headerName: 'Cliente', field: 'client_name', flex: 1.5, minWidth: 150 },
     { headerName: 'Data Início', field: 'start_date', flex: 1, minWidth: 120, valueFormatter: params => formatDate(params.value) },
+    { headerName: 'Data Fim Desejada', field: 'desired_date', flex: 1, minWidth: 140, valueFormatter: params => formatDate(params.value) },
     { headerName: 'Data Fim', field: 'close_date', flex: 1, minWidth: 120, valueFormatter: params => formatDate(params.value) },
     { headerName: 'Tarefas', field: 'tasks_count', flex: 0.8, minWidth: 90, type: 'numericColumn' },
     { headerName: 'Entregues', field: 'tasks_closed_count', flex: 0.8, minWidth: 100, type: 'numericColumn' },

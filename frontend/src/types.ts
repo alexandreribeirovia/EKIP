@@ -235,6 +235,7 @@ export interface DbProject {
   client_name: string;
   project_sub_group_name: string;
   start_date: string | null;
+  desired_date: string | null;
   close_date: string | null;
   tasks_count: number;
   tasks_closed_count: number;
