@@ -1,0 +1,635 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.access_platforms (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  client_id bigint NOT NULL,
+  client_name character varying NOT NULL,
+  user_id character varying NOT NULL,
+  platform_id bigint NOT NULL,
+  platform_name character varying NOT NULL,
+  environment_id bigint NOT NULL,
+  environment_name character varying NOT NULL,
+  role_id bigint NOT NULL,
+  role_name character varying NOT NULL,
+  risk_id bigint NOT NULL,
+  risk_name character varying NOT NULL,
+  description text,
+  expiration_date date,
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT access_platforms_pkey PRIMARY KEY (id),
+  CONSTRAINT platform_access_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(client_id),
+  CONSTRAINT access_platforms_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.access_platforms_details (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  access_platform_id bigint NOT NULL,
+  domain_id bigint NOT NULL,
+  domain_value character varying NOT NULL,
+  domain_tag character varying,
+  domain_type character varying NOT NULL,
+  CONSTRAINT access_platforms_details_pkey PRIMARY KEY (id),
+  CONSTRAINT details_access_platform_id_fkey FOREIGN KEY (access_platform_id) REFERENCES public.access_platforms(id)
+);
+CREATE TABLE public.access_repository (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  client_id bigint NOT NULL,
+  name character varying NOT NULL UNIQUE,
+  description text,
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT access_repository_pkey PRIMARY KEY (id),
+  CONSTRAINT access_repository_github_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(client_id)
+);
+CREATE TABLE public.access_repository_plataform (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  plataform_id bigint NOT NULL,
+  repository_id bigint,
+  CONSTRAINT access_repository_plataform_pkey PRIMARY KEY (id),
+  CONSTRAINT access_repository_github_plataform_plataform_id_fkey FOREIGN KEY (plataform_id) REFERENCES public.access_platforms(id),
+  CONSTRAINT access_repository_github_plataform_repository_id_fkey FOREIGN KEY (repository_id) REFERENCES public.access_repository(id)
+);
+CREATE TABLE public.assignments (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  task_id bigint NOT NULL,
+  assignee_id character varying NOT NULL,
+  team_id bigint,
+  assignee_name character varying,
+  team_name character varying,
+  current_estimate_seconds bigint,
+  time_worked bigint,
+  estimated_start_date timestamp with time zone,
+  start_date timestamp with time zone,
+  close_date timestamp with time zone,
+  is_closed boolean,
+  CONSTRAINT assignments_pkey PRIMARY KEY (id, task_id, assignee_id),
+  CONSTRAINT assignments_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(task_id)
+);
+CREATE TABLE public.boards (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  board_id bigint NOT NULL UNIQUE,
+  name character varying NOT NULL,
+  CONSTRAINT boards_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.boards_stages (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  board_id bigint NOT NULL,
+  name character varying NOT NULL,
+  stage_group character varying NOT NULL,
+  position integer NOT NULL,
+  description character varying,
+  stage_id bigint UNIQUE,
+  CONSTRAINT boards_stages_pkey PRIMARY KEY (id),
+  CONSTRAINT boards_stages_board_fk FOREIGN KEY (board_id) REFERENCES public.boards(board_id)
+);
+CREATE TABLE public.clients (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  client_id bigint NOT NULL UNIQUE,
+  name character varying NOT NULL UNIQUE,
+  projects_count integer,
+  time_total bigint,
+  CONSTRAINT clients_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.clients_projects (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  client_id bigint NOT NULL,
+  project_id bigint NOT NULL,
+  CONSTRAINT clients_projects_pkey PRIMARY KEY (id),
+  CONSTRAINT clients_projects_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(client_id),
+  CONSTRAINT clients_projects_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id)
+);
+CREATE TABLE public.domains (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  update_at timestamp with time zone DEFAULT now(),
+  type character varying NOT NULL,
+  value character varying NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  parent_id bigint,
+  description text,
+  icon character varying,
+  tag character varying NOT NULL,
+  CONSTRAINT domains_pkey PRIMARY KEY (id, type, tag)
+);
+CREATE TABLE public.evaluations (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  evaluation_model_id bigint NOT NULL,
+  name character varying NOT NULL,
+  owner_id character varying NOT NULL,
+  owner_name character varying NOT NULL,
+  user_id character varying NOT NULL,
+  user_name character varying NOT NULL,
+  period_start date,
+  period_end date,
+  status_id bigint,
+  is_closed boolean NOT NULL DEFAULT false,
+  is_pdi boolean NOT NULL DEFAULT false,
+  accepted boolean DEFAULT false,
+  accepted_at timestamp with time zone,
+  closed_at timestamp with time zone,
+  CONSTRAINT evaluations_pkey PRIMARY KEY (id),
+  CONSTRAINT evaluations_evaluation_model_id_fkey FOREIGN KEY (evaluation_model_id) REFERENCES public.evaluations_model(id)
+);
+CREATE TABLE public.evaluations_model (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  name character varying NOT NULL,
+  is_active boolean DEFAULT true,
+  description character varying,
+  CONSTRAINT evaluations_model_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.evaluations_projects (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  evaluation_id bigint NOT NULL,
+  project_id bigint NOT NULL,
+  CONSTRAINT evaluations_projects_pkey PRIMARY KEY (id),
+  CONSTRAINT evaluations_projects_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id),
+  CONSTRAINT evaluations_projects_evaluation_id_fkey FOREIGN KEY (evaluation_id) REFERENCES public.evaluations(id)
+);
+CREATE TABLE public.evaluations_questions_model (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  evaluation_id bigint NOT NULL,
+  question_id bigint NOT NULL,
+  category_order integer,
+  question_order integer,
+  subcategory_order integer,
+  CONSTRAINT evaluations_questions_model_pkey PRIMARY KEY (id),
+  CONSTRAINT evaluations_questions_model_evaluation_id_fkey FOREIGN KEY (evaluation_id) REFERENCES public.evaluations_model(id),
+  CONSTRAINT evaluations_questions_model_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.questions_model(id)
+);
+CREATE TABLE public.evaluations_questions_reply (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  evaluation_id bigint NOT NULL,
+  category character varying NOT NULL,
+  subcategory character varying,
+  question character varying NOT NULL,
+  score integer,
+  reply character varying,
+  yes_no boolean,
+  weight integer NOT NULL,
+  reply_type character varying NOT NULL,
+  category_id bigint NOT NULL,
+  subcategory_id bigint NOT NULL,
+  question_id bigint NOT NULL,
+  user_id character varying,
+  owner_id character varying,
+  CONSTRAINT evaluations_questions_reply_pkey PRIMARY KEY (id),
+  CONSTRAINT evaluations_questions_reply_evaluation_id_fkey FOREIGN KEY (evaluation_id) REFERENCES public.evaluations(id)
+);
+CREATE TABLE public.feedbacks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  feedback_user_id character varying NOT NULL,
+  feedback_user_name character varying NOT NULL,
+  owner_user_id character varying NOT NULL,
+  owner_user_name character varying NOT NULL,
+  project_id bigint,
+  project_name character varying,
+  type_id bigint NOT NULL,
+  type character varying,
+  public_comment text,
+  private_comment text,
+  feedback_date timestamp with time zone,
+  is_pdi boolean NOT NULL DEFAULT false,
+  accepted boolean,
+  accepted_at timestamp with time zone,
+  is_closed boolean NOT NULL DEFAULT false,
+  closed_at timestamp with time zone,
+  CONSTRAINT feedbacks_pkey PRIMARY KEY (id),
+  CONSTRAINT feedbacks_feedback_user_id_fkey FOREIGN KEY (feedback_user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.notifications (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  auth_user_id character varying,
+  title character varying NOT NULL,
+  message text NOT NULL,
+  type_id bigint NOT NULL,
+  type character varying NOT NULL,
+  source_type character varying,
+  source_id bigint,
+  audience character varying NOT NULL DEFAULT '"all"'::character varying,
+  link_url character varying,
+  CONSTRAINT notifications_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.notifications_all_users_state (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  notification_id bigint NOT NULL,
+  auth_user_id character varying,
+  is_read boolean DEFAULT false,
+  read_at timestamp with time zone,
+  is_deleted boolean,
+  deleted_at timestamp with time zone,
+  CONSTRAINT notifications_all_users_state_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_all_users_state_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES public.notifications(id)
+);
+CREATE TABLE public.off_days (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  off_days_id bigint NOT NULL UNIQUE,
+  day date NOT NULL,
+  description text,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT off_days_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.pdi (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  user_id character varying NOT NULL,
+  user_name character varying NOT NULL,
+  owner_id character varying NOT NULL,
+  owner_name character varying NOT NULL,
+  status_id bigint NOT NULL,
+  status character varying NOT NULL,
+  start_date date,
+  end_date date,
+  review_date date,
+  comments text,
+  name character varying NOT NULL,
+  feedback_id bigint,
+  evaluation_id bigint,
+  CONSTRAINT pdi_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.pdi_items (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  pdi_id bigint NOT NULL,
+  competency_id bigint NOT NULL,
+  level_current smallint,
+  level_target smallint,
+  goal_description text NOT NULL,
+  actions text NOT NULL,
+  due_date date,
+  progress numeric,
+  comments text,
+  CONSTRAINT pdi_items_pkey PRIMARY KEY (id),
+  CONSTRAINT pdi_items_pdi_id_fkey FOREIGN KEY (pdi_id) REFERENCES public.pdi(id)
+);
+CREATE TABLE public.projects (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  update_at timestamp with time zone DEFAULT now(),
+  project_id bigint NOT NULL UNIQUE,
+  start_date timestamp with time zone,
+  close_date timestamp with time zone,
+  is_closed boolean NOT NULL,
+  desired_date timestamp with time zone,
+  client_id bigint NOT NULL,
+  client_name character varying,
+  project_group_name character varying,
+  project_sub_group_name character varying,
+  tasks_count bigint,
+  tasks_count_progress double precision,
+  tasks_queued_count bigint,
+  tasks_working_on_count bigint,
+  tasks_closed_count bigint,
+  time_worked bigint,
+  time_pending bigint,
+  time_total bigint,
+  time_progress double precision,
+  is_active boolean,
+  name character varying,
+  CONSTRAINT projects_pkey PRIMARY KEY (project_id)
+);
+CREATE TABLE public.projects_owner (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  project_id bigint NOT NULL,
+  user_id character varying NOT NULL,
+  CONSTRAINT projects_owner_pkey PRIMARY KEY (id),
+  CONSTRAINT projects_owner_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id),
+  CONSTRAINT projects_owner_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.projects_phase (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  project_id bigint NOT NULL,
+  domains_id bigint NOT NULL,
+  expected_progress real,
+  progress real,
+  order smallint,
+  period integer NOT NULL,
+  CONSTRAINT projects_phase_pkey PRIMARY KEY (id),
+  CONSTRAINT projects_phase_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id)
+);
+CREATE TABLE public.questions_model (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  question character varying,
+  category_id bigint,
+  category character varying,
+  subcategory_id bigint,
+  subcategory character varying,
+  reply_type_id bigint,
+  weight integer,
+  required boolean DEFAULT false,
+  description text,
+  CONSTRAINT questions_model_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.quiz (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  title text NOT NULL,
+  description text,
+  is_active boolean NOT NULL DEFAULT false,
+  starts_at timestamp with time zone,
+  ends_at timestamp with time zone,
+  about_id bigint,
+  about text,
+  shuffle_questions boolean NOT NULL DEFAULT true,
+  shuffle_options boolean NOT NULL DEFAULT true,
+  attempt_limit integer,
+  pass_score integer,
+  owner_user_id character varying,
+  CONSTRAINT quiz_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.quiz_attempt (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  quiz_id bigint NOT NULL,
+  user_id character varying NOT NULL,
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  submitted_at timestamp with time zone,
+  status character varying NOT NULL DEFAULT 'in_progress'::character varying,
+  score integer,
+  total_points integer,
+  correct_count integer,
+  wrong_count integer,
+  time_spent_seconds integer,
+  metadata jsonb,
+  CONSTRAINT quiz_attempt_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_attempt_quiz_id_fkey FOREIGN KEY (quiz_id) REFERENCES public.quiz(id),
+  CONSTRAINT quiz_attempt_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.quiz_attempt_answer (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  attempt_id bigint NOT NULL,
+  question_id bigint NOT NULL,
+  answered_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_correct boolean,
+  points_earned integer DEFAULT 0,
+  time_spent_seconds integer,
+  CONSTRAINT quiz_attempt_answer_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_attempt_answer_attempt_id_fkey FOREIGN KEY (attempt_id) REFERENCES public.quiz_attempt(id),
+  CONSTRAINT quiz_attempt_answer_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.quiz_question(id)
+);
+CREATE TABLE public.quiz_attempt_answer_options (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  attempt_answer_id bigint NOT NULL,
+  option_id bigint NOT NULL,
+  CONSTRAINT quiz_attempt_answer_options_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_attempt_answer_options_attempt_answer_id_fkey FOREIGN KEY (attempt_answer_id) REFERENCES public.quiz_attempt_answer(id),
+  CONSTRAINT quiz_attempt_answer_options_option_id_fkey FOREIGN KEY (option_id) REFERENCES public.quiz_question_option(id)
+);
+CREATE TABLE public.quiz_participant (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  quiz_id bigint NOT NULL,
+  user_id character varying NOT NULL,
+  CONSTRAINT quiz_participant_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_participant_quiz_id_fkey FOREIGN KEY (quiz_id) REFERENCES public.quiz(id),
+  CONSTRAINT quiz_participant_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+CREATE TABLE public.quiz_question (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  quiz_id bigint NOT NULL,
+  question_text text NOT NULL,
+  hint text,
+  explanation text,
+  question_type character varying NOT NULL DEFAULT 'single_choice'::character varying,
+  points integer NOT NULL DEFAULT 1,
+  question_order integer NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT quiz_question_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_question_quiz_id_fkey FOREIGN KEY (quiz_id) REFERENCES public.quiz(id)
+);
+CREATE TABLE public.quiz_question_option (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  question_id bigint NOT NULL,
+  option_text text NOT NULL,
+  is_correct boolean NOT NULL DEFAULT false,
+  rationale text,
+  option_order integer NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT quiz_question_option_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_question_option_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.quiz_question(id)
+);
+CREATE TABLE public.risks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  project_id bigint NOT NULL,
+  type_id bigint NOT NULL,
+  priority_id bigint NOT NULL,
+  description text NOT NULL,
+  action_plan text NOT NULL,
+  start_date date NOT NULL,
+  forecast_date date,
+  close_date date,
+  status_id bigint,
+  owner_id character varying,
+  owner_name character varying,
+  manual_owner character varying,
+  CONSTRAINT risks_pkey PRIMARY KEY (id),
+  CONSTRAINT risks_projetct_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id)
+);
+CREATE TABLE public.risks_owner (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  user_id character varying,
+  manual_owner character varying,
+  risk_id bigint NOT NULL,
+  CONSTRAINT risks_owner_pkey PRIMARY KEY (id),
+  CONSTRAINT risks_owner_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT risks_owner_risk_id_fkey FOREIGN KEY (risk_id) REFERENCES public.risks(id)
+);
+CREATE TABLE public.sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  email text NOT NULL,
+  access_token text NOT NULL,
+  refresh_token text NOT NULL,
+  backend_refresh_token text UNIQUE,
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  last_used_at timestamp with time zone DEFAULT now(),
+  user_agent text,
+  ip_address text,
+  is_valid boolean DEFAULT true,
+  CONSTRAINT sessions_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.skills (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  update_at timestamp with time zone NOT NULL DEFAULT now(),
+  area text NOT NULL,
+  category text,
+  skill text,
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT skills_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.tags (
+  id bigint NOT NULL DEFAULT nextval('tags_id_seq'::regclass),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  name character varying NOT NULL UNIQUE,
+  color character varying,
+  CONSTRAINT tags_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.task_tags (
+  id bigint NOT NULL DEFAULT nextval('task_tags_id_seq'::regclass),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  task_id bigint NOT NULL DEFAULT nextval('task_tags_task_id_seq'::regclass),
+  tag_id bigint NOT NULL DEFAULT nextval('task_tags_tag_id_seq'::regclass),
+  CONSTRAINT task_tags_pkey PRIMARY KEY (id),
+  CONSTRAINT task_tags_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(task_id),
+  CONSTRAINT task_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tags(id)
+);
+CREATE TABLE public.tasks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL UNIQUE,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone DEFAULT now(),
+  task_id bigint NOT NULL UNIQUE,
+  title text,
+  is_closed boolean,
+  board_name text,
+  board_stage_name text,
+  gantt_bar_start_date timestamp with time zone,
+  gantt_bar_end_date timestamp with time zone,
+  desired_date timestamp with time zone,
+  desired_start_date timestamp with time zone,
+  desired_date_with_time timestamp with time zone,
+  project_id bigint,
+  project_name text,
+  client_name text,
+  responsible_id character varying,
+  responsible_name text,
+  current_estimate_seconds integer DEFAULT 0,
+  time_worked integer DEFAULT 0,
+  type_name character varying,
+  close_date timestamp with time zone,
+  user_id character varying,
+  billing_type character varying,
+  technology character varying,
+  project_group_name character varying,
+  project_sub_group_name character varying,
+  board_id bigint,
+  board_stage_id bigint,
+  CONSTRAINT tasks_pkey PRIMARY KEY (id, task_id),
+  CONSTRAINT tasks_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id)
+);
+CREATE TABLE public.temp_session (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  entity_id integer NOT NULL,
+  token_hash character varying NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  is_active boolean DEFAULT true,
+  type character varying,
+  max_access integer,
+  access_count integer,
+  CONSTRAINT temp_session_pkey PRIMARY KEY (id),
+  CONSTRAINT evaluation_accept_session_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.time_worked (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  time_worked_date date,
+  project_id bigint,
+  task_id bigint,
+  user_id character varying,
+  project_name character varying,
+  client_id bigint,
+  client_name character varying,
+  task_title character varying,
+  type_id bigint,
+  type_name character varying,
+  task_is_closed boolean,
+  task_close_date timestamp with time zone,
+  task_start_date timestamp with time zone,
+  task_state character varying,
+  task_current_estimate_seconds bigint,
+  automatic_time bigint,
+  manual_time bigint,
+  time bigint,
+  user_name character varying,
+  project_group_name character varying,
+  project_sub_group_name character varying,
+  CONSTRAINT time_worked_pkey PRIMARY KEY (id),
+  CONSTRAINT time_worked_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(task_id)
+);
+CREATE TABLE public.users (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  user_id character varying NOT NULL UNIQUE,
+  name character varying NOT NULL,
+  email character varying NOT NULL,
+  avatar_large_url character varying,
+  position character varying,
+  skill_id bigint,
+  on_vacation boolean,
+  birthday character varying,
+  phone character varying,
+  is_active boolean DEFAULT true,
+  in_company_since date,
+  log_hours boolean DEFAULT true,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users_skill (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  update_at timestamp with time zone DEFAULT now(),
+  skill_id bigint NOT NULL,
+  user_id character varying NOT NULL,
+  CONSTRAINT users_skill_pkey PRIMARY KEY (id),
+  CONSTRAINT users_skill_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT users_skill_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES public.skills(id)
+);
