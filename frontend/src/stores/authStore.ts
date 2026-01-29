@@ -38,7 +38,12 @@ interface AuthState {
   loading: boolean
   
   // Actions
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  login: (email: string, password: string, captchaToken?: string) => Promise<{ 
+    success: boolean
+    error?: string
+    requiresCaptcha?: boolean
+    failedAttempts?: number 
+  }>
   logout: () => Promise<void>
   updateUser: (user: Partial<User>) => void
   initializeAuth: () => Promise<void>
@@ -58,14 +63,15 @@ export const useAuthStore = create<AuthState>()(
       /**
        * Faz login via Backend API
        * Backend autentica com Supabase e retorna sessionId
+       * @param captchaToken - Token do Turnstile (obrigatório após 3 tentativas falhas)
        */
-      login: async (email: string, password: string) => {
+      login: async (email: string, password: string, captchaToken?: string) => {
         try {
           const response = await fetch(`${API_URL}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include', // Para receber o cookie httpOnly
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, captchaToken }),
           })
 
           const result = await response.json()
@@ -73,7 +79,9 @@ export const useAuthStore = create<AuthState>()(
           if (!result.success) {
             return { 
               success: false, 
-              error: result.error?.message || 'Erro ao fazer login' 
+              error: result.error?.message || 'Erro ao fazer login',
+              requiresCaptcha: result.requiresCaptcha || false,
+              failedAttempts: result.failedAttempts || 0,
             }
           }
 

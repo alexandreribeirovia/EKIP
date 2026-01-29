@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import { sessionAuth } from '@/middleware/sessionAuth'
 import { 
   createSession,
@@ -10,8 +11,34 @@ import {
   getUserSessions
 } from '@/lib/sessionStore'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { 
+  getLoginAttempts, 
+  incrementLoginAttempts, 
+  resetLoginAttempts,
+  LOGIN_ATTEMPT_CONFIG 
+} from '@/lib/loginAttemptStore'
+import { validatePasswordStrength } from '@/lib/passwordValidation'
 
 const router = Router()
+
+// Rate limiter específico para login (5 tentativas por IP a cada 15 minutos)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  limit: LOGIN_ATTEMPT_CONFIG.MAX_ATTEMPTS, // 5 tentativas
+  message: {
+    success: false,
+    error: {
+      message: 'Muitas tentativas de login. Aguarde 15 minutos antes de tentar novamente.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Usa IP real considerando proxies
+    return req.ip || req.headers['x-forwarded-for']?.toString().split(',')[0] || 'unknown'
+  },
+})
 
 // Usar cliente Supabase Admin centralizado (bypassa RLS)
 const supabase = supabaseAdmin
@@ -49,9 +76,10 @@ const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 dias em ms
  *       401:
  *         description: Credenciais inválidas
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email, password, captchaToken } = req.body
+    const clientIp = req.ip || req.headers['x-forwarded-for']?.toString().split(',')[0] || 'unknown'
 
     if (!email || !password) {
       return res.status(400).json({
@@ -60,21 +88,55 @@ router.post('/login', async (req, res) => {
       })
     }
 
-    // Autenticar via Supabase
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    // Verificar tentativas de login para este IP
+    const loginAttempts = await getLoginAttempts(clientIp)
+
+    // Se bloqueado (>= 5 tentativas), retornar erro
+    if (loginAttempts.isBlocked) {
+      return res.status(429).json({
+        success: false,
+        error: { 
+          message: 'Muitas tentativas de login. Aguarde 15 minutos antes de tentar novamente.',
+          code: 'RATE_LIMIT_EXCEEDED',
+        },
+      })
+    }
+
+    // Se precisa CAPTCHA (>= 3 tentativas) e não foi fornecido
+    if (loginAttempts.requiresCaptcha && !captchaToken) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          message: 'Verificação de segurança necessária',
+          code: 'CAPTCHA_REQUIRED',
+        },
+        requiresCaptcha: true,
+        failedAttempts: loginAttempts.attemptCount,
+      })
+    }
+
+    // Autenticar via Supabase (passando captchaToken se fornecido)
+    const signInOptions = captchaToken 
+      ? { email, password, options: { captchaToken } }
+      : { email, password }
+    
+    const { data, error } = await supabase.auth.signInWithPassword(signInOptions)
 
     if (error) {
       console.error('Login error:', error)
+      
+      // Incrementar contador de tentativas falhas
+      const updatedAttempts = await incrementLoginAttempts(clientIp, email)
+      
       return res.status(401).json({
         success: false,
         error: {
-          message: error.message === 'Invalid login credentials'
-            ? 'Email ou senha inválidos'
-            : error.message
+          // Sempre retornar mensagem genérica para evitar enumeração de usuários
+          message: 'Email ou senha inválidos',
+          code: 'INVALID_CREDENTIALS',
         },
+        requiresCaptcha: updatedAttempts.requiresCaptcha,
+        failedAttempts: updatedAttempts.attemptCount,
       })
     }
 
@@ -84,6 +146,9 @@ router.post('/login', async (req, res) => {
         error: { message: 'Erro ao criar sessão' },
       })
     }
+
+    // Login bem-sucedido - resetar contador de tentativas
+    await resetLoginAttempts(clientIp)
 
     const userId = data.user.id
     const userEmail = data.user.email || ''
@@ -98,7 +163,7 @@ router.post('/login', async (req, res) => {
       supabaseRefreshToken: data.session.refresh_token,
       expiresAt: data.session.expires_at || Math.floor(Date.now() / 1000) + 3600,
       userAgent: req.headers['user-agent'] || '',
-      ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || '',
+      ipAddress: clientIp,
     })
 
     if (!sessionResult) {
@@ -145,6 +210,54 @@ router.post('/login', async (req, res) => {
     })
   } catch (error) {
     console.error('Login error:', error)
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Erro interno do servidor' },
+    })
+  }
+})
+
+/**
+ * @swagger
+ * /api/auth/login-attempts:
+ *   get:
+ *     summary: Verificar tentativas de login para o IP atual
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Informações sobre tentativas de login
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     failedAttempts:
+ *                       type: number
+ *                     requiresCaptcha:
+ *                       type: boolean
+ *                     isBlocked:
+ *                       type: boolean
+ */
+router.get('/login-attempts', async (req, res) => {
+  try {
+    const clientIp = req.ip || req.headers['x-forwarded-for']?.toString().split(',')[0] || 'unknown'
+    const loginAttempts = await getLoginAttempts(clientIp)
+
+    return res.json({
+      success: true,
+      data: {
+        failedAttempts: loginAttempts.attemptCount,
+        requiresCaptcha: loginAttempts.requiresCaptcha,
+        isBlocked: loginAttempts.isBlocked,
+      },
+    })
+  } catch (error) {
+    console.error('Erro ao verificar tentativas de login:', error)
     return res.status(500).json({
       success: false,
       error: { message: 'Erro interno do servidor' },
@@ -826,8 +939,19 @@ router.patch('/users/:id', sessionAuth, async (req, res) => {
       }
     }
 
-    // Atualizar senha se fornecida
+    // Atualizar senha se fornecida (com validação de força)
     if (password) {
+      const passwordValidation = validatePasswordStrength(password)
+      if (!passwordValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: { 
+            message: passwordValidation.errors.join('. '),
+            code: 'WEAK_PASSWORD',
+            details: passwordValidation.errors,
+          },
+        })
+      }
       updateData.password = password
     }
 

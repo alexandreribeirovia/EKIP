@@ -11,6 +11,7 @@
     "@fullcalendar/interaction": "^6.1.18",
     "@fullcalendar/react": "^6.1.18",
     "@fullcalendar/resource-timeline": "^6.1.18",
+    "@marsidev/react-turnstile": "^1.4.1",
     "@supabase/supabase-js": "^2.54.0",
     "@tippyjs/react": "^4.2.6",
     "@types/canvas-confetti": "^1.9.0",

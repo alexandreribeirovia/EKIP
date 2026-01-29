@@ -1,14 +1,19 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Mail, AlertCircle, CheckCircle } from 'lucide-react'
+import { Mail, AlertCircle, CheckCircle, Shield } from 'lucide-react'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import logo from '../../img/logo.png'
+
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance | null>(null)
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -16,14 +21,28 @@ const ForgotPassword = () => {
     setError(null)
     setSuccess(null)
 
+    // Verificar CAPTCHA se configurado
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError('Por favor, complete a verificação de segurança.')
+      setIsLoading(false)
+      return
+    }
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
+      captchaToken: captchaToken || undefined,
     })
 
     setIsLoading(false)
 
     if (error) {
-      setError(error.message)
+      // Mensagem genérica para evitar enumeração de usuários
+      setError('Ocorreu um erro. Tente novamente.')
+      // Resetar CAPTCHA após erro
+      if (turnstileRef.current) {
+        turnstileRef.current.reset()
+      }
+      setCaptchaToken(null)
     } else {
       setSuccess('Se o e-mail estiver correto, você receberá um link para redefinir sua senha em breve.')
       setEmail('')
@@ -83,10 +102,36 @@ const ForgotPassword = () => {
                   </div>
                 </div>
 
+                {/* CAPTCHA Turnstile - sempre visível na recuperação de senha */}
+                {TURNSTILE_SITE_KEY && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <Shield className="w-4 h-4" />
+                      <span>Verificação de segurança</span>
+                    </div>
+                    <div className="flex justify-center">
+                      <Turnstile
+                        ref={turnstileRef}
+                        siteKey={TURNSTILE_SITE_KEY}
+                        onSuccess={(token) => setCaptchaToken(token)}
+                        onExpire={() => setCaptchaToken(null)}
+                        onError={() => {
+                          setCaptchaToken(null)
+                          setError('Erro na verificação de segurança. Tente novamente.')
+                        }}
+                        options={{
+                          theme: 'auto',
+                          size: 'normal',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || (TURNSTILE_SITE_KEY ? !captchaToken : false)}
                     className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
                     {isLoading ? (

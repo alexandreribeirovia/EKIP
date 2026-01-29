@@ -1,8 +1,26 @@
 import { useState, useEffect } from 'react'
-import { Eye, EyeOff, Lock, AlertCircle, CheckCircle } from 'lucide-react'
+import { Eye, EyeOff, Lock, AlertCircle, CheckCircle, Check, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
 import logo from '../../img/logo.png'
+
+// Requisitos de senha
+const PASSWORD_REQUIREMENTS = {
+  minLength: 8,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumber: true,
+  requireSymbol: true,
+}
+
+// Função para verificar requisitos de senha
+const checkPasswordRequirements = (password: string) => ({
+  minLength: password.length >= PASSWORD_REQUIREMENTS.minLength,
+  hasUppercase: /[A-Z]/.test(password),
+  hasLowercase: /[a-z]/.test(password),
+  hasNumber: /[0-9]/.test(password),
+  hasSymbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password),
+})
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('')
@@ -13,7 +31,11 @@ const ResetPassword = () => {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [, setHasValidSession] = useState(false)
+  const [showRequirements, setShowRequirements] = useState(false)
   const navigate = useNavigate()
+
+  const requirements = checkPasswordRequirements(password)
+  const allRequirementsMet = Object.values(requirements).every(Boolean)
 
   useEffect(() => {
     // This page should only be accessible during a password recovery flow.
@@ -36,9 +58,11 @@ const ResetPassword = () => {
       setError('As senhas não coincidem.')
       return
     }
-    if (password.length < 6) {
-        setError('A senha deve ter pelo menos 6 caracteres.')
-        return
+    
+    // Validar requisitos de senha
+    if (!allRequirementsMet) {
+      setError('A senha não atende a todos os requisitos de segurança.')
+      return
     }
 
     setIsLoading(true)
@@ -110,6 +134,8 @@ const ResetPassword = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setShowRequirements(true)}
+                  onBlur={() => setTimeout(() => setShowRequirements(false), 200)}
                   disabled={isLoading}
                   className="block w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Nova senha"
@@ -127,6 +153,37 @@ const ResetPassword = () => {
                   )}
                 </button>
               </div>
+              
+              {/* Requisitos de senha */}
+              {(showRequirements || password.length > 0) && (
+                <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                    Requisitos da senha:
+                  </p>
+                  <ul className="space-y-1">
+                    <li className={`flex items-center gap-2 text-xs ${requirements.minLength ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {requirements.minLength ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      Mínimo 8 caracteres
+                    </li>
+                    <li className={`flex items-center gap-2 text-xs ${requirements.hasUppercase ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {requirements.hasUppercase ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      Letra maiúscula (A-Z)
+                    </li>
+                    <li className={`flex items-center gap-2 text-xs ${requirements.hasLowercase ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {requirements.hasLowercase ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      Letra minúscula (a-z)
+                    </li>
+                    <li className={`flex items-center gap-2 text-xs ${requirements.hasNumber ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {requirements.hasNumber ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      Número (0-9)
+                    </li>
+                    <li className={`flex items-center gap-2 text-xs ${requirements.hasSymbol ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {requirements.hasSymbol ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      Símbolo especial (!@#$%...)
+                    </li>
+                  </ul>
+                </div>
+              )}
             </div>
 
             {/* Campo Confirmar Senha */}

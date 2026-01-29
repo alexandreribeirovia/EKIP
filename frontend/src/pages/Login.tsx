@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Shield } from 'lucide-react'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import logo from '../../img/logo.png'
 import loginBackground from '../../img/login_background.png'
 import { Link } from 'react-router-dom'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -11,7 +15,30 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [requiresCaptcha, setRequiresCaptcha] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const turnstileRef = useRef<TurnstileInstance | null>(null)
   const { login } = useAuthStore()
+
+  // Verificar tentativas de login ao carregar a página
+  useEffect(() => {
+    const checkLoginAttempts = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/auth/login-attempts`, {
+          credentials: 'include',
+        })
+        const result = await response.json()
+        if (result.success) {
+          setRequiresCaptcha(result.data.requiresCaptcha)
+          setFailedAttempts(result.data.failedAttempts)
+        }
+      } catch (err) {
+        console.error('Erro ao verificar tentativas de login:', err)
+      }
+    }
+    checkLoginAttempts()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,11 +46,32 @@ const Login = () => {
     setError(null)
 
     try {
+      // Se CAPTCHA é necessário mas não foi completado
+      if (requiresCaptcha && !captchaToken) {
+        setError('Por favor, complete a verificação de segurança.')
+        setIsLoading(false)
+        return
+      }
+
       // Usa o método login do authStore que chama o backend
-      const result = await login(email, password)
+      const result = await login(email, password, captchaToken || undefined)
 
       if (!result.success) {
         setError(result.error || 'Erro ao fazer login')
+        
+        // Atualizar estado de CAPTCHA baseado na resposta
+        if (result.requiresCaptcha !== undefined) {
+          setRequiresCaptcha(result.requiresCaptcha)
+        }
+        if (result.failedAttempts !== undefined) {
+          setFailedAttempts(result.failedAttempts)
+        }
+
+        // Resetar CAPTCHA após falha para forçar nova verificação
+        if (turnstileRef.current) {
+          turnstileRef.current.reset()
+        }
+        setCaptchaToken(null)
       }
       // Se sucesso, o authStore já atualizou o estado e o ProtectedRoute vai redirecionar
     } catch (err: unknown) {
@@ -122,6 +170,33 @@ const Login = () => {
                 Problema de acesso?
               </Link>
             </div>
+
+            {/* CAPTCHA Turnstile - aparece após 3 tentativas falhas */}
+            {requiresCaptcha && TURNSTILE_SITE_KEY && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                  <Shield className="w-4 h-4" />
+                  <span>Verificação de segurança necessária ({failedAttempts} tentativas)</span>
+                </div>
+                <div className="flex justify-center">
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onSuccess={(token) => setCaptchaToken(token)}
+                    onExpire={() => setCaptchaToken(null)}
+                    onError={() => {
+                      setCaptchaToken(null)
+                      setError('Erro na verificação de segurança. Tente novamente.')
+                    }}
+                    options={{
+                      theme: 'auto',
+                      size: 'normal',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Mensagem de erro */}
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-start gap-2">
