@@ -8,7 +8,6 @@ import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit, Eye }
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal';
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating';
 import { EmployeeEvaluationData } from '../types';
-import '../styles/main.css';
 
 interface ConsultantOption {
   value: string;

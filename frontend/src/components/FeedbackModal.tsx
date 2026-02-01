@@ -311,6 +311,11 @@ const FeedbackModal = ({ isOpen, onClose, onSuccess, preSelectedUser = null, fee
       return;
     }
 
+    if (!user.runrun_user_id) {
+      setError('Usuário não possui ID configurado. Faça logout e login novamente.');
+      return;
+    }
+
     if (!selectedFeedbackUser) {
       setError('Selecione o consultor que receberá o feedback');
       return;

@@ -13,7 +13,6 @@ import PDIModal from '../components/PDIModal'
 import HtmlCellRenderer from '../components/HtmlCellRenderer'
 import AccessModal from '../components/AccessModal'
 import apiClient from '../lib/apiClient'
-import '../styles/main.css'
 
 // Interface para acessos agrupados por cliente
 interface DbAccessClientGrouped {

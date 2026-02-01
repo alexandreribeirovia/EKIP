@@ -5,7 +5,6 @@ import { ColDef, RowClickedEvent } from 'ag-grid-community'
 import { Search, User, Users, UserCheck, UserX } from 'lucide-react'
 import { DbUser } from '../types'
 import * as apiClient from '../lib/apiClient'
-import '../styles/main.css';
 
 const Employees = () => {
   const navigate = useNavigate()

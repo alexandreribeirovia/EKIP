@@ -636,6 +636,8 @@ export interface QuizData {
   // Contagens (preenchidas no GET /api/quiz)
   question_count?: number;
   participant_count?: number;
+  // Flag indicando se o quiz já foi respondido por participantes
+  has_attempts?: boolean;
 }
 
 /**

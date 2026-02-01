@@ -7,7 +7,6 @@ import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit } from
 import { PdiData } from '@/types';
 import PDIModal from '@/components/PDIModal';
 import NotificationToast from '@/components/NotificationToast';
-import '@/styles/main.css';
 
 interface ConsultantOption {
   value: string;

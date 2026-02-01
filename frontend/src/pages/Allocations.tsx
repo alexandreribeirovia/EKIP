@@ -798,10 +798,15 @@ const handleDatesSet = () => {
                   options={consultantOptions}
                   onChange={(options) => setSelectedConsultants(options.map(o => o.value))}
                   placeholder="Filtrar consultor"
-                  className="text-sm w-full react-select-container"
+                  className="react-select-container"
                   classNamePrefix="react-select"
-                  menuPortalTarget={menuPortalTarget}
-                  menuPosition={'fixed'}
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                  menuPlacement="auto"
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                    menu: (base) => ({ ...base, zIndex: 9999 })
+                  }}
                 />
               </div>
             </div>
@@ -815,10 +820,15 @@ const handleDatesSet = () => {
                   options={availableProjects}
                   onChange={(options) => setSelectedProjects(options.map(o => o.value))}
                   placeholder="Filtrar projeto"
-                  className="text-sm w-full react-select-container"
+                  className="react-select-container"
                   classNamePrefix="react-select"
-                  menuPortalTarget={menuPortalTarget}
-                  menuPosition={'fixed'}
+                  menuPortalTarget={document.body}
+                  menuPosition="fixed"
+                  menuPlacement="auto"
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                    menu: (base) => ({ ...base, zIndex: 9999 })
+                  }}
                 />
               </div>
             </div>

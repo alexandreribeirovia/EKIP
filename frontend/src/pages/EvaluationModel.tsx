@@ -6,7 +6,6 @@ import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, FileText, Edit, CreditCard } from 'lucide-react';
 import { EvaluationData } from '../types';
 import EvaluationModelModal from '../components/EvaluationModelModal';
-import '../styles/main.css';
 
 const Evaluations = () => {
   const [evaluations, setEvaluations] = useState<EvaluationData[]>([]);

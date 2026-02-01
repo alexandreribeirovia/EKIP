@@ -33,7 +33,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { EvaluationData, CategoryData, QuestionData, ReplyTypeOption } from '../types';
-import '../styles/main.css';
 
 const EvaluationDetail = () => {
   const { id } = useParams<{ id: string }>();

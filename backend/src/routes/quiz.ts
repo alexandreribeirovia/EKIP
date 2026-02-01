@@ -20,6 +20,30 @@ const router = Router()
 router.use(sessionAuth)
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Verifica se um quiz possui tentativas (respostas de participantes)
+ * @param quizId - ID do quiz
+ * @returns true se existem tentativas, false caso contrário
+ */
+async function quizHasAttempts(quizId: number): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('quiz_attempt')
+    .select('id')
+    .eq('quiz_id', quizId)
+    .limit(1)
+
+  if (error) {
+    console.error('Erro ao verificar tentativas do quiz:', error)
+    return false
+  }
+
+  return data !== null && data.length > 0
+}
+
+// ============================================================================
 // QUIZ CRUD
 // ============================================================================
 
@@ -130,8 +154,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
       return {
         ...quiz,
-        questions_count: quiz.quiz_question?.[0]?.count || 0,
-        participants_count: participantCount,
+        question_count: quiz.quiz_question?.[0]?.count || 0,
+        participant_count: participantCount,
         completed_count: stats.completed_count,
         completion_rate: completionRate,
         average_score: stats.average_score,
@@ -200,11 +224,15 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
       })
     }
 
+    // Verificar se o quiz tem tentativas
+    const hasAttempts = await quizHasAttempts(parseInt(id))
+
     // Formatar contagens
     const formattedData = {
       ...quiz,
       question_count: quiz.quiz_question?.[0]?.count || 0,
       participant_count: quiz.quiz_participant?.[0]?.count || 0,
+      has_attempts: hasAttempts,
       quiz_question: undefined,
       quiz_participant: undefined
     }
@@ -634,6 +662,15 @@ router.post('/:quizId/questions', async (req: Request, res: Response, next: Next
       })
     }
 
+    // Verificar se o quiz tem tentativas (bloquear modificações)
+    const hasAttempts = await quizHasAttempts(parseInt(quizId))
+    if (hasAttempts) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Não é possível adicionar perguntas. Este quiz já foi respondido por participantes.', code: 'QUIZ_HAS_ATTEMPTS' }
+      })
+    }
+
     const {
       question_text,
       question_type = 'single_choice',
@@ -765,6 +802,15 @@ router.put('/:quizId/questions/:questionId', async (req: Request, res: Response,
       })
     }
 
+    // Verificar se o quiz tem tentativas (bloquear modificações)
+    const hasAttempts = await quizHasAttempts(parseInt(quizId))
+    if (hasAttempts) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Não é possível editar perguntas. Este quiz já foi respondido por participantes.', code: 'QUIZ_HAS_ATTEMPTS' }
+      })
+    }
+
     const {
       question_text,
       question_type,
@@ -834,6 +880,15 @@ router.delete('/:quizId/questions/:questionId', async (req: Request, res: Respon
       return res.status(400).json({
         success: false,
         error: { message: 'IDs são obrigatórios', code: 'INVALID_REQUEST' }
+      })
+    }
+
+    // Verificar se o quiz tem tentativas (bloquear modificações)
+    const hasAttempts = await quizHasAttempts(parseInt(quizId))
+    if (hasAttempts) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Não é possível excluir perguntas. Este quiz já foi respondido por participantes.', code: 'QUIZ_HAS_ATTEMPTS' }
       })
     }
 
@@ -970,12 +1025,23 @@ router.patch('/:quizId/questions/reorder', async (req: Request, res: Response, n
  */
 router.post('/:quizId/questions/:questionId/options', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { questionId } = req.params
+    const { quizId, questionId } = req.params
     if (!questionId) {
       return res.status(400).json({
         success: false,
         error: { message: 'ID da pergunta é obrigatório', code: 'INVALID_REQUEST' }
       })
+    }
+
+    // Verificar se o quiz tem tentativas (bloquear modificações)
+    if (quizId) {
+      const hasAttempts = await quizHasAttempts(parseInt(quizId))
+      if (hasAttempts) {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'Não é possível adicionar opções. Este quiz já foi respondido por participantes.', code: 'QUIZ_HAS_ATTEMPTS' }
+        })
+      }
     }
 
     const { option_text, is_correct = false, rationale } = req.body
@@ -1055,12 +1121,23 @@ router.post('/:quizId/questions/:questionId/options', async (req: Request, res: 
  */
 router.put('/:quizId/questions/:questionId/options/:optionId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { questionId, optionId } = req.params
+    const { quizId, questionId, optionId } = req.params
     if (!questionId || !optionId) {
       return res.status(400).json({
         success: false,
         error: { message: 'IDs são obrigatórios', code: 'INVALID_REQUEST' }
       })
+    }
+
+    // Verificar se o quiz tem tentativas (bloquear modificações)
+    if (quizId) {
+      const hasAttempts = await quizHasAttempts(parseInt(quizId))
+      if (hasAttempts) {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'Não é possível editar opções. Este quiz já foi respondido por participantes.', code: 'QUIZ_HAS_ATTEMPTS' }
+        })
+      }
     }
 
     const { option_text, is_correct, rationale, is_active } = req.body
@@ -1123,12 +1200,23 @@ router.put('/:quizId/questions/:questionId/options/:optionId', async (req: Reque
  */
 router.delete('/:quizId/questions/:questionId/options/:optionId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { questionId, optionId } = req.params
+    const { quizId, questionId, optionId } = req.params
     if (!questionId || !optionId) {
       return res.status(400).json({
         success: false,
         error: { message: 'IDs são obrigatórios', code: 'INVALID_REQUEST' }
       })
+    }
+
+    // Verificar se o quiz tem tentativas (bloquear modificações)
+    if (quizId) {
+      const hasAttempts = await quizHasAttempts(parseInt(quizId))
+      if (hasAttempts) {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'Não é possível excluir opções. Este quiz já foi respondido por participantes.', code: 'QUIZ_HAS_ATTEMPTS' }
+        })
+      }
     }
 
     const { error } = await supabaseAdmin

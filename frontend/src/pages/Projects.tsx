@@ -4,7 +4,6 @@ import { ColDef, RowClickedEvent } from 'ag-grid-community';
 import { Search, FolderOpen, FolderCheck, Layers } from 'lucide-react';
 import * as apiClient from '../lib/apiClient';
 import { DbProject } from '../types';
-import '../styles/main.css';
 import ProjectDetail from './ProjectDetail';
 import ProjectOwnersGridRenderer from '../components/ProjectOwnersGridRenderer'; 
 

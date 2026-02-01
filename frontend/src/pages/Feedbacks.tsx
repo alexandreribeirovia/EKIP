@@ -6,7 +6,6 @@ import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Edit, Eye, CheckCircle, Clock } from 'lucide-react';
 import FeedbackModal from '../components/FeedbackModal';
 import HtmlCellRenderer from '../components/HtmlCellRenderer';
-import '../styles/main.css';
 
 interface ConsultantOption {
   value: string;

@@ -266,6 +266,14 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       })
     }
 
+    if (!owner_user_id || !owner_user_name) {
+      console.error('Dados do proprietário ausentes:', { owner_user_id, owner_user_name })
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Dados do proprietário são obrigatórios. Faça logout e login novamente.', code: 'VALIDATION_ERROR' }
+      })
+    }
+
     const { data, error } = await supabaseAdmin
       .from('feedbacks')
       .insert({
@@ -284,6 +292,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     if (error) {
       console.error('Erro ao criar feedback:', error)
+      console.error('Payload enviado:', JSON.stringify(req.body, null, 2))
       return res.status(500).json({
         success: false,
         error: { message: error.message, code: 'SUPABASE_ERROR' }

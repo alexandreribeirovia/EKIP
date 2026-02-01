@@ -172,6 +172,7 @@ interface SortableQuestionProps {
   question: QuizQuestionData;
   index: number;
   isExpanded: boolean;
+  disabled?: boolean;
   onToggleExpand: () => void;
   onEditQuestion: (question: QuizQuestionData) => void;
   onDeleteQuestion: (questionId: number) => void;
@@ -185,6 +186,7 @@ const SortableQuestionItem = ({
   question,
   index,
   isExpanded,
+  disabled = false,
   onToggleExpand,
   onEditQuestion,
   onDeleteQuestion,
@@ -222,9 +224,13 @@ const SortableQuestionItem = ({
       {/* Header da Pergunta */}
       <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50">
         <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          {...(disabled ? {} : { ...attributes, ...listeners })}
+          className={`${
+            disabled 
+              ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+              : 'cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+          }`}
+          disabled={disabled}
         >
           <GripVertical className="w-5 h-5" />
         </button>
@@ -269,15 +275,25 @@ const SortableQuestionItem = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onEditQuestion(question)}
-            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-            title="Editar pergunta"
+            disabled={disabled}
+            className={`p-2 rounded-lg transition-colors ${
+              disabled 
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+            }`}
+            title={disabled ? 'Quiz já respondido' : 'Editar pergunta'}
           >
             <HelpCircle className="w-4 h-4" />
           </button>
           <button
             onClick={() => onDeleteQuestion(question.id)}
-            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-            title="Excluir pergunta"
+            disabled={disabled}
+            className={`p-2 rounded-lg transition-colors ${
+              disabled 
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                : 'text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+            }`}
+            title={disabled ? 'Quiz já respondido' : 'Excluir pergunta'}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -306,26 +322,39 @@ const SortableQuestionItem = ({
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => onToggleCorrect(option)}
+                    disabled={disabled}
                     className={`p-1.5 rounded-lg transition-colors ${
-                      option.is_correct
-                        ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30'
-                        : 'text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                      disabled
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                        : option.is_correct
+                          ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30'
+                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
                     }`}
-                    title={option.is_correct ? 'Remover como correta' : 'Marcar como correta'}
+                    title={disabled ? 'Quiz já respondido' : option.is_correct ? 'Remover como correta' : 'Marcar como correta'}
                   >
                     <CheckCircle className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => onEditOption(option)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                    title="Editar opção"
+                    disabled={disabled}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      disabled
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                        : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
+                    title={disabled ? 'Quiz já respondido' : 'Editar opção'}
                   >
                     <HelpCircle className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => onDeleteOption(option.id, question.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                    title="Excluir opção"
+                    disabled={disabled}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      disabled
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+                    }`}
+                    title={disabled ? 'Quiz já respondido' : 'Excluir opção'}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -338,13 +367,15 @@ const SortableQuestionItem = ({
             </p>
           )}
           
-          <button
-            onClick={() => onAddOption(question.id)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Adicionar Opção
-          </button>
+          {!disabled && (
+            <button
+              onClick={() => onAddOption(question.id)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Opção
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1055,27 +1086,39 @@ const QuizDetail = () => {
           {/* Perguntas Tab */}
           {activeTab === 'perguntas' && (
             <div className="space-y-4">
+              {/* Warning Banner quando quiz já foi respondido */}
+              {quiz.has_attempts && (
+                <div className="flex items-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    Este quiz já foi respondido por participantes. Não é possível adicionar, editar ou remover perguntas.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   Perguntas do Quiz
                 </h3>
-                <button
-                  onClick={() => {
-                    setQuestionToEdit(null);
-                    setQuestionForm({
-                      question_text: '',
-                      question_type: 'single_choice',
-                      hint: '',
-                      explanation: '',
-                      points: 1,
-                    });
-                    setShowQuestionModal(true);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Nova Pergunta
-                </button>
+                {!quiz.has_attempts && (
+                  <button
+                    onClick={() => {
+                      setQuestionToEdit(null);
+                      setQuestionForm({
+                        question_text: '',
+                        question_type: 'single_choice',
+                        hint: '',
+                        explanation: '',
+                        points: 1,
+                      });
+                      setShowQuestionModal(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nova Pergunta
+                  </button>
+                )}
               </div>
 
               {isLoadingQuestions ? (
@@ -1109,6 +1152,7 @@ const QuizDetail = () => {
                           question={question}
                           index={index}
                           isExpanded={expandedQuestions.has(question.id)}
+                          disabled={quiz.has_attempts}
                           onToggleExpand={() => {
                             setExpandedQuestions(prev => {
                               const newSet = new Set(prev);

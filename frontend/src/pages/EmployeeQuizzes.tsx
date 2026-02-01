@@ -23,7 +23,6 @@ import {
   BarChart3,
   Loader2
 } from 'lucide-react';
-import '../styles/main.css';
 
 interface QuizListData {
   id: number;

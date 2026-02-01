@@ -152,8 +152,23 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const userId = data.user.id
     const userEmail = data.user.email || ''
-    const userName = data.user.user_metadata?.['name'] || data.user.email || 'Usuário'
-    const userRole = data.user.user_metadata?.['role'] || 'user'
+    
+    // Buscar dados adicionais do usuário na tabela users
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('user_id, name, role, avatar_large_url')
+      .eq('email', userEmail)
+      .single()
+    
+    if (userError) {
+      console.warn('Usuário não encontrado na tabela users:', userError.message)
+    }
+
+    // Priorizar dados da tabela users, fallback para user_metadata
+    const userName = userData?.name || data.user.user_metadata?.['name'] || data.user.email || 'Usuário'
+    const userRole = userData?.role || data.user.user_metadata?.['role'] || 'user'
+    const runrunUserId = userData?.user_id || data.user.user_metadata?.['runrun_user_id']
+    const userAvatar = userData?.avatar_large_url || data.user.user_metadata?.['avatar']
 
     // Criar sessão segura no banco (tokens criptografados)
     const sessionResult = await createSession({
@@ -202,8 +217,8 @@ router.post('/login', loginLimiter, async (req, res) => {
           email: userEmail,
           name: userName,
           role: userRole,
-          avatar: data.user.user_metadata?.['avatar'],
-          runrun_user_id: data.user.user_metadata?.['runrun_user_id'],
+          avatar: userAvatar,
+          runrun_user_id: runrunUserId,
         },
         sessionId, // Frontend usa isso para as próximas requisições
       },

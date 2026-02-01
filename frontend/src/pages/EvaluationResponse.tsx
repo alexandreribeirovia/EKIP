@@ -981,7 +981,7 @@ const EvaluationResponse = () => {
   }
 
   return (
-    <div ref={presentationRef} className="h-full flex flex-col space-y-2 dark:bg-gray-900 pt-0">
+    <div ref={presentationRef} className="h-full flex flex-col space-y-2 bg-gray-50 dark:bg-gray-900 pt-0">
       {/* Notificação de Sucesso */}
       {successMessage && (
         <NotificationToast

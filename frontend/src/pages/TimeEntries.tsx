@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabaseClient';
 import Select from 'react-select';
 import { ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Clock, CheckCircle, Zap, TrendingUp, TrendingDown, Plus, Minus, Scale, Percent } from 'lucide-react';
 import { TimeEntryData, DailyTimeEntry, ConsultantOption } from '../types';
-import '../styles/main.css';
 
 const TimeEntries = () => {
   const [timeEntries, setTimeEntries] = useState<TimeEntryData[]>([]);

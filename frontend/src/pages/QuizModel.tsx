@@ -6,7 +6,6 @@ import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, FileText, Edit, ClipboardCheck, Users, HelpCircle } from 'lucide-react';
 import { QuizData } from '../types';
 import QuizModal from '../components/QuizModal';
-import '../styles/main.css';
 
 const QuizModel = () => {
   const [quizzes, setQuizzes] = useState<QuizData[]>([]);
@@ -153,19 +152,6 @@ const QuizModel = () => {
         <div className="flex items-center justify-center h-full">
           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
             <HelpCircle className="w-3 h-3 inline mr-1" />
-            {params.value || 0}
-          </span>
-        </div>
-      ),
-    },
-    {
-      headerName: 'Participantes',
-      field: 'participant_count',
-      width: 130,
-      cellRenderer: (params: any) => (
-        <div className="flex items-center justify-center h-full">
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-            <Users className="w-3 h-3 inline mr-1" />
             {params.value || 0}
           </span>
         </div>
