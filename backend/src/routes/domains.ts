@@ -24,17 +24,17 @@ const getSupabaseClient = (req: Request) => {
  *         schema:
  *           type: string
  *           enum: [active, inactive, all]
- *         description: Filtrar por status do domínio (legado)
+ *         description: "Filtrar por status do domínio (legado)"
  *       - in: query
  *         name: type
  *         schema:
  *           type: string
- *         description: Filtrar por tipo do domínio (ex: pdi_competencies, pdi_status)
+ *         description: "Filtrar por tipo do domínio (ex: pdi_competencies, pdi_status)"
  *       - in: query
  *         name: is_active
  *         schema:
  *           type: boolean
- *         description: Filtrar por domínios ativos/inativos
+ *         description: "Filtrar por domínios ativos/inativos"
  *     responses:
  *       200:
  *         description: Lista de domínios com informações do parent
