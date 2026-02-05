@@ -15,6 +15,24 @@ import ProjectProgressModal from '../components/ProjectProgressModal.tsx';
 import RiskModal from '../components/RiskModal.tsx';
 import AccessModal from '../components/AccessModal.tsx';
 import HtmlCellRenderer from '../components/HtmlCellRenderer.tsx';
+import { usePermissionStore } from '../stores/permissionStore';
+
+// Configuração das abas com permissões
+type ProjectTabKey = 'tracking' | 'tasks' | 'risks' | 'status-report' | 'access'
+
+interface ProjectTabConfig {
+  key: ProjectTabKey
+  label: string
+  permissionKey: string
+}
+
+const PROJECT_TAB_CONFIG: ProjectTabConfig[] = [
+  { key: 'tracking', label: 'Acompanhamento', permissionKey: 'projects' },
+  { key: 'tasks', label: 'Tarefas do Projeto', permissionKey: 'projects.tasks' },
+  { key: 'risks', label: 'Riscos/Ações', permissionKey: 'projects.risks' },
+  { key: 'status-report', label: 'Status Report', permissionKey: 'projects.statusreport' },
+  { key: 'access', label: 'Acesso', permissionKey: 'projects' },
+]
 
 interface SelectOption {
   value: string;
@@ -551,6 +569,7 @@ interface TaskStatusCount {
 }
 
 const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
+  const { hasScreenAccess, isAdmin } = usePermissionStore();
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [risks, setRisks] = useState<DbRisk[]>([]);
@@ -564,7 +583,19 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [projectPhases, setProjectPhases] = useState<DbProjectPhase[]>([]);
   const [isLoadingPhases, setIsLoadingPhases] = useState(true);
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState('tracking');
+  
+  // Filtrar tabs baseado em permissões
+  const visibleTabs = useMemo(() => {
+    if (isAdmin) return PROJECT_TAB_CONFIG
+    return PROJECT_TAB_CONFIG.filter(tab => hasScreenAccess(tab.permissionKey))
+  }, [isAdmin, hasScreenAccess])
+  
+  // Tab ativa - inicia com a primeira tab visível
+  const getInitialTab = (): ProjectTabKey => {
+    return visibleTabs.length > 0 ? visibleTabs[0].key : 'tracking'
+  }
+  
+  const [activeTab, setActiveTab] = useState<ProjectTabKey>(getInitialTab);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const statusReportRef = useRef<HTMLDivElement>(null);
   
@@ -2377,58 +2408,21 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
         <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="flex justify-between items-center -mb-px px-6">
             <div className="flex">
-              <button
-                onClick={() => setActiveTab('tracking')}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                  activeTab === 'tracking'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Acompanhamento
-              </button>
-              <button
-                onClick={() => setActiveTab('tasks')}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                  activeTab === 'tasks'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
-                }`}
-              >
-                Tarefas do Projeto
-              </button>
-              <button
-                onClick={() => setActiveTab('risks')}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                  activeTab === 'risks'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
-                }`}
-              >
-                Riscos/Ações
-              </button>
-             
-              <button
-                onClick={() => setActiveTab('status-report')}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                  activeTab === 'status-report'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
-                }`}
-              >
-                Status Report
-              </button>
-
-              <button
-                onClick={() => setActiveTab('access')}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'access'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
-                }`}
-              >
-                Acesso
-              </button>
+              {visibleTabs.map((tab, index) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                    index < visibleTabs.length - 1 ? 'mr-8' : ''
+                  } ${
+                    activeTab === tab.key
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-300 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
             
             <button

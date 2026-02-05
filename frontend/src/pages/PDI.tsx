@@ -7,6 +7,7 @@ import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit } from
 import { PdiData } from '@/types';
 import PDIModal from '@/components/PDIModal';
 import NotificationToast from '@/components/NotificationToast';
+import { ProtectedAction } from '@/components/ProtectedComponents';
 
 interface ConsultantOption {
   value: string;
@@ -496,13 +497,15 @@ const PDI = () => {
 
           {/* Botão Novo PDI */}
           <div className="flex items-end">
-            <button
-              onClick={handleCreatePdi}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              Novo PDI
-            </button>
+            <ProtectedAction screenKey="employees.pdi" action="create">
+              <button
+                onClick={handleCreatePdi}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                Novo PDI
+              </button>
+            </ProtectedAction>
           </div>
         </div>
 

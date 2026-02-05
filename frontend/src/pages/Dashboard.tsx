@@ -175,7 +175,7 @@ const ManagementDashboard = () => {
       // Removed 'status' from selection as it doesn't exist
       const [projectsRes, usersRes, risksRes, evaluationsRes] = await Promise.all([
         supabase.from('projects').select('id, name, is_closed'),
-        supabase.from('users').select('user_id, name, position, avatar_large_url').eq('is_active', true).not('position', 'ilike', '%Gestor%'),
+        supabase.from('employees').select('user_id, name, position, avatar_large_url').eq('is_active', true).not('position', 'ilike', '%Gestor%'),
         // Fetch all open risks to count them
         supabase.from('risks').select('id, status_id'), 
         // Fetch all evaluations to filter in memory or by status_id

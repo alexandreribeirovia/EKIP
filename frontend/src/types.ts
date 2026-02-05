@@ -165,7 +165,7 @@ export interface DbUser {
     name: string;
   } | null;
   in_company_since?: string;
-  users_skill?: Array<{
+  employees_skill?: Array<{
     id: string;
     skills: {
       id: string;

@@ -1,0 +1,110 @@
+/**
+ * [ARIBEIRO] 06/11/2025 - RUNRUN TAGS IMPORT (UPSERT por name)
+ * Carrega tags do Runrun.it e faz UPSERT em public.tags (chave: name).
+ *
+ * Exemplo de chamada:
+ *   https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_tags_import
+ *
+ * Requer variáveis de ambiente:
+ *   - SUPABASE_URL
+ *   - SUPABASE_SERVICE_ROLE_KEY
+ *   - RUNRUNIT_APP_KEY
+ *   - RUNRUNIT_USER_TOKEN
+ */
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+
+type RunrunTag = {
+  name: string;
+  color: string | null;
+};
+
+function normalizeColor(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (!v) return null;
+  // Mantém como veio; se quiser normalizar: return v.toUpperCase();
+  return v;
+}
+
+Deno.serve(async (_req) => {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const appKey = Deno.env.get('RUNRUNIT_APP_KEY');
+    const userToken = Deno.env.get('RUNRUNIT_USER_TOKEN');
+
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response(JSON.stringify({ error: 'SUPABASE_URL/KEY não configurados.' }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 500,
+      });
+    }
+    if (!appKey || !userToken) {
+      return new Response(JSON.stringify({ error: 'RUNRUNIT_APP_KEY/USER_TOKEN não configurados.' }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 500,
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Base URL bate com o seu print do Postman
+    const runrun = axios.create({
+      baseURL: 'https://secure.runrun.it',
+      headers: {
+        'App-Key': appKey,
+        'User-Token': userToken,
+      },
+      timeout: 30000,
+    });
+
+    // 1) Busca tags no Runrun.it
+    const resp = await runrun.get<RunrunTag[]>('/api/tags');
+    const tags = Array.isArray(resp.data) ? resp.data : [];
+    if (tags.length === 0) {
+      return new Response(JSON.stringify({ message: 'Nenhuma tag encontrada no Runrun.it.' }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    // 2) Mapeia para o formato da tabela
+    const nowIso = new Date().toISOString(); // opcional: atualizar updated_at manualmente
+    const rows = tags.map((t) => ({
+      name: t.name,
+      color: normalizeColor(t.color),
+      updated_at: nowIso, // se seu schema já atualiza via trigger, pode remover esta linha
+      // created_at: fica a cargo do default do banco na primeira inserção
+    }));
+
+    // 3) UPSERT por name
+    const { error } = await supabase
+      .from('tags')
+      .upsert(rows, {
+        onConflict: 'name',
+        ignoreDuplicates: false, // queremos atualizar se existir
+        // returning: 'minimal'  // descomente para reduzir payload de volta
+      });
+
+    if (error) {
+      throw new Error(`Erro ao salvar tags no Supabase: ${error.message}`);
+    }
+
+    return new Response(
+      JSON.stringify({
+        message: `Tags importadas com sucesso.`,
+        total_from_runrun: tags.length,
+        upserted: rows.length,
+      }),
+      { headers: { 'Content-Type': 'application/json' }, status: 200 }
+    );
+  } catch (err: any) {
+    console.error('Erro na execução da função:', err?.message || err);
+    return new Response(JSON.stringify({ error: String(err?.message || err) }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+});

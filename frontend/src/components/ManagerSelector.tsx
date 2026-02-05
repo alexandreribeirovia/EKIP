@@ -21,7 +21,7 @@ const ManagerSelector = ({ projectId, currentOwners, onOwnerChange, onError }: M
     const fetchManagers = async () => {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('users')
+        .from('employees')
         .select('*')
         .ilike('position', '%Gestor%')
         .eq('is_active', true)

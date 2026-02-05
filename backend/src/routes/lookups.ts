@@ -24,13 +24,13 @@ router.use(sessionAuth)
 router.get('/users', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('users')
+      .from('employees')
       .select('user_id, name, email, position')
       .eq('is_active', true)
       .order('name')
 
     if (error) {
-      console.error('Erro ao buscar usuários:', error)
+      console.error('Erro ao buscar funcionários:', error)
       return res.status(500).json({
         success: false,
         error: { message: error.message, code: 'SUPABASE_ERROR' }
@@ -59,7 +59,7 @@ router.get('/users', async (_req: Request, res: Response, next: NextFunction) =>
 router.get('/managers', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('users')
+      .from('employees')
       .select('user_id, name, email, position')
       .eq('is_active', true)
       .order('name')

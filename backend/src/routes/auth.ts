@@ -153,22 +153,62 @@ router.post('/login', loginLimiter, async (req, res) => {
     const userId = data.user.id
     const userEmail = data.user.email || ''
     
-    // Buscar dados adicionais do usuário na tabela users
-    const { data: userData, error: userError } = await supabase
+    // Buscar dados do usuário da plataforma na nova tabela users (por UUID)
+    let { data: platformUser, error: platformUserError } = await supabase
       .from('users')
-      .select('user_id, name, role, avatar_large_url')
-      .eq('email', userEmail)
+      .select('id, name, email, avatar_url, role, profile_id, employee_id')
+      .eq('id', userId)
       .single()
     
-    if (userError) {
-      console.warn('Usuário não encontrado na tabela users:', userError.message)
+    // Se não encontrar na tabela users, criar registro
+    if (platformUserError && platformUserError.code === 'PGRST116') {
+      console.log('Usuário não encontrado em public.users, criando registro...')
+      
+      // Buscar dados do funcionário (se existir) para vincular
+      const { data: employeeData } = await supabase
+        .from('employees')
+        .select('user_id, name, avatar_large_url')
+        .eq('email', userEmail)
+        .single()
+      
+      // Criar registro na tabela users (usuários da plataforma)
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: userEmail,
+          name: employeeData?.name || data.user.user_metadata?.['name'] || userEmail.split('@')[0],
+          avatar_url: employeeData?.avatar_large_url || data.user.user_metadata?.['avatar'],
+          role: data.user.user_metadata?.['role'] || 'user',
+          employee_id: employeeData?.user_id || null,
+          is_active: true,
+        })
+        .select()
+        .single()
+      
+      if (createError) {
+        console.error('Erro ao criar registro em public.users:', createError)
+      } else {
+        platformUser = newUser
+      }
     }
 
-    // Priorizar dados da tabela users, fallback para user_metadata
-    const userName = userData?.name || data.user.user_metadata?.['name'] || data.user.email || 'Usuário'
-    const userRole = userData?.role || data.user.user_metadata?.['role'] || 'user'
-    const runrunUserId = userData?.user_id || data.user.user_metadata?.['runrun_user_id']
-    const userAvatar = userData?.avatar_large_url || data.user.user_metadata?.['avatar']
+    // Buscar dados complementares do funcionário se houver vínculo
+    let employeeAvatar: string | null = null
+    if (platformUser?.employee_id) {
+      const { data: empData } = await supabase
+        .from('employees')
+        .select('avatar_large_url')
+        .eq('user_id', platformUser.employee_id)
+        .single()
+      employeeAvatar = empData?.avatar_large_url || null
+    }
+
+    // Montar dados do usuário
+    const userName = platformUser?.name || data.user.user_metadata?.['name'] || userEmail
+    const userRole = platformUser?.role || data.user.user_metadata?.['role'] || 'user'
+    const userAvatar = platformUser?.avatar_url || employeeAvatar || data.user.user_metadata?.['avatar']
+    const employeeId = platformUser?.employee_id || null
 
     // Criar sessão segura no banco (tokens criptografados)
     const sessionResult = await createSession({
@@ -218,7 +258,8 @@ router.post('/login', loginLimiter, async (req, res) => {
           name: userName,
           role: userRole,
           avatar: userAvatar,
-          runrun_user_id: runrunUserId,
+          employee_id: employeeId,
+          runrun_user_id: employeeId, // Compatibilidade com frontend
         },
         sessionId, // Frontend usa isso para as próximas requisições
       },
@@ -318,21 +359,22 @@ router.get('/me', sessionAuth, async (req, res) => {
 
     const user = userData.user
 
-    // Buscar dados adicionais da tabela public.users (avatar_large_url, runrun_user_id)
+    // Buscar dados do usuário da plataforma (nova tabela users)
+    const { data: platformUser } = await supabase
+      .from('users')
+      .select('name, avatar_url, role, profile_id, employee_id')
+      .eq('id', session.userId)
+      .maybeSingle()
+
+    // Buscar dados do funcionário se houver vínculo
     let avatar_large_url: string | undefined
-    let runrun_user_id: string | undefined
-
-    if (user.email) {
-      const { data: profileData } = await supabase
-        .from('users')
-        .select('avatar_large_url, runrun_user_id')
-        .eq('email', user.email)
-        .maybeSingle()
-
-      if (profileData) {
-        avatar_large_url = profileData.avatar_large_url || undefined
-        runrun_user_id = profileData.runrun_user_id || undefined
-      }
+    if (platformUser?.employee_id) {
+      const { data: empData } = await supabase
+        .from('employees')
+        .select('avatar_large_url')
+        .eq('user_id', platformUser.employee_id)
+        .single()
+      avatar_large_url = empData?.avatar_large_url || undefined
     }
 
     return res.json({
@@ -341,11 +383,12 @@ router.get('/me', sessionAuth, async (req, res) => {
         user: {
           id: user.id,
           email: user.email,
-          name: user.user_metadata?.['name'] || user.email,
-          role: user.user_metadata?.['role'] || 'user',
-          avatar: user.user_metadata?.['avatar'],
-          avatar_large_url,
-          runrun_user_id,
+          name: platformUser?.name || user.user_metadata?.['name'] || user.email,
+          role: platformUser?.role || user.user_metadata?.['role'] || 'user',
+          avatar: platformUser?.avatar_url || avatar_large_url || user.user_metadata?.['avatar'],
+          employee_id: platformUser?.employee_id || null,
+          runrun_user_id: platformUser?.employee_id || null, // Compatibilidade com frontend
+          profile_id: platformUser?.profile_id || null,
         },
       },
     })
@@ -439,6 +482,13 @@ router.post('/refresh', async (req, res) => {
     // Buscar dados atualizados do usuário
     const { data: userData } = await supabase.auth.admin.getUserById(session.userId)
 
+    // Buscar dados da tabela public.users para obter employee_id
+    const { data: platformUser } = await supabaseAdmin
+      .from('users')
+      .select('employee_id, name, role, avatar_url')
+      .eq('id', session.userId)
+      .single()
+
     return res.json({
       success: true,
       data: {
@@ -449,7 +499,8 @@ router.post('/refresh', async (req, res) => {
           name: userData.user.user_metadata?.['name'] || userData.user.email,
           role: userData.user.user_metadata?.['role'] || 'user',
           avatar: userData.user.user_metadata?.['avatar'],
-          runrun_user_id: userData.user.user_metadata?.['runrun_user_id'],
+          runrun_user_id: platformUser?.employee_id || userData.user.user_metadata?.['runrun_user_id'],
+          employee_id: platformUser?.employee_id || null,
         } : null,
       },
     })
@@ -690,7 +741,7 @@ router.get('/users', sessionAuth, async (req, res) => {
       })
     }
 
-    // Listar todos os usuários
+    // Listar todos os usuários do auth.users
     const { data, error } = await supabase.auth.admin.listUsers()
 
     if (error) {
@@ -701,16 +752,52 @@ router.get('/users', sessionAuth, async (req, res) => {
       })
     }
 
-    const users = data.users.map((user) => ({
-      id: user.id,
-      email: user.email || '',
-      name: user.user_metadata?.['name'] || user.email || 'Sem nome',
-      role: user.user_metadata?.['role'] || 'user',
-      status: user.user_metadata?.['status'] || 'active',
-      avatar: user.user_metadata?.['avatar'],
-      runrun_user_id: user.user_metadata?.['runrun_user_id'],
-      created_at: user.created_at,
-    }))
+    // Buscar dados da nova tabela users (profile_id, employee_id, etc.)
+    const userIds = data.users.map(u => u.id)
+    const { data: platformUsersData } = await supabase
+      .from('users')
+      .select('id, name, avatar_url, role, profile_id, employee_id, is_active, access_profiles(name)')
+      .in('id', userIds)
+
+    // Criar mapa de id -> dados do usuário da plataforma
+    const platformUserMap = new Map<string, {
+      name: string | null
+      avatar_url: string | null
+      role: string | null
+      profile_id: number | null
+      profile_name: string | null
+      employee_id: string | null
+      is_active: boolean
+    }>()
+    platformUsersData?.forEach(u => {
+      const profileName = (u.access_profiles as any)?.name || null
+      platformUserMap.set(u.id, {
+        name: u.name,
+        avatar_url: u.avatar_url,
+        role: u.role,
+        profile_id: u.profile_id,
+        profile_name: profileName,
+        employee_id: u.employee_id,
+        is_active: u.is_active,
+      })
+    })
+
+    const users = data.users.map((user) => {
+      const platformUser = platformUserMap.get(user.id)
+      return {
+        id: user.id,
+        email: user.email || '',
+        name: platformUser?.name || user.user_metadata?.['name'] || user.email || 'Sem nome',
+        role: platformUser?.role || user.user_metadata?.['role'] || 'user',
+        status: user.user_metadata?.['status'] || 'active',
+        avatar: platformUser?.avatar_url || user.user_metadata?.['avatar'],
+        employee_id: platformUser?.employee_id || null,
+        profile_id: platformUser?.profile_id || null,
+        profile_name: platformUser?.profile_name || null,
+        is_active: platformUser?.is_active ?? true,
+        created_at: user.created_at,
+      }
+    })
 
     return res.json({
       success: true,
@@ -777,7 +864,7 @@ router.post('/users', sessionAuth, async (req, res) => {
       })
     }
 
-    const { email, name, role = 'user' } = req.body
+    const { email, name, role = 'user', profile_id, employee_id } = req.body
 
     if (!email || !name) {
       return res.status(400).json({
@@ -786,19 +873,25 @@ router.post('/users', sessionAuth, async (req, res) => {
       })
     }
 
-    // Buscar dados adicionais do usuário na tabela 'users' do schema 'public'
-    const { data: userData, error: fetchUserError } = await supabase
-      .from('users')
-      .select('avatar_large_url, user_id')
-      .eq('email', email)
-      .single()
-
-    if (fetchUserError && fetchUserError.code !== 'PGRST116') { // Ignora erro 'user not found'
-      console.error('Error fetching user data from public.users:', fetchUserError)
-      // Decide se quer bloquear a criação ou continuar sem os dados
+    // Buscar dados do funcionário na tabela employees (se existir por email ou employee_id)
+    let employeeData: { user_id: string; avatar_large_url: string | null } | null = null
+    if (employee_id) {
+      const { data } = await supabase
+        .from('employees')
+        .select('user_id, avatar_large_url')
+        .eq('user_id', employee_id)
+        .single()
+      employeeData = data
+    } else {
+      const { data } = await supabase
+        .from('employees')
+        .select('user_id, avatar_large_url')
+        .eq('email', email)
+        .maybeSingle()
+      employeeData = data
     }
 
-    // Convidar usuário por e-mail
+    // Convidar usuário por e-mail (cria em auth.users)
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(
       email,
       {
@@ -806,8 +899,6 @@ router.post('/users', sessionAuth, async (req, res) => {
           name,
           role,
           status: 'active',
-          avatar: userData?.avatar_large_url || null,
-          runrun_user_id: userData?.user_id || null,
         }
       }
     )
@@ -820,16 +911,36 @@ router.post('/users', sessionAuth, async (req, res) => {
       })
     }
 
+    // Criar registro na nova tabela users (usuários da plataforma)
+    const { error: createUserError } = await supabase
+      .from('users')
+      .insert({
+        id: data.user.id,
+        email: email,
+        name: name,
+        avatar_url: employeeData?.avatar_large_url || null,
+        role: role,
+        profile_id: profile_id || null,
+        employee_id: employeeData?.user_id || employee_id || null,
+        is_active: true,
+      })
+
+    if (createUserError) {
+      console.error('Error creating user in public.users:', createUserError)
+      // Não falha a operação, apenas loga
+    }
+
     return res.status(201).json({
       success: true,
       data: {
         user: {
           id: data.user.id,
           email: data.user.email,
-          name: data.user.user_metadata?.['name'],
-          role: data.user.user_metadata?.['role'],
-          status: data.user.user_metadata?.['status'],
-          runrun_user_id: data.user.user_metadata?.['runrun_user_id'],
+          name: name,
+          role: role,
+          status: 'active',
+          employee_id: employeeData?.user_id || employee_id || null,
+          profile_id: profile_id || null,
         },
       },
     })
@@ -907,47 +1018,25 @@ router.patch('/users/:id', sessionAuth, async (req, res) => {
       })
     }
 
-    const { name, role, status, password } = req.body
+    const { name, role, status, password, profile_id, employee_id } = req.body
 
     const updateData: {
-      user_metadata?: Record<string, any> // Alterado para 'any' para aceitar null
+      user_metadata?: Record<string, any>
       password?: string
       email?: string
     } = {}
 
-    // Obter dados atuais do usuário para pegar o email
+    // Obter dados atuais do usuário
     const { data: currentUserData, error: getUserError } = await supabase.auth.admin.getUserById(id)
     if (getUserError) {
       return res.status(404).json({ success: false, error: { message: 'Usuário não encontrado' } })
     }
     const currentUser = currentUserData.user
-    const currentEmail = currentUser.email
 
-    // Se houver um email, buscar dados do RunRun
-    if (currentEmail) {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('avatar_large_url, user_id')
-        .eq('email', currentEmail)
-        .single()
-
-      if (userError && userError.code !== 'PGRST116') {
-        console.error('Error fetching user data from public.users:', userError)
-      }
-
-      // Adicionar dados do RunRun aos metadados a serem atualizados
-      updateData.user_metadata = {
-        ...currentUser?.user_metadata,
-        avatar: userData?.avatar_large_url || currentUser?.user_metadata?.['avatar'],
-        runrun_user_id: userData?.user_id || currentUser?.user_metadata?.['runrun_user_id'],
-      }
-    }
-
-
-    // Atualizar metadados se fornecidos
+    // Atualizar metadados no auth.users se fornecidos
     if (name || role || status) {
       updateData.user_metadata = {
-        ...updateData.user_metadata, // Manter dados do RunRun
+        ...currentUser?.user_metadata,
         ...(name && { name }),
         ...(role && { role }),
         ...(status && { status }),
@@ -970,26 +1059,81 @@ router.patch('/users/:id', sessionAuth, async (req, res) => {
       updateData.password = password
     }
 
-    const { data, error } = await supabase.auth.admin.updateUserById(id, updateData)
-
-    if (error) {
-      console.error('Error updating user:', error)
-      return res.status(400).json({
-        success: false,
-        error: { message: error.message },
-      })
+    // Atualizar auth.users se houver metadados ou senha
+    if (Object.keys(updateData).length > 0) {
+      const { error } = await supabase.auth.admin.updateUserById(id, updateData)
+      if (error) {
+        console.error('Error updating auth user:', error)
+        return res.status(400).json({
+          success: false,
+          error: { message: error.message },
+        })
+      }
     }
+
+    // Atualizar dados na nova tabela users (usuários da plataforma)
+    const platformUserUpdate: Record<string, any> = {}
+    if (name !== undefined) platformUserUpdate['name'] = name
+    if (role !== undefined) platformUserUpdate['role'] = role
+    if (profile_id !== undefined) platformUserUpdate['profile_id'] = profile_id
+    if (employee_id !== undefined) platformUserUpdate['employee_id'] = employee_id
+
+    if (Object.keys(platformUserUpdate).length > 0) {
+      // Verificar se existe registro na tabela users
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', id)
+        .single()
+
+      if (existingUser) {
+        // Atualizar registro existente
+        const { error: updateError } = await supabase
+          .from('users')
+          .update(platformUserUpdate)
+          .eq('id', id)
+
+        if (updateError) {
+          console.error('Error updating user in public.users:', updateError)
+        }
+      } else {
+        // Criar registro se não existir
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: id,
+            email: currentUser.email || '',
+            name: name || currentUser.user_metadata?.['name'] || currentUser.email || '',
+            role: role || 'user',
+            profile_id: profile_id || null,
+            employee_id: employee_id || null,
+            is_active: true,
+          })
+
+        if (insertError) {
+          console.error('Error inserting user in public.users:', insertError)
+        }
+      }
+    }
+
+    // Buscar dados atualizados
+    const { data: updatedPlatformUser } = await supabase
+      .from('users')
+      .select('name, role, profile_id, employee_id, avatar_url')
+      .eq('id', id)
+      .single()
 
     return res.json({
       success: true,
       data: {
         user: {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.user_metadata?.['name'],
-          role: data.user.user_metadata?.['role'],
-          status: data.user.user_metadata?.['status'],
-          runrun_user_id: data.user.user_metadata?.['runrun_user_id'],
+          id: id,
+          email: currentUser.email,
+          name: updatedPlatformUser?.name || name || currentUser.user_metadata?.['name'],
+          role: updatedPlatformUser?.role || role || currentUser.user_metadata?.['role'],
+          status: status || currentUser.user_metadata?.['status'],
+          employee_id: updatedPlatformUser?.employee_id || null,
+          profile_id: updatedPlatformUser?.profile_id || null,
         },
       },
     })

@@ -37,12 +37,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const supabase = getSupabaseClient(req)
     let query = supabase
-      .from('users')
+      .from('employees')
       .select(`
         *,
-        users_skill (
+        employees_skill (
           id,
-          skills (
+          skills!employees_skill_skill_id_fkey (
             id,
             area,
             category,
@@ -103,12 +103,12 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     const supabase = getSupabaseClient(req)
     const { data, error } = await supabase
-      .from('users')
+      .from('employees')
       .select(`
         *,
-        users_skill (
+        employees_skill (
           id,
-          skills (
+          skills!employees_skill_skill_id_fkey (
             id,
             area,
             category,
@@ -170,11 +170,11 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
     delete updateData.id
     delete updateData.user_id
     delete updateData.created_at
-    delete updateData.users_skill
+    delete updateData.employees_skill
 
     const supabase = getSupabaseClient(req)
     const { data, error } = await supabase
-      .from('users')
+      .from('employees')
       .update(updateData)
       .eq('user_id', id)
       .select()
@@ -220,7 +220,7 @@ router.get('/:id/skills', async (req: Request, res: Response, next: NextFunction
 
     const supabase = getSupabaseClient(req)
     const { data, error } = await supabase
-      .from('users_skill')
+      .from('employees_skill')
       .select(`
         id,
         skill_id,
@@ -297,7 +297,7 @@ router.post('/:id/skills', async (req: Request, res: Response, next: NextFunctio
 
     const supabase = getSupabaseClient(req)
     const { data, error } = await supabase
-      .from('users_skill')
+      .from('employees_skill')
       .insert({ user_id: id, skill_id })
       .select(`
         id,
@@ -345,7 +345,7 @@ router.post('/:id/skills', async (req: Request, res: Response, next: NextFunctio
  *         required: true
  *         schema:
  *           type: number
- *         description: ID do registro users_skill
+ *         description: ID do registro employees_skill
  *     responses:
  *       200:
  *         description: Habilidade removida
@@ -356,7 +356,7 @@ router.delete('/:id/skills/:skillId', async (req: Request, res: Response, next: 
 
     const supabase = getSupabaseClient(req)
     const { error } = await supabase
-      .from('users_skill')
+      .from('employees_skill')
       .delete()
       .eq('user_id', id)
       .eq('id', skillId)

@@ -308,21 +308,21 @@ router.post('/confirm/:token', async (req: Request, res: Response, next: NextFun
     // NOTIFICAÇÃO: Criar notificação para o gerente informando o aceite
     // ========================================================================
     try {
-      // 1. Buscar o email do owner na tabela users usando o slug (user_id)
-      const { data: ownerUser, error: ownerError } = await supabaseAdmin
-        .from('users')
+      // 1. Buscar o email do owner na tabela employees usando o slug (user_id)
+      const { data: ownerEmployee, error: ownerError } = await supabaseAdmin
+        .from('employees')
         .select('email')
         .eq('user_id', feedback.owner_user_id)
         .single()
 
-      if (ownerError || !ownerUser?.email) {
-        console.error('Erro ao buscar email do owner na tabela users:', ownerError)
+      if (ownerError || !ownerEmployee?.email) {
+        console.error('Erro ao buscar email do owner na tabela employees:', ownerError)
       } else {
         // 2. Buscar o UUID do auth.users na tabela sessions usando o email
         const { data: ownerSession, error: sessionError } = await supabaseAdmin
           .from('sessions')
           .select('user_id')
-          .eq('email', ownerUser.email)
+          .eq('email', ownerEmployee.email)
           .limit(1)
           .single()
 

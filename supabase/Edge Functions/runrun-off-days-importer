@@ -1,0 +1,124 @@
+/**
+ * [ARIBEIRO] 10/08/2025 - CRIAÇÃO
+ * Busca, processa e salva todos os feriados
+ * Exemplo de chamada
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun-off-days-importer
+ * 
+ */
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+console.log('Função "runrun-off-days-importer" (com filtro de data) inicializada.');
+Deno.serve(async (req)=>{
+  // Trata a requisição CORS pre-flight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+      }
+    });
+  }
+  try {
+    // --- Lógica para ler o parâmetro startDate da URL ---
+    const url = new URL(req.url);
+    const startDateParam = url.searchParams.get('startDate'); // Ex: '2025-08-01'
+    let filterDescription = "todos os registros";
+    if (startDateParam) {
+      filterDescription = `registros a partir de ${startDateParam}`;
+    }
+    // --- Fim da lógica do parâmetro ---
+    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': Deno.env.get("RUNRUNIT_APP_KEY"),
+        'User-Token': Deno.env.get("RUNRUNIT_USER_TOKEN")
+      }
+    });
+    // 1. BUSCA TODOS OS FERIADOS DA API DO RUNRUN.IT
+    console.log("Buscando lista de feriados (off_days) da API do Runrun.it...");
+    const response = await runrunApi.get('/api/v1.0/off_days');
+    let offDays = response.data; // Usamos 'let' para poder reatribuir após o filtro
+    if (!offDays || offDays.length === 0) {
+      const message = "Nenhum feriado encontrado na API.";
+      console.log(message);
+      return new Response(JSON.stringify({
+        message,
+        count: 0
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        },
+        status: 200
+      });
+    }
+    console.log(`${offDays.length} feriados recebidos da API.`);
+    // --- FILTRA OS DADOS SE O PARÂMETRO startDate FOI FORNECIDO ---
+    if (startDateParam) {
+      console.log(`Aplicando filtro: buscando feriados com data >= ${startDateParam}`);
+      const filterDate = new Date(startDateParam + 'T00:00:00Z'); // Adiciona tempo para garantir a comparação correta
+      offDays = offDays.filter((day)=>{
+        const dayDate = new Date(day.day + 'T00:00:00Z');
+        return dayDate >= filterDate;
+      });
+      console.log(`${offDays.length} feriados restantes após o filtro.`);
+    }
+    // --- Fim do filtro ---
+    if (offDays.length === 0) {
+      const message = "Nenhum feriado corresponde ao filtro de data fornecido.";
+      console.log(message);
+      return new Response(JSON.stringify({
+        message,
+        count: 0
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        },
+        status: 200
+      });
+    }
+    // 2. MAPEIA OS DADOS PARA O FORMATO DA TABELA DO SUPABASE
+    const dataForSupabase = offDays.map((day)=>({
+        off_days_id: day.id,
+        day: day.day,
+        description: day.description,
+        updated_at: new Date().toISOString()
+      }));
+    // 3. INSERE/ATUALIZA OS DADOS NA TABELA `off_days`
+    // Agora o conflito é verificado na coluna 'off_days_id'
+    const { error, count } = await supabase.from('off_days').upsert(dataForSupabase, {
+      onConflict: 'off_days_id'
+    });
+    if (error) {
+      console.error('Erro ao salvar os feriados no Supabase:', error.message);
+      throw error;
+    }
+    const finalCount = count ?? dataForSupabase.length;
+    const successMessage = `Sincronização de feriados concluída. ${finalCount} registros processados (filtro: ${filterDescription}).`;
+    console.log(successMessage);
+    return new Response(JSON.stringify({
+      message: successMessage,
+      count: finalCount
+    }), {
+      headers: {
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*'
+      },
+      status: 200
+    });
+  } catch (err) {
+    console.error('Erro fatal e inesperado na execução da função:', err.message);
+    return new Response(JSON.stringify({
+      error: err.message
+    }), {
+      headers: {
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*'
+      },
+      status: 500
+    });
+  }
+});

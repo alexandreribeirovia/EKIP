@@ -121,7 +121,7 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
         id,
         quiz_id,
         user_id,
-        users (
+        employees (
           name,
           email
         )
@@ -262,7 +262,7 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
         participant: {
           id: participant.id,
           user_id: participant.user_id,
-          user_name: (participant.users as any)?.name || participant.user_id
+          user_name: (participant.employees as any)?.name || participant.user_id
         },
         attempts: {
           count: attemptsCount,

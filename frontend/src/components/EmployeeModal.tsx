@@ -401,11 +401,11 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
     setIsLoadingSkills(true);
     try {
       const { data, error } = await supabase
-        .from('users_skill')
+        .from('employees_skill')
         .select(`
           id,
           skill_id,
-          skills!inner (
+          skills!employees_skill_skill_id_fkey (
             id,
             area,
             category,
@@ -471,7 +471,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
     
     try {
       const { error } = await supabase
-        .from('users_skill')
+        .from('employees_skill')
         .insert({
           user_id: employee.user_id,
           skill_id: skillId
@@ -493,7 +493,7 @@ const EmployeeModal = ({ employee, isOpen, onClose }: EmployeeModalProps) => {
   const removeSkillFromUser = async (userSkillId: string) => {
     try {
       const { error } = await supabase
-        .from('users_skill')
+        .from('employees_skill')
         .delete()
         .eq('id', userSkillId);
 

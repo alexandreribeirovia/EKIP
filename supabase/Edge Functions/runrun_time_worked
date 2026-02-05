@@ -1,0 +1,171 @@
+/**
+ * [ARIBEIRO] 10/08/2025 - CRIAÇÃO
+ * Busca, processa e salva horas trabalhadas
+ * Exemplo de chamada por dias 
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_time_worked?days=1
+ * Exemplo de chamada por período 
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_time_worked?startDate=2025-08-01&endDate=2025-08-30
+ * 
+ */ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+console.log('Função "runrun-time-worked-importer" (com lotes) inicializada.');
+function formatDateToLocal(dateString) {
+  if (!dateString) return null;
+  return dateString.substring(0, 19);
+}
+function formatDateToYYYYMMDD(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+Deno.serve(async (req)=>{
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+      }
+    });
+  }
+  try {
+    const url = new URL(req.url);
+    const daysParam = url.searchParams.get('days');
+    const startDateParam = url.searchParams.get('startDate');
+    const endDateParam = url.searchParams.get('endDate');
+    let startDate, endDate, filterDescription;
+    const today = new Date();
+    if (startDateParam && endDateParam) {
+      startDate = new Date(startDateParam);
+      endDate = new Date(endDateParam);
+      filterDescription = `no intervalo de ${startDateParam} a ${endDateParam}`;
+    } else {
+      const days = daysParam ? parseInt(daysParam, 10) : 7;
+      endDate = new Date(today);
+      startDate = new Date();
+      startDate.setDate(today.getDate() - (days - 1));
+      filterDescription = `nos últimos ${days} dias`;
+    }
+    const formattedStartDate = formatDateToYYYYMMDD(startDate);
+    const formattedEndDate = formatDateToYYYYMMDD(endDate);
+    console.log(`Período de busca definido de ${formattedStartDate} a ${formattedEndDate}.`);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': Deno.env.get("RUNRUNIT_APP_KEY"),
+        'User-Token': Deno.env.get("RUNRUNIT_USER_TOKEN")
+      }
+    });
+    const requestUrl = `${runrunApi.defaults.baseURL}/api/v1.0/reports/time_worked?period_type=custom_range&period_start=${formattedStartDate}&period_end=${formattedEndDate}&group_by=date,project_id,task_id,user_id`;
+    console.log(`Chamando a API do Runrun.it: ${requestUrl}`);
+    const response = await runrunApi.get('/api/v1.0/reports/time_worked', {
+      params: {
+        period_type: 'custom_range',
+        period_start: formattedStartDate,
+        period_end: formattedEndDate,
+        group_by: 'date,project_id,task_id,user_id'
+      }
+    });
+    const timeWorkedEntries = response.data.result;
+    if (!timeWorkedEntries || timeWorkedEntries.length === 0) {
+      const message = "Nenhum registro de tempo trabalhado encontrado para o período consultado.";
+      console.log(message);
+      return new Response(JSON.stringify({
+        message,
+        count: 0
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': '*'
+        },
+        status: 200
+      });
+    }
+    console.log(`${timeWorkedEntries.length} registros recebidos da API. Iniciando processamento em lotes...`);
+    // --- LÓGICA DE PROCESSAMENTO EM LOTES ---
+    const batchSize = 2000; // Define o tamanho de cada lote
+    let totalProcessedCount = 0;
+    for(let i = 0; i < timeWorkedEntries.length; i += batchSize){
+      const batch = timeWorkedEntries.slice(i, i + batchSize);
+      const batchNumber = i / batchSize + 1;
+      console.log(`- Processando lote ${batchNumber} (${batch.length} registros)...`);
+      const dataForSupabase = batch.map((entry)=>({
+          time_worked_date: entry.date,
+          project_id: entry.project_id,
+          task_id: entry.task_id,
+          user_id: entry.user_id,
+          project_name: entry.project_name,
+          project_group_name: entry.project_group_name,
+          project_sub_group_name: entry.project_sub_group_name,
+          client_id: entry.client_id,
+          client_name: entry.client_name,
+          task_title: entry.task_title,
+          type_id: entry.type_id,
+          type_name: entry.type_name,
+          task_is_closed: entry.task_is_closed,
+          task_close_date: formatDateToLocal(entry.task_close_date),
+          task_start_date: formatDateToLocal(entry.task_start_date),
+          task_state: entry.task_state,
+          task_current_estimate_seconds: entry.task_current_estimate_seconds,
+          automatic_time: entry.automatic_time,
+          manual_time: entry.manual_time,
+          time: entry.time,
+          updated_at: new Date().toISOString(),
+          user_name: entry.user_name
+        }));
+      const { error, count } = await supabase.from('time_worked').upsert(dataForSupabase, {
+        onConflict: 'time_worked_date,task_id,user_id'
+      });
+      if (error) {
+        console.error(`Erro ao salvar o lote ${batchNumber} no Supabase:`, error.message);
+        // Decide se quer parar ou continuar em caso de erro
+        throw new Error(`Falha no processamento do lote ${batchNumber}: ${error.message}`);
+      }
+      const processedInBatch = count ?? batch.length;
+      totalProcessedCount += processedInBatch;
+      console.log(`- Lote ${batchNumber} salvo com sucesso. ${processedInBatch} registros afetados.`);
+    }
+    // --- FIM DA LÓGICA DE LOTES ---
+    const successMessage = `Sincronização concluída. ${totalProcessedCount} registros de tempo trabalhado processados (filtro: ${filterDescription}).`;
+    console.log(successMessage);
+    try {
+      const { data: notifId, error: notifErr } = await supabase.rpc('create_notification', {
+        p_title: 'Carga tarefas concluída com sucesso!',
+        p_message: successMessage,
+        p_type_value: 'success',
+        p_user_email: null,
+        p_link_url: null,
+        p_source_type: 'system'
+      });
+      if (notifErr) {
+        console.error('Falha ao criar notificação:', notifErr.message);
+      } else {
+        console.log('Notificação criada. ID:', notifId);
+      }
+    } catch (e) {
+      console.error('Exceção ao criar notificação:', e?.message ?? e);
+    }
+    return new Response(JSON.stringify({
+      message: successMessage,
+      count: totalProcessedCount
+    }), {
+      headers: {
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*'
+      },
+      status: 200
+    });
+  } catch (err) {
+    console.error('Erro fatal e inesperado na execução da função:', err.message);
+    return new Response(JSON.stringify({
+      error: err.message
+    }), {
+      headers: {
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Origin': '*'
+      },
+      status: 500
+    });
+  }
+});

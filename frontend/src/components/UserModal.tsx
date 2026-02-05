@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, User, Mail, Shield, KeyRound, UserCheck, UserX } from 'lucide-react'
+import { X, User, Mail, Shield, KeyRound, UserCheck, UserX, Lock } from 'lucide-react'
 import NotificationToast from './NotificationToast'
 import * as apiClient from '../lib/apiClient'
 
@@ -10,12 +10,21 @@ interface UserModalProps {
   userId?: string // Se presente, é edição
 }
 
+interface AccessProfile {
+  id: number
+  name: string
+  description: string | null
+  is_system: boolean
+  is_active: boolean
+}
+
 interface UserData {
   id?: string
   email: string
   name: string
   role: 'admin' | 'user' | 'manager'
   status: 'active' | 'inactive'
+  profile_id: number | null
 }
 
 const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
@@ -24,12 +33,37 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
     name: '',
     role: 'user',
     status: 'active',
+    profile_id: null,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
+  const [accessProfiles, setAccessProfiles] = useState<AccessProfile[]>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
 
   const isEditMode = !!userId
+
+  // Buscar perfis de acesso
+  useEffect(() => {
+    if (isOpen) {
+      void fetchAccessProfiles()
+    }
+  }, [isOpen])
+
+  const fetchAccessProfiles = async () => {
+    setLoadingProfiles(true)
+    try {
+      const result = await apiClient.get<AccessProfile[]>('/api/access-profiles')
+      if (result.success && result.data) {
+        // Filtrar apenas perfis ativos
+        setAccessProfiles(result.data.filter((p: AccessProfile) => p.is_active))
+      }
+    } catch (err) {
+      console.error('Erro ao buscar perfis de acesso:', err)
+    } finally {
+      setLoadingProfiles(false)
+    }
+  }
 
   // Buscar dados do usuário se for edição
   useEffect(() => {
@@ -42,6 +76,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
         name: '',
         role: 'user',
         status: 'active',
+        profile_id: null,
       })
     }
   }, [userId, isEditMode])
@@ -69,6 +104,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
             name: user.name || '',
             role: user.role || 'user',
             status: user.status || 'active',
+            profile_id: user.profile_id || null,
           })
         }
       }
@@ -89,6 +125,12 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
       return
     }
 
+    // Validação do perfil de acesso (obrigatório)
+    if (!formData.profile_id) {
+      setError('Perfil de acesso é obrigatório')
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -98,6 +140,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
           name: formData.name,
           role: formData.role,
           status: formData.status,
+          profile_id: formData.profile_id,
         })
 
         if (!result.success) {
@@ -114,6 +157,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
           email: formData.email,
           name: formData.name,
           role: formData.role,
+          profile_id: formData.profile_id,
         })
 
         if (!result.success) {
@@ -283,11 +327,11 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
               </div>
             )}
 
-            {/* Perfil */}
+            {/* Perfil (Role legado) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 <Shield className="w-4 h-4 inline mr-1" />
-                Perfil: *
+                Tipo de Usuário: *
               </label>
               <select
                 value={formData.role}
@@ -300,6 +344,37 @@ const UserModal = ({ isOpen, onClose, onSuccess, userId }: UserModalProps) => {
                 <option value="manager">Gerente</option>
                 <option value="admin">Administrador</option>
               </select>
+            </div>
+
+            {/* Perfil de Acesso */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <Lock className="w-4 h-4 inline mr-1" />
+                Perfil de Acesso: *
+              </label>
+              <select
+                value={formData.profile_id || ''}
+                onChange={(e) => setFormData({ ...formData, profile_id: e.target.value ? Number(e.target.value) : null })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+                required
+                disabled={isLoading || loadingProfiles}
+              >
+                <option value="">Selecione um perfil...</option>
+                {accessProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                    {profile.is_system ? ' (Sistema)' : ''}
+                  </option>
+                ))}
+              </select>
+              {loadingProfiles && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Carregando perfis...
+                </p>
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Define as permissões de acesso às telas e funcionalidades do sistema
+              </p>
             </div>
 
             {/* Ações adicionais para edição */}

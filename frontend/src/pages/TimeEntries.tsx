@@ -82,7 +82,7 @@ const TimeEntries = () => {
   const fetchConsultants = async () => {
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('employees')
         .select('user_id, name, is_active')
         .eq('log_hours', true)
         .order('name', { ascending: true });

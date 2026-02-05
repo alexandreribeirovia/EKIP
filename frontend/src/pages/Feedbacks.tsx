@@ -6,6 +6,7 @@ import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Edit, Eye, CheckCircle, Clock } from 'lucide-react';
 import FeedbackModal from '../components/FeedbackModal';
 import HtmlCellRenderer from '../components/HtmlCellRenderer';
+import { ProtectedAction } from '../components/ProtectedComponents';
 
 interface ConsultantOption {
   value: string;
@@ -456,13 +457,15 @@ const Feedbacks = () => {
 
           {/* Botão Novo Feedback */}
           <div className="flex items-end">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Feedback
-            </button>
+            <ProtectedAction screenKey="employees.feedbacks" action="create">
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Feedback
+              </button>
+            </ProtectedAction>
           </div>
         </div>
 

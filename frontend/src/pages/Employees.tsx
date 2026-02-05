@@ -91,7 +91,7 @@ const Employees = () => {
 
       // Filtro por habilidade - busca no texto das habilidades
       const matchesSkill = !selectedSkill || 
-        formatUserSkills(employee.users_skill || [])
+        formatUserSkills(employee.employees_skill || [])
           .toLowerCase()
           .includes(selectedSkill.toLowerCase());
 
@@ -148,11 +148,11 @@ const Employees = () => {
     },
     {
       headerName: 'Habilidades',
-      field: 'users_skill',
+      field: 'employees_skill',
       flex: 2,
       minWidth: 200,
       cellRenderer: (params: any) => {
-        const skills = formatUserSkills(params.data.users_skill || []);
+        const skills = formatUserSkills(params.data.employees_skill || []);
         return (
           <div className="truncate" title={skills}>
             {skills}

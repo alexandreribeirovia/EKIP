@@ -1,0 +1,143 @@
+/**
+ * [ARIBEIRO] 25/11/2025 - CRIAÇÃO
+ * Busca, processa e salva clientes e seus relacionamentos com projetos
+ * Exemplo de chamada
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_clients_import
+ * 
+ */ 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+
+console.log('Função "runrun-clients-importer" inicializada.');
+
+async function processAllClients(supabase, api) {
+  let totalProcessed = 0;
+  let offset = 0;
+  const limit = 100;
+
+  while(true){
+    try {
+      // Busca clientes com paginação
+      const { data: batch } = await api.get('/api/v1.0/clients', {
+        params: {
+          limit,
+          offset
+          // 'sort' e 'order' podem ser adicionados se a API suportar para clientes, 
+          // mas geralmente o padrão é ID asc ou criado
+        }
+      });
+
+      if (!batch || batch.length === 0) break;
+
+      console.log(`- [Clients] Lote recebido: ${batch.length} itens (offset ${offset}).`);
+
+      // 1. Preparar dados para tabela 'clients'
+      const clientRows = batch.map((c) => ({
+          id: c.id, // ID do Runrun é usado como ID da tabela (conforme padrão visto na imagem)
+          client_id: c.id, // Redundância solicitada (coluna explicita no diagrama)
+          name: c.name ?? null,
+          projects_count: c.projects_count ?? 0,
+          time_total: c.time_total ?? 0,
+          // A API de clientes no exemplo não mostrou created_at na raiz, 
+          // então atualizamos o updated_at para o momento da execução.
+          updated_at: new Date().toISOString()
+      }));
+
+      // 2. Preparar dados para tabela 'clients_projects' (Relacionamento N:N)
+      const relationRows = [];
+      batch.forEach((c) => {
+        if (c.project_ids && Array.isArray(c.project_ids)) {
+          c.project_ids.forEach((projectId) => {
+            relationRows.push({
+              client_id: c.id,
+              project_id: projectId,
+              updated_at: new Date().toISOString()
+              // Nota: created_at geralmente é gerado pelo banco se for null na inserção
+            });
+          });
+        }
+      });
+
+      // --- UPSERT CLIENTS ---
+      const { error: clientsError } = await supabase.from('clients').upsert(clientRows, {
+        onConflict: 'id' // Assume-se que 'id' é a chave primária mapeada para o ID do Runrun
+      });
+
+      if (clientsError) {
+        console.error(`Erro ao salvar lote de Clientes [offset ${offset}]:`, clientsError.message);
+      } else {
+        console.log(`- [Clients] ${clientRows.length} clientes salvos/atualizados.`);
+      }
+
+      // --- UPSERT CLIENTS_PROJECTS ---
+      if (relationRows.length > 0) {
+        // IMPORTANTE: Para o upsert funcionar na tabela de relacionamento sem criar duplicatas,
+        // é necessário que exista uma restrição única (Unique Constraint) no banco 
+        // nas colunas (client_id, project_id).
+        const { error: relationError } = await supabase.from('clients_projects').upsert(relationRows, {
+          onConflict: 'client_id, project_id', // Sintaxe para chave composta
+          ignoreDuplicates: false // Atualiza o updated_at se já existir
+        });
+
+        if (relationError) {
+           console.error(`Erro ao salvar relacionamentos Clientes-Projetos [offset ${offset}]:`, relationError.message);
+        } else {
+           console.log(`- [Clients_Projects] ${relationRows.length} relacionamentos processados.`);
+        }
+      }
+
+      totalProcessed += batch.length;
+      offset += batch.length;
+
+      // Se a API retornou menos que o limite, acabou a paginação
+      if (batch.length < limit) break;
+
+    } catch (err) {
+      console.error(`Erro crítico no lote [offset ${offset}]:`, err?.message ?? err);
+      break;
+    }
+  }
+
+  console.log(`Processamento de clientes finalizado. Total: ${totalProcessed}`);
+  return totalProcessed;
+}
+
+Deno.serve(async (_req) => {
+  try {
+    const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
+    
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': Deno.env.get('RUNRUNIT_APP_KEY'),
+        'User-Token': Deno.env.get('RUNRUNIT_USER_TOKEN')
+      }
+    });
+
+    const clientsCount = await processAllClients(supabase, runrunApi);
+    
+    const msg = `Sincronização de clientes concluída. Total de ${clientsCount} clientes processados.`;
+    console.log(msg);
+
+    return new Response(JSON.stringify({
+      message: msg,
+      clients: clientsCount
+    }), {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      status: 200
+    });
+
+  } catch (err) {
+    console.error('Erro fatal na execução da função:', err?.message ?? err);
+    return new Response(JSON.stringify({
+      error: err?.message ?? 'Unknown error'
+    }), {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      status: 500
+    });
+  }
+});

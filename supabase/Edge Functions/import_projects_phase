@@ -1,0 +1,309 @@
+// supabase/functions/import-projects-phase/index.ts
+// deno-lint-ignore-file no-explicit-any
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { parse } from "jsr:@std/csv@1.0.2/parse";
+
+const BUCKET = "ProjectProgress";
+
+// CORS
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+  });
+
+// Detecta ; , ou \t
+function detectDelimiter(headerLine: string): string {
+  const cands = [";", ",", "\t"];
+  let best = ",", max = -1;
+  for (const c of cands) {
+    const k = headerLine.split(c).length - 1;
+    if (k > max) { max = k; best = c; }
+  }
+  return best;
+}
+const stripBOM = (t: string) => (t.charCodeAt(0) === 0xfeff ? t.slice(1) : t);
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const startedAt = Date.now();
+
+  // --- variáveis p/ retorno e limpeza ---
+  let respBody: any = {};
+  let respStatus = 200;
+  let path: string | undefined;
+  let supabase: ReturnType<typeof createClient> | null = null;
+  let deleteResult: { attempted: boolean; success: boolean; error?: string | null } = {
+    attempted: false,
+    success: false,
+    error: null,
+  };
+
+  try {
+    if (req.method !== "POST") {
+      respBody = { error: "Use POST" };
+      respStatus = 405;
+      return;
+    }
+
+    // Body
+    const body = await req.json().catch(() => ({}));
+    path = typeof body?.path === "string" ? body.path : undefined;
+
+    if (!path) {
+      console.log("[IMPORT] Body inválido:", body);
+      respBody = { error: "Body inválido. Envie { path: 'arquivo.csv' }" };
+      respStatus = 400;
+      return;
+    }
+
+    // Client
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("[IMPORT] Variáveis não configuradas");
+      respBody = { error: "Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY" };
+      respStatus = 500;
+      return;
+    }
+    supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+    // ===== 1) DOWNLOAD =====
+    console.log("[IMPORT] Baixando do Storage...", { path });
+    const dl = await supabase.storage.from(BUCKET).download(path);
+    if (dl.error || !dl.data) {
+      console.error("[IMPORT] Falha no download", {
+        bucket: BUCKET,
+        path,
+        error: dl.error ? { name: dl.error.name, message: dl.error.message, status: (dl.error as any)?.status } : null,
+      });
+      respBody = { error: "Falha ao baixar do Storage", detail: dl.error?.message ?? null };
+      respStatus = 400;
+      return;
+    }
+    console.log("[IMPORT] Download OK");
+
+    // ===== 2) PARSE CSV =====
+    let text = await dl.data.text();
+    text = stripBOM(text).replace(/\r\n/g, "\n");
+
+    const lines = text.split("\n").filter((l) => l !== "");
+    if (!lines.length) {
+      console.warn("[IMPORT] CSV vazio");
+      respBody = { error: "CSV vazio" };
+      respStatus = 400;
+      return;
+    }
+
+    const header = lines[0];
+    const delimiter = detectDelimiter(header);
+    console.log("[IMPORT] Delimitador:", delimiter);
+
+    // Cabeçalhos detectados no arquivo
+    let headers = header.split(delimiter).map((h) => h.trim()).filter(Boolean);
+
+    // Cabeçalhos aceitos (qualquer casing/acentuação equivalente)
+    const expected = ["Projeto", "Fase", "Progresso", "Progresso esperado", "ordem", "semana"];
+    const canonicalMap = new Map<string, string>([
+      [norm("Projeto"), "Projeto"],
+      [norm("Fase"), "Fase"],
+      [norm("Progresso"), "Progresso"],
+      [norm("Progresso esperado"), "Progresso esperado"],
+      [norm("ordem"), "ordem"],   // canônico em minúsculo
+      [norm("Ordem"), "ordem"],   // aceita 'Ordem'
+      [norm("semana"), "semana"], // canônico em minúsculo
+      [norm("Semana"), "semana"], // aceita 'Semana'
+    ]);
+
+    // Verifica e converte para nomes canônicos
+    const headersNorm = headers.map(norm);
+    const expectedNorm = expected.map(norm);
+    const headersOk =
+      headersNorm.length === expectedNorm.length &&
+      headersNorm.every((h) => canonicalMap.has(h));
+
+    if (!headersOk) {
+      console.error("[IMPORT] Cabeçalho inesperado", { header, received: headers });
+      respBody = {
+        error: "Cabeçalho inesperado",
+        detected_delimiter: delimiter,
+        header_preview: header,
+        expected_headers: expected,
+        received_headers: headers,
+      };
+      respStatus = 400;
+      return;
+    }
+
+    const canonicalHeaders = headersNorm.map((h) => canonicalMap.get(h)!);
+
+    console.log("[IMPORT] Parseando CSV com headers canônicos:", canonicalHeaders);
+    let rows: any[] = [];
+    try {
+      rows = [
+        ...parse(text, {
+          columns: canonicalHeaders,   // força chaves canônicas
+          separator: delimiter,
+          skipFirstRow: true,
+          trimLeadingSpace: true,
+        }),
+      ];
+    } catch (err) {
+      console.error("[IMPORT] Erro no parse:", (err as Error).message);
+      respBody = { error: `Falha ao ler CSV: ${(err as Error).message}`, detected_delimiter: delimiter };
+      respStatus = 500;
+      return;
+    }
+
+    if (!rows.length) {
+      console.warn("[IMPORT] Nenhuma linha de dados");
+      respBody = { error: "Nenhuma linha de dados" };
+      respStatus = 400;
+      return;
+    }
+
+    // ===== 3) LOOKUPS =====
+    console.log("[IMPORT] Carregando domains...");
+    const domainsRes = await supabase
+      .from("domains")
+      .select("id, type, value, is_active")
+      .in("type", ["projects_phase", "project_phase"])
+      .or("is_active.is.null,is_active.eq.true");
+
+    if (domainsRes.error) {
+      console.error("[IMPORT] Erro lendo domains:", domainsRes.error.message);
+      respBody = { error: `Erro lendo domains: ${domainsRes.error.message}` };
+      respStatus = 500;
+      return;
+    }
+    const domainMap = new Map<string, number>();
+    for (const d of domainsRes.data ?? []) domainMap.set(String(d.value).trim().toLowerCase(), Number(d.id));
+    console.log("[IMPORT] Domains OK", { count: domainMap.size });
+
+    console.log("[IMPORT] Carregando projects...");
+    const projectsRes = await supabase.from("projects").select("name, project_id");
+    if (projectsRes.error) {
+      console.error("[IMPORT] Erro lendo projects:", projectsRes.error.message);
+      respBody = { error: `Erro lendo projects: ${projectsRes.error.message}` };
+      respStatus = 500;
+      return;
+    }
+    const projectMap = new Map<string, number>();
+    for (const p of projectsRes.data ?? [])
+      projectMap.set(String(p.name).trim().toLowerCase(), Number(p.project_id));
+    console.log("[IMPORT] Projects OK", { count: projectMap.size });
+
+    // ===== 4) TRANSFORMAÇÃO =====
+    console.log("[IMPORT] Transformando linhas...");
+    const toFloat = (v?: string) =>
+      v == null || `${v}`.trim() === "" ? null : Number(String(v).replace(",", "."));
+    const toInt = (v?: string) => (v == null || `${v}`.trim() === "" ? null : parseInt(String(v).trim(), 10));
+
+    const inserts: any[] = [];
+    const errors: Array<{ line: number; reason: string; raw: any }> = [];
+
+    rows.forEach((r, idx) => {
+      const line = idx + 2;
+      const projeto = (r["Projeto"] ?? "").trim();
+      const fase = (r["Fase"] ?? "").trim();
+
+      if (!projeto) return errors.push({ line, reason: "Projeto vazio", raw: r });
+      if (!fase) return errors.push({ line, reason: "Fase vazia", raw: r });
+
+      const project_id = projectMap.get(projeto.toLowerCase());
+      if (!project_id) return errors.push({ line, reason: `Projeto não encontrado: ${projeto}`, raw: r });
+
+      const domains_id = domainMap.get(fase.toLowerCase());
+      if (!domains_id) return errors.push({ line, reason: `Fase (domain) não encontrada: ${fase}`, raw: r });
+
+      const progress = toFloat(r["Progresso"]);
+      const expected_progress = toFloat(r["Progresso esperado"]);
+      const orderVal = toInt(r["ordem"]);   // <- agora sempre existe, mesmo que venha 'Ordem' no CSV
+      const periodVal = toInt(r["semana"]); // <- idem
+
+      if (periodVal == null || Number.isNaN(periodVal))
+        return errors.push({ line, reason: "semana inválida", raw: r });
+
+      inserts.push({
+        project_id,
+        domains_id,
+        progress: progress ?? null,
+        expected_progress: expected_progress ?? null,
+        order: orderVal ?? null,
+        period: periodVal,
+      });
+    });
+
+    console.log("[IMPORT] Transformação concluída", { inserts: inserts.length, errors: errors.length });
+    if (errors.length) console.warn("[IMPORT] Erros (1ªs 10)", errors.slice(0, 10));
+
+    // ===== 5) UPSERT =====
+    let ok = 0;
+    const BATCH = 1000;
+    for (let i = 0; i < inserts.length; i += BATCH) {
+      const chunk = inserts.slice(i, i + BATCH);
+      console.log("[IMPORT] Upsert batch", { from: i, to: i + chunk.length - 1, size: chunk.length });
+      const up = await supabase
+        .from("projects_phase")
+        .upsert(chunk, { onConflict: "project_id,period,domains_id", ignoreDuplicates: false });
+      if (up.error) {
+        console.error("[IMPORT] Erro no upsert", up.error.message);
+        errors.push({
+          line: -1,
+          reason: `Falha no upsert em lote [${i}-${i + chunk.length - 1}]: ${up.error.message}`,
+          raw: null,
+        });
+      } else {
+        ok += chunk.length;
+      }
+    }
+
+    const finishedAt = Date.now();
+    respBody = {
+      file: path,
+      parsed_rows: rows.length,
+      valid_rows: inserts.length,
+      inserted_or_updated: ok,
+      errors_count: errors.length,
+      errors,
+      detected_delimiter: delimiter,
+      used_columns: canonicalHeaders,
+      ms: finishedAt - startedAt,
+    };
+    respStatus = errors.length ? 207 : 200;
+  } catch (e) {
+    console.error("[IMPORT] EXCEPTION", { message: (e as Error).message, stack: (e as Error).stack });
+    respBody = { error: String((e as Error).message ?? e) };
+    respStatus = 500;
+  } finally {
+    // ===== SEMPRE apaga o arquivo (mesmo com erro) =====
+    try {
+      if (supabase && path) {
+        console.log("[IMPORT] Removendo arquivo do Storage (always)...");
+        deleteResult.attempted = true;
+        const del = await supabase.storage.from(BUCKET).remove([path]);
+        if (del.error) {
+          deleteResult.success = false;
+          deleteResult.error = del.error.message;
+          console.error("[IMPORT] Erro ao excluir arquivo:", del.error.message);
+        } else {
+          deleteResult.success = true;
+          console.log("[IMPORT] Arquivo excluído (always).");
+        }
+      }
+    } catch (e) {
+      deleteResult.success = false;
+      deleteResult.error = (e as Error).message;
+      console.error("[IMPORT] Falha ao deletar no finally:", (e as Error).message);
+    }
+  }
+
+  // inclui status da remoção no retorno
+  return json({ ...respBody, file_delete: deleteResult }, respStatus);
+});

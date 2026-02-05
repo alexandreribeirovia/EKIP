@@ -38,7 +38,7 @@ const RiskOwnerCellEditor = forwardRef<RiskOwnerCellEditorRef, RiskOwnerCellEdit
     
     console.log('Buscando usuários ativos...');
     const { data, error } = await supabase
-      .from('users')
+      .from('employees')
       .select('*')
       .eq('is_active', true)
       .order('name');

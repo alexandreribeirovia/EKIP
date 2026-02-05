@@ -37,7 +37,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           updated_at,
           project_id,
           user_id,
-          users(
+          employees(
             user_id,
             name,
             avatar_large_url
@@ -58,22 +58,22 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const projectsWithOwners = (data || []).map(project => ({
       ...project,
       owners: (project.projects_owner || []).map((ownerData: any) => {
-        const userData = Array.isArray(ownerData.users) && ownerData.users.length > 0 
-          ? ownerData.users[0] 
-          : ownerData.users
+        const employeeData = Array.isArray(ownerData.employees) && ownerData.employees.length > 0 
+          ? ownerData.employees[0] 
+          : ownerData.employees
         return {
           id: ownerData.id,
           created_at: ownerData.created_at,
           updated_at: ownerData.updated_at,
           project_id: ownerData.project_id,
           user_id: ownerData.user_id,
-          users: userData && !Array.isArray(userData) ? {
-            user_id: userData.user_id,
-            name: userData.name,
-            avatar_large_url: userData.avatar_large_url
+          employees: employeeData && !Array.isArray(employeeData) ? {
+            user_id: employeeData.user_id,
+            name: employeeData.name,
+            avatar_large_url: employeeData.avatar_large_url
           } : null
         }
-      }).filter((owner: any) => owner.users !== null)
+      }).filter((owner: any) => owner.employees !== null)
     }))
 
     return res.json({

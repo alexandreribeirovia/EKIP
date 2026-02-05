@@ -305,6 +305,161 @@ O `EmployeeDetail.tsx` suporta hash na URL para abrir aba específica:
 - **Dark mode**: Native dark mode support (`dark:` prefix)
 - **Colors**: Primary orange/yellow palette (see STATUS_REPORT.md for hex values)
 
+### Page Layout Patterns (OBRIGATÓRIO)
+
+Todas as páginas devem seguir os padrões de layout estabelecidos. Existem dois tipos principais:
+
+#### 1. Página de Listagem (Grid/Tabela)
+Usado em: `Employees.tsx`, `Projects.tsx`, `AccessProfiles.tsx`, `Feedbacks.tsx`, `PDI.tsx`
+
+```tsx
+return (
+  <div className="h-full flex flex-col space-y-2">
+    {/* Card de Filtros */}
+    <div className="card p-6 pt-3 pb-3">
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+        {/* Campo de Busca */}
+        <div className="flex-1 min-w-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        {/* Botão de Ação Principal - SEMPRE LARANJA */}
+        <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors">
+          <Plus className="w-4 h-4" />
+          Novo Item
+        </button>
+      </div>
+
+      {/* Cards de Estatísticas */}
+      <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {/* Card Total - Cinza */}
+        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+            <Layers className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          </div>
+          <div className="text-lg font-bold text-gray-800 dark:text-gray-200">{total}</div>
+        </div>
+        {/* Card Positivo - Verde */}
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">...</div>
+        {/* Card Negativo - Vermelho */}
+        <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2 border border-red-200 dark:border-red-800">...</div>
+      </div>
+    </div>
+
+    {/* Card com Tabela AG-Grid */}
+    <div className="card p-6 pt-3 flex-1 flex flex-col overflow-hidden">
+      <div className="ag-theme-alpine w-full flex-1">
+        <AgGridReact
+          rowData={data}
+          columnDefs={columnDefs}
+          defaultColDef={{ sortable: true, filter: true, resizable: true }}
+          rowHeight={48}
+          headerHeight={48}
+        />
+      </div>
+    </div>
+  </div>
+)
+```
+
+#### 2. Página de Detalhe (Master-Detail ou Tabs)
+Usado em: `EmployeeDetail.tsx`, `AccessProfileDetail.tsx`, `ProjectDetail.tsx`
+
+```tsx
+return (
+  <div className="h-full flex flex-col space-y-2 overflow-hidden">
+    {/* Botão Voltar - FORA do card */}
+    <button
+      onClick={() => navigate('/lista')}
+      className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+    >
+      <ArrowLeft className="w-4 h-4" />
+      Voltar
+    </button>
+
+    {/* Card com Informações do Item */}
+    <div className="card p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {/* Ícone - background CINZA, não gradiente */}
+          <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+            <Icon className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Nome</h1>
+              {/* Badges de status */}
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                Ativo
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Descrição</p>
+          </div>
+        </div>
+
+        {/* Botão de Ação (Salvar) - Verde quando habilitado */}
+        <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+          <Save className="w-4 h-4" />
+          Salvar
+        </button>
+      </div>
+    </div>
+
+    {/* Card Principal com Conteúdo */}
+    <div className="card flex-1 flex gap-4 min-h-0 p-4 overflow-hidden">
+      {/* Painéis internos - background BRANCO */}
+      <div className="w-64 flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        {/* Sidebar ou Lista */}
+      </div>
+      <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        {/* Conteúdo Principal */}
+      </div>
+    </div>
+  </div>
+)
+```
+
+#### 3. Padrão de Abas (Tabs)
+Usado em: `EmployeeDetail.tsx`, `ProjectDetail.tsx`, `AccessProfileDetail.tsx`
+
+```tsx
+{/* Container de abas */}
+<div className="border-b border-gray-200 dark:border-gray-700">
+  <nav className="flex -mb-px px-4">
+    <button
+      onClick={() => setActiveTab('tab1')}
+      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
+        activeTab === 'tab1'
+          ? 'border-primary-500 text-primary-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+      }`}
+    >
+      Nome da Aba
+    </button>
+    {/* Mais abas... */}
+  </nav>
+</div>
+```
+
+**REGRAS IMPORTANTES:**
+- **Container principal**: Sempre `h-full flex flex-col space-y-2`
+- **Cards**: Usar classe `card` (definida no CSS global)
+- **Botão de ação principal (Novo/Adicionar)**: SEMPRE `bg-orange-500 hover:bg-orange-600`
+- **Botão de salvar**: `bg-green-500 hover:bg-green-600`
+- **Botão cancelar/secundário**: `bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`
+- **Background de painéis internos**: `bg-white dark:bg-gray-800` (NUNCA bg-gray-50)
+- **Ícones em headers de detalhe**: `bg-gray-100 dark:bg-gray-700` (NÃO usar gradiente laranja)
+- **Abas**: Estilo underline com `border-b-2 border-primary-500` (NÃO usar background arredondado)
+- **AG-Grid**: Sempre `rowHeight={48} headerHeight={48}`
+
 ### Badge Pattern (rounded-full)
 All status badges, priority indicators, and category tags should follow this standardized pattern with dark mode support:
 

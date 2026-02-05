@@ -1,0 +1,288 @@
+/**
+ * [ARIBEIRO] 17/08/2025 - OTIMIZADO
+ * Busca, processa e salva tarefas, assignments e tags em lotes (sincronização total).
+ */
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+
+console.log('Função "runrun-tasks-importer-client-filter" (versão otimizada) inicializada.');
+
+function formatDateToLocal(dateString) {
+  if (!dateString) return null;
+  return dateString.substring(0, 19);
+}
+
+/** 
+ * Monta as linhas desejadas de task_tags para o lote 
+ * (resolve name -> id uma única vez)
+ */
+async function buildDesiredTaskTagsRowsForBatch(supabase, tasks) {
+  const allTagNames = Array.from(
+    new Set(
+      tasks.flatMap((t) =>
+        (t.tags_data || [])
+          .map((tg) => tg?.name)
+          .filter((n) => typeof n === 'string' && n.trim().length > 0)
+      )
+    )
+  );
+  if (allTagNames.length === 0) return [];
+
+  const { data: tagRows, error: tagSelError } = await supabase
+    .from('tags')
+    .select('id, name')
+    .in('name', allTagNames);
+
+  if (tagSelError) throw new Error(`Erro ao buscar tags: ${tagSelError.message}`);
+
+  const tagIdByName = new Map((tagRows || []).map((r) => [r.name, r.id]));
+  const nowIso = new Date().toISOString();
+  const rows = [];
+
+  for (const t of tasks) {
+    for (const tg of (t.tags_data || [])) {
+      const tagId = tagIdByName.get(tg?.name);
+      if (tagId) {
+        rows.push({
+          task_id: t.id,
+          tag_id: tagId,
+          updated_at: nowIso
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+/**
+ * Processa em lotes (limit/offset desc por last_activity_at),
+ * salva tasks, assignments e task_tags (sincronizado em lote).
+ */
+async function processTasksInBatches(supabase, api, status, startDate, endDate = null) {
+  let totalProcessed = 0;
+  let offset = 0;
+  const limit = 200; // aumentado para performance
+  let continueFetching = true;
+  const statusLabel = status ? 'Fechadas' : 'Abertas';
+
+  console.log(`Iniciando processamento para tarefas ${statusLabel}...`);
+
+  while (continueFetching) {
+    try {
+      const response = await api.get(`/api/v1.0/tasks`, {
+        params: {
+          limit,
+          offset,
+          is_closed: status,
+          sort: 'last_activity_at',
+          order: 'desc'
+        }
+      });
+
+      const batchTasks = response.data;
+      if (!batchTasks?.length) {
+        continueFetching = false;
+        break;
+      }
+
+      const validTasks = batchTasks.filter((t) => {
+        if (!t.last_activity_at) return false;
+        const d = new Date(t.last_activity_at);
+        if (d < startDate) {
+          continueFetching = false;
+          return false;
+        }
+        return (!endDate || d <= endDate);
+      });
+
+      if (validTasks.length === 0) {
+        offset += batchTasks.length;
+        continue;
+      }
+
+      console.log(`- [${statusLabel}] ${validTasks.length} tarefas válidas no lote.`);
+
+      // === TASKS: UPSERT ===
+      const tasksForSupabase = validTasks.map((task) => ({
+        task_id: task.id,
+        title: task.title,
+        is_closed: task.is_closed,
+        board_name: task.board_name,
+        board_id: task.board_id,
+        board_stage_name: task.board_stage_name,
+        board_stage_id: task.board_stage_id,
+        created_at: formatDateToLocal(task.created_at),
+        updated_at: formatDateToLocal(task.last_activity_at),
+        gantt_bar_start_date: formatDateToLocal(task.gantt_bar_start_date),
+        gantt_bar_end_date: formatDateToLocal(task.gantt_bar_end_date),
+        desired_date: formatDateToLocal(task.desired_date),
+        desired_start_date: formatDateToLocal(task.desired_start_date),
+        desired_date_with_time: formatDateToLocal(task.desired_date_with_time),
+        project_id: task.project_id,
+        project_name: task.project_name,
+        client_name: task.client_name,
+        responsible_id: task.responsible_id ? String(task.responsible_id) : null,
+        responsible_name: task.responsible_name,
+        current_estimate_seconds: task.current_estimate_seconds,
+        time_worked: task.time_worked,
+        type_name: task.type_name,
+        close_date: formatDateToLocal(task.close_date),
+        user_id: task.user_id,
+        technology: task.custom_fields?.custom_77?.label || null,
+        billing_type: task.custom_fields?.custom_78?.label || null,
+        project_group_name: task.project_group_name,
+        project_sub_group_name: task.project_sub_group_name
+      }));
+
+      const { error: tasksError } = await supabase.from('tasks').upsert(tasksForSupabase, { onConflict: 'task_id' });
+      if (tasksError) console.error('Erro ao salvar tarefas:', tasksError.message);
+
+      // === ASSIGNMENTS ===
+      const taskIds = validTasks.map((t) => t.id);
+      const assignments = validTasks.flatMap((task) =>
+        (task.assignments || []).map((a) => ({
+          task_id: a.task_id,
+          assignee_id: a.assignee_id,
+          team_id: a.team_id,
+          assignee_name: a.assignee_name,
+          team_name: a.team_name,
+          current_estimate_seconds: a.current_estimate_seconds,
+          time_worked: a.time_worked,
+          estimated_start_date: formatDateToLocal(a.estimated_start_date),
+          start_date: formatDateToLocal(a.start_date),
+          close_date: formatDateToLocal(a.close_date),
+          is_closed: a.is_closed,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }))
+      );
+
+      if (taskIds.length > 0) {
+        await supabase.from('assignments').delete().in('task_id', taskIds);
+        if (assignments.length > 0)
+          await supabase.from('assignments').insert(assignments);
+      }
+
+      // === TASK_TAGS (sincronização total, delete+insert) ===
+      const desiredTaskTagsRows = await buildDesiredTaskTagsRowsForBatch(supabase, validTasks);
+      if (taskIds.length > 0)
+        await supabase.from('task_tags').delete().in('task_id', taskIds);
+      if (desiredTaskTagsRows.length > 0)
+        await supabase.from('task_tags').insert(desiredTaskTagsRows);
+
+      console.log(`- [${statusLabel}] Lote sincronizado (${validTasks.length} tasks).`);
+      totalProcessed += validTasks.length;
+      offset += batchTasks.length;
+
+    } catch (err) {
+      console.error('Erro no lote:', err.message);
+      continueFetching = false;
+    }
+  }
+
+  console.log(`Processamento finalizado (${statusLabel}). Total: ${totalProcessed}`);
+  return totalProcessed;
+}
+
+// === HANDLER PRINCIPAL ===
+Deno.serve(async (req) => {
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL'),
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    );
+
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': Deno.env.get('RUNRUNIT_APP_KEY'),
+        'User-Token': Deno.env.get('RUNRUNIT_USER_TOKEN')
+      }
+    });
+
+    const url = new URL(req.url);
+    const taskId = url.searchParams.get('task_id');
+
+    // --- CASO TASK ÚNICA ---
+    if (taskId) {
+      const { data: task } = await runrunApi.get(`/api/v1.0/tasks/${taskId}`);
+      if (!task?.id) throw new Error('Tarefa inválida');
+
+      const taskToSave = [{
+        task_id: task.id,
+        title: task.title,
+        is_closed: task.is_closed,
+        created_at: formatDateToLocal(task.created_at),
+        updated_at: formatDateToLocal(task.last_activity_at),
+        project_id: task.project_id,
+        project_name: task.project_name,
+        client_name: task.client_name,
+        responsible_id: task.responsible_id ? String(task.responsible_id) : null,
+        responsible_name: task.responsible_name
+      }];
+
+      await supabase.from('tasks').upsert(taskToSave, { onConflict: 'task_id' });
+      await supabase.from('assignments').delete().eq('task_id', task.id);
+      const assignments = (task.assignments || []).map((a) => ({
+        task_id: a.task_id,
+        assignee_id: a.assignee_id,
+        team_id: a.team_id,
+        assignee_name: a.assignee_name,
+        team_name: a.team_name
+      }));
+      if (assignments.length > 0)
+        await supabase.from('assignments').insert(assignments);
+
+      // TAGS da tarefa única
+      const desiredRows = await buildDesiredTaskTagsRowsForBatch(supabase, [task]);
+      await supabase.from('task_tags').delete().eq('task_id', task.id);
+      if (desiredRows.length > 0)
+        await supabase.from('task_tags').insert(desiredRows);
+
+      return new Response(JSON.stringify({ message: `Tarefa ${taskId} sincronizada com sucesso.` }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      });
+    }
+
+    // --- MÚLTIPLAS TAREFAS ---
+    const months = parseInt(url.searchParams.get('months') || '0');
+    const days = parseInt(url.searchParams.get('days') || '0');
+    const startDateParam = url.searchParams.get('startDate');
+    const endDateParam = url.searchParams.get('endDate');
+
+    let startDate, endDate = null;
+    if (startDateParam && endDateParam) {
+      startDate = new Date(startDateParam);
+      endDate = new Date(endDateParam);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (months) {
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - months);
+    } else if (days) {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+    } else {
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 18);
+    }
+
+    const openCount = await processTasksInBatches(supabase, runrunApi, false, startDate, endDate);
+    const closedCount = await processTasksInBatches(supabase, runrunApi, true, startDate, endDate);
+    const total = openCount + closedCount;
+
+    return new Response(JSON.stringify({
+      message: `Sincronização concluída (${total} tarefas).`,
+      open: openCount,
+      closed: closedCount
+    }), { headers: { "Content-Type": "application/json" } });
+
+  } catch (err) {
+    console.error('Erro fatal:', err.message);
+    return new Response(JSON.stringify({ error: err.message }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500
+    });
+  }
+});

@@ -1,0 +1,68 @@
+/**
+ * [ARIBEIRO] 10/08/2025 - CRIAÇÃO
+ * Busca, processa e salva todos usuários
+ * Exemplo de chamada
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_user_import
+ * 
+ */ 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+console.log('Função "runrun-importer" inicializada.');
+Deno.serve(async (req)=>{
+  try {
+    // As variáveis de ambiente são injetadas automaticamente pelo Supabase
+    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const RUNRUNIT_APP_KEY = Deno.env.get("RUNRUNIT_APP_KEY");
+    const RUNRUNIT_USER_TOKEN = Deno.env.get("RUNRUNIT_USER_TOKEN");
+    // 1. Buscar usuários do Runrun.it
+    console.log('Buscando usuários na API do Runrun.it...');
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': RUNRUNIT_APP_KEY,
+        'User-Token': RUNRUNIT_USER_TOKEN
+      }
+    });
+    const response = await runrunApi.get('/api/v1.0/users?sort=name');
+    const users = response.data;
+    console.log(`Sucesso! ${users.length} usuários encontrados.`);
+    // 2. Mapear e sincronizar com a tabela 'users' do Supabase
+    const usersForSupabase = users.map((user)=>({
+        user_id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar_large_url: user.avatar_large_url,
+        position: user.position,
+        on_vacation: user.on_vacation,
+        birthday: user.birthday,
+        phone: user.phone,
+        in_company_since: user.in_company_since
+      }));
+    const { error } = await supabase.from('users').upsert(usersForSupabase, {
+      onConflict: 'user_id'
+    });
+    if (error) {
+      throw error;
+    }
+    console.log('Sincronização com o Supabase concluída com sucesso!');
+    // Retorna uma resposta de sucesso
+    return new Response(JSON.stringify({
+      message: `Sincronizados ${users.length} usuários com sucesso.`
+    }), {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      status: 200
+    });
+  } catch (err) {
+    console.error('Erro na execução da função:', err.message);
+    return new Response(JSON.stringify({
+      error: err.message
+    }), {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      status: 500
+    });
+  }
+});

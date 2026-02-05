@@ -1,0 +1,228 @@
+/**
+ * [ARIBEIRO] 03/11/2025 - FINAL IMPORTER BY PAGE
+ * Importa tarefas em massa do Runrun.it usando o método de paginação da API.
+ * Esta é a abordagem mais rápida e eficiente para a carga completa.
+ * 
+ * Exemplo de chamada:
+ * Para processar 5 páginas de tarefas FECHADAS, começando da página 1:
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_tasks_import_by_pagestartPage=1&pageCount=5&is_closed=true
+ * 
+ * Para processar 10 páginas de tarefas ABERTAS, começando da página 1:
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_tasks_import_by_page?startPage=1&pageCount=10&is_closed=false
+ */ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+console.log('Função "runrun_tasks_import_by_page" inicializada.');
+function formatDateToLocal(dateString) {
+  if (!dateString) return null;
+  return dateString.substring(0, 19);
+}
+// Reutilizamos a mesma função de salvar em lote, pois a lógica do Supabase não muda.
+async function processAndSaveBatch(supabase, tasks) {
+  if (!tasks || tasks.length === 0) return 0;
+
+  // === TASKS via UPSERT (mantido) ===
+  const tasksForSupabase = tasks.map((task) => ({
+    task_id: task.id,
+    title: task.title,
+    is_closed: task.is_closed,
+    board_name: task.board_name,
+    board_id: task.board_id,
+    board_stage_name: task.board_stage_name,
+    board_stage_id: task.board_stage_id,
+    created_at: formatDateToLocal(task.created_at),
+    updated_at: formatDateToLocal(task.last_activity_at),
+    gantt_bar_start_date: formatDateToLocal(task.gantt_bar_start_date),
+    gantt_bar_end_date: formatDateToLocal(task.gantt_bar_end_date),
+    desired_date: formatDateToLocal(task.desired_date),
+    desired_start_date: formatDateToLocal(task.desired_start_date),
+    desired_date_with_time: formatDateToLocal(task.desired_date_with_time),
+    project_id: task.project_id,
+    project_name: task.project_name,
+    client_name: task.client_name,
+    responsible_id: task.responsible_id ? String(task.responsible_id) : null,
+    responsible_name: task.responsible_name,
+    current_estimate_seconds: task.current_estimate_seconds,
+    time_worked: task.time_worked,
+    type_name: task.type_name,
+    close_date: formatDateToLocal(task.close_date),
+    user_id: task.user_id,
+    technology: task.custom_fields?.custom_77?.label || null,
+    billing_type: task.custom_fields?.custom_78?.label || null,
+    project_group_name: task.project_group_name,
+    project_sub_group_name: task.project_sub_group_name
+  }));
+
+  const { error: tasksError } = await supabase
+    .from('tasks')
+    .upsert(tasksForSupabase, { onConflict: 'task_id' });
+
+  if (tasksError) throw new Error(`Erro no Supabase ao salvar tarefas: ${tasksError.message}`);
+
+  // === ASSIGNMENTS (mantido como estava: delete + insert) ===
+  const taskIdsInBatch = tasks.map((task) => task.id);
+
+  const assignmentsForSupabase = tasks.flatMap((task) =>
+    (task.assignments || []).map((assignment) => ({
+      task_id: assignment.task_id,
+      assignee_id: assignment.assignee_id,
+      team_id: assignment.team_id,
+      assignee_name: assignment.assignee_name,
+      team_name: assignment.team_name,
+      current_estimate_seconds: assignment.current_estimate_seconds,
+      time_worked: assignment.time_worked,
+      estimated_start_date: formatDateToLocal(assignment.estimated_start_date),
+      start_date: formatDateToLocal(assignment.start_date),
+      close_date: formatDateToLocal(assignment.close_date),
+      is_closed: assignment.is_closed,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }))
+  );
+
+  if (taskIdsInBatch.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('assignments')
+      .delete()
+      .in('task_id', taskIdsInBatch);
+    if (deleteError) throw new Error(`Erro ao deletar assignments: ${deleteError.message}`);
+
+    if (assignmentsForSupabase.length > 0) {
+      const { error: insertError } = await supabase
+        .from('assignments')
+        .insert(assignmentsForSupabase);
+      if (insertError) throw new Error(`Erro ao inserir assignments: ${insertError.message}`);
+    }
+  }
+
+  // === NOVO: TASK_TAGS (tags_data -> task_tags) =============================
+  // 1) Colete todos os nomes de tag presentes no lote
+  const allTagNames = Array.from(
+    new Set(
+      tasks.flatMap((t) =>
+        (t.tags_data || [])
+          .map((tg) => tg?.name)
+          .filter((n) => typeof n === 'string' && n.trim().length > 0)
+      )
+    )
+  );
+
+  if (allTagNames.length > 0) {
+    // 2) Busque os IDs dessas tags na tabela 'tags'
+    const { data: tagRows, error: tagSelError } = await supabase
+      .from('tags')
+      .select('id, name')
+      .in('name', allTagNames);
+
+    if (tagSelError) throw new Error(`Erro ao buscar tags: ${tagSelError.message}`);
+
+    // Mapa nome -> id (só entra quem foi encontrado)
+    const tagIdByName = new Map((tagRows || []).map((r) => [r.name, r.id]));
+
+    // 3) Monte as linhas de task_tags
+    const taskTagsToUpsert = [];
+    for (const t of tasks) {
+      const tagsArr = t.tags_data || [];
+      for (const tg of tagsArr) {
+        const tagId = tagIdByName.get(tg?.name);
+        if (tagId) {
+          taskTagsToUpsert.push({
+            task_id: t.id,
+            tag_id: tagId,
+            updated_at: new Date().toISOString(), // opcional
+          });
+        } else {
+          // Loga quando a tag não está na tabela 'tags'
+          console.log(`Tag não encontrada em 'tags': "${tg?.name}" (task ${t.id})`);
+        }
+      }
+    }
+
+    // 4) UPSERT por (task_id, tag_id)
+    if (taskTagsToUpsert.length > 0) {
+      const { error: ttError } = await supabase
+        .from('task_tags')
+        .upsert(taskTagsToUpsert, { onConflict: 'task_id,tag_id' });
+
+      if (ttError) throw new Error(`Erro ao salvar task_tags: ${ttError.message}`);
+    }
+  }
+  // === FIM NOVO ============================================================
+
+  return tasks.length;
+}
+Deno.serve(async (req)=>{
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': Deno.env.get("RUNRUNIT_APP_KEY"),
+        'User-Token': Deno.env.get("RUNRUNIT_USER_TOKEN")
+      }
+    });
+    // 1. Obter e validar os parâmetros
+    const url = new URL(req.url);
+    const startPageParam = url.searchParams.get('startPage');
+    const pageCountParam = url.searchParams.get('pageCount');
+    const isClosedParam = url.searchParams.get('is_closed');
+    if (!startPageParam || !pageCountParam || isClosedParam === null) {
+      return new Response(JSON.stringify({
+        error: "Parâmetros 'startPage', 'pageCount' e 'is_closed' são obrigatórios."
+      }), {
+        status: 400
+      });
+    }
+    const startPage = parseInt(startPageParam, 10);
+    const pageCount = parseInt(pageCountParam, 10);
+    const isClosed = isClosedParam === 'true'; // Converte string 'true'/'false' para booleano
+    if (isNaN(startPage) || isNaN(pageCount) || startPage <= 0 || pageCount <= 0) {
+      return new Response(JSON.stringify({
+        error: "'startPage' e 'pageCount' devem ser números positivos."
+      }), {
+        status: 400
+      });
+    }
+    // 2. Loop de processamento
+    let totalProcessed = 0;
+    let pagesProcessed = 0;
+    const endPage = startPage + pageCount;
+    console.log(`Iniciando carga. Status: ${isClosed ? 'Fechadas' : 'Abertas'}. Páginas: ${startPage} a ${endPage - 1}.`);
+    for(let currentPage = startPage; currentPage < endPage; currentPage++){
+      console.log(`- Buscando página ${currentPage}...`);
+      const response = await runrunApi.get('/api/v1.0/tasks', {
+        params: {
+          page: currentPage,
+          is_closed: isClosed
+        }
+      });
+      const tasks = response.data;
+      if (tasks && tasks.length > 0) {
+        const processedCount = await processAndSaveBatch(supabase, tasks);
+        totalProcessed += processedCount;
+        pagesProcessed++;
+        console.log(`- Página ${currentPage} salva. ${processedCount} tarefas processadas. Total nesta execução: ${totalProcessed}.`);
+      } else {
+        // Se a API retorna uma página vazia, significa que não há mais dados.
+        console.log(`- Página ${currentPage} vazia. Não há mais tarefas. Interrompendo.`);
+        break;
+      }
+    }
+    // 3. Resposta com resumo
+    const nextStartPage = startPage + pagesProcessed;
+    const summaryMessage = `Execução concluída. ${totalProcessed} tarefas salvas de ${pagesProcessed} páginas processadas.`;
+    return new Response(JSON.stringify({
+      message: summaryMessage,
+      proxima_pagina_sugerida: nextStartPage,
+      total_processado_nesta_execucao: totalProcessed
+    }), {
+      status: 200
+    });
+  } catch (err) {
+    console.error('Erro na execução da função:', err.message);
+    return new Response(JSON.stringify({
+      error: err.message
+    }), {
+      status: 500
+    });
+  }
+});

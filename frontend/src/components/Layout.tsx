@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { usePermissionStore } from '@/stores/permissionStore'
 import NotificationBell from './NotificationBell'
 import {
   LayoutDashboard,
@@ -20,7 +21,8 @@ import {
   Database,
   Bell,
   ClipboardCheck,
-  HelpCircle
+  HelpCircle,
+  Shield
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -35,7 +37,43 @@ const Layout = ({ children }: LayoutProps) => {
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const { user, logout } = useAuthStore()
+  const { hasScreenAccess, isAdmin, loaded: permissionsLoaded } = usePermissionStore()
   const location = useLocation()
+
+  // Mapeamento de rotas para screenKey
+  const getScreenKeyFromHref = (href: string): string => {
+    // Mapeamento de rotas para screen_key conforme definido em permissions.ts (ENTITIES_CONFIG)
+    const map: Record<string, string> = {
+      '/dashboard': 'dashboard',
+      '/time-entries': 'dashboard',          // Parte do Dashboard
+      '/employees': 'employees',
+      '/feedbacks': 'employees',             // Subtab de Employees (employees.feedbacks)
+      '/employee-evaluations': 'employees',  // Subtab de Employees (employees.evaluations)
+      '/pdi': 'employees',                   // Subtab de Employees (employees.pdi)
+      '/employee-quizzes': 'employees',      // Subtab de Employees (employees.quizzes)
+      '/projects': 'projects',
+      '/allocations': 'allocations',
+      '/evaluations': 'evaluation_models',   // Modelos de Avaliação
+      '/quizzes': 'quizzes',
+      '/access-profiles': 'access_profiles', // Perfis de Acesso
+      '/users': 'users',
+      '/domains': 'domains',
+      '/notifications': 'notifications',
+      '/settings': 'settings'
+    }
+    return map[href] || href.replace('/', '') || 'dashboard'
+  }
+
+  // Verificar se usuário tem acesso a um item de menu
+  const hasMenuAccess = (href: string): boolean => {
+    // Enquanto não carregou permissões, mostra tudo (evita flash)
+    if (!permissionsLoaded) return true
+    // Admin vê tudo
+    if (isAdmin) return true
+    // Verifica permissão
+    const screenKey = getScreenKeyFromHref(href)
+    return hasScreenAccess(screenKey)
+  }
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
@@ -74,6 +112,7 @@ const Layout = ({ children }: LayoutProps) => {
       submenu: [
         { name: 'Avaliações Modelo', href: '/evaluations', icon: ClipboardList },
         { name: 'Quiz', href: '/quizzes', icon: ClipboardCheck },
+        { name: 'Perfis de Acesso', href: '/access-profiles', icon: Shield },
         { name: 'Usuários', href: '/users', icon: Users },
         { name: 'Domínios', href: '/domains', icon: Database }
       ]
@@ -106,9 +145,24 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
 
         <nav className="mt-4">
-          {navigation.map((item) => {
+          {navigation
+            .filter(item => {
+              // Verifica acesso ao item principal
+              if (!hasMenuAccess(item.href)) {
+                // Se tem submenu, verifica se tem acesso a algum submenu
+                if (item.submenu) {
+                  return item.submenu.some(sub => hasMenuAccess(sub.href))
+                }
+                return false
+              }
+              return true
+            })
+            .map((item) => {
+            // Filtra submenus também
+            const filteredSubmenu = item.submenu?.filter(sub => hasMenuAccess(sub.href))
+            const itemWithFilteredSubmenu = { ...item, submenu: filteredSubmenu }
             const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/')
-            const isSubmenuActive = item.submenu?.some(sub => location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')) || false
+            const isSubmenuActive = filteredSubmenu?.some(sub => location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')) || false
 
             return (
               <div key={item.name}>
@@ -164,12 +218,12 @@ const Layout = ({ children }: LayoutProps) => {
                 )}
 
                 {/* Submenu */}
-                {item.hasSubmenu && item.submenu && !sidebarCollapsed &&
+                {item.hasSubmenu && filteredSubmenu && filteredSubmenu.length > 0 && !sidebarCollapsed &&
                   ((item.name === 'Dashboard' && dashboardExpanded) ||
                     (item.name === 'Funcionários' && employeesExpanded) ||
                     (item.name === 'Configurações' && settingsExpanded)) && (
                     <div className="bg-gray-50 dark:bg-gray-900">
-                      {item.submenu.map((subItem) => {
+                      {filteredSubmenu.map((subItem) => {
                         const isSubActive = location.pathname === subItem.href || location.pathname.startsWith(subItem.href + '/')
                         return (
                           <Link

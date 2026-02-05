@@ -1,0 +1,108 @@
+/**
+ * [ARIBEIRO] 10/08/2025 - CRIAÇÃO
+ * Busca, processa e salva todos projetos
+ * Exemplo de chamada
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_projects_import
+ * 
+ */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import axios from 'https://esm.sh/axios@1.7.2';
+console.log('Função "runrun-projects-importer" (sem filtro de data) inicializada.');
+ async function processAllProjects(supabase, api) {
+  let totalProcessed = 0;
+  let offset = 0;
+  const limit = 100;
+  while(true){
+    try {
+      const { data: batch } = await api.get('/api/v1.0/projects', {
+        params: {
+          limit,
+          offset,
+          sort: 'created_at',
+          order: 'desc'
+        }
+      });
+      if (!batch || batch.length === 0) break;
+      console.log(`- [Projects] Lote recebido: ${batch.length} itens (offset ${offset}).`);
+      const rows = batch.map((p)=>({
+          project_id: p.id ?? null,
+          name: p.name ?? null,
+          // datas / flags
+          created_at: p.created_at ?? null,
+          update_at: new Date().toISOString(),
+          start_date: p.start_date ?? null,
+          close_date: p.close_date ?? null,
+          desired_date: p.desired_date ?? null,
+          is_closed: typeof p.is_closed === 'boolean' ? p.is_closed : null,
+          is_active: typeof p.is_active === 'boolean' ? p.is_active : null,
+          // cliente / grupos
+          client_id: p.client_id ?? null,
+          client_name: p.client_name ?? null,
+          project_group_name: p.project_group_name ?? null,
+          project_sub_group_name: p.project_sub_group_name ?? null,
+          // métricas
+          tasks_count: p.tasks_count ?? null,
+          tasks_count_progress: p.tasks_count_progress ?? null,
+          tasks_queued_count: p.tasks_queued_count ?? null,
+          tasks_working_on_count: p.tasks_working_on_count ?? null,
+          tasks_closed_count: p.tasks_closed_count ?? null,
+          // tempos
+          time_worked: p.time_worked ?? null,
+          time_pending: p.time_pending ?? null,
+          time_total: p.time_total ?? null,
+          time_progress: p.time_progress ?? null
+        }));
+      const { error } = await supabase.from('projects').upsert(rows, {
+        onConflict: 'project_id'
+      });
+      if (error) {
+        console.error(`Erro ao salvar lote [offset ${offset}]:`, error.message);
+      } else {
+        console.log('- [Projects] Lote salvo com sucesso.');
+      }
+      totalProcessed += batch.length;
+      offset += batch.length;
+      // se a API retornou menos que o limite, acabou
+      if (batch.length < limit) break;
+    } catch (err) {
+      console.error(`Erro crítico no lote [offset ${offset}]:`, err?.message ?? err);
+      break;
+    }
+  }
+  console.log(`Processamento de projetos finalizado. Total: ${totalProcessed}`);
+  return totalProcessed;
+}
+Deno.serve(async (_req)=>{
+  try {
+    const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
+    const runrunApi = axios.create({
+      baseURL: 'https://runrun.it',
+      headers: {
+        'App-Key': Deno.env.get('RUNRUNIT_APP_KEY'),
+        'User-Token': Deno.env.get('RUNRUNIT_USER_TOKEN')
+      }
+    });
+    const projectsCount = await processAllProjects(supabase, runrunApi);
+    const msg = `Sincronização de projetos concluída. Total de ${projectsCount} projetos processados.`;
+    console.log(msg);
+    return new Response(JSON.stringify({
+      message: msg,
+      projects: projectsCount
+    }), {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      status: 200
+    });
+  } catch (err) {
+    console.error('Erro fatal na execução da função:', err?.message ?? err);
+    return new Response(JSON.stringify({
+      error: err?.message ?? 'Unknown error'
+    }), {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      status: 500
+    });
+  }
+});

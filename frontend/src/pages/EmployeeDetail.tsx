@@ -13,6 +13,7 @@ import PDIModal from '../components/PDIModal'
 import HtmlCellRenderer from '../components/HtmlCellRenderer'
 import AccessModal from '../components/AccessModal'
 import apiClient from '../lib/apiClient'
+import { usePermissionStore } from '../stores/permissionStore'
 
 // Interface para acessos agrupados por cliente
 interface DbAccessClientGrouped {
@@ -21,26 +22,54 @@ interface DbAccessClientGrouped {
   accesses: DbAccessPlatform[];
 }
 
+// Configuração das abas com permissões
+type TabKey = 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes'
+
+interface TabConfig {
+  key: TabKey
+  label: string
+  permissionKey: string
+}
+
+const TAB_CONFIG: TabConfig[] = [
+  { key: 'tarefas', label: 'Tarefas Atribuídas', permissionKey: 'employees.tasks' },
+  { key: 'registro', label: 'Registro de Horas', permissionKey: 'employees.timerecord' },
+  { key: 'acompanhamento', label: 'Acompanhamento', permissionKey: 'employees.followup' },
+  { key: 'feedbacks', label: 'Feedbacks', permissionKey: 'employees.feedbacks' },
+  { key: 'avaliacoes', label: 'Avaliações', permissionKey: 'employees.evaluations' },
+  { key: 'pdi', label: 'PDI', permissionKey: 'employees.pdi' },
+  { key: 'acessos', label: 'Acessos', permissionKey: 'employees.access' },
+  { key: 'quizzes', label: 'Quizzes', permissionKey: 'employees.quizzes' },
+]
+
 const EmployeeDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const { hasScreenAccess, isAdmin } = usePermissionStore()
   const [employee, setEmployee] = useState<DbUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   
-  // Determinar aba inicial baseado no hash da URL
-  const getInitialTab = (): 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes' => {
+  // Filtrar tabs baseado em permissões
+  const visibleTabs = useMemo(() => {
+    if (isAdmin) return TAB_CONFIG
+    return TAB_CONFIG.filter(tab => hasScreenAccess(tab.permissionKey))
+  }, [isAdmin, hasScreenAccess])
+  
+  // Determinar aba inicial baseado no hash da URL e tabs visíveis
+  const getInitialTab = (): TabKey => {
     const hash = location.hash.replace('#', '')
-    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos', 'quizzes']
-    if (validTabs.includes(hash)) {
-      return hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes'
+    const validTabKeys = visibleTabs.map(t => t.key)
+    if (validTabKeys.includes(hash as TabKey)) {
+      return hash as TabKey
     }
-    return 'tarefas'
+    // Retorna a primeira tab visível ou 'tarefas' como fallback
+    return visibleTabs.length > 0 ? visibleTabs[0].key : 'tarefas'
   }
   
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes'>(getInitialTab())
+  const [activeTab, setActiveTab] = useState<TabKey>(getInitialTab())
   const [selectedProjectsFilter, setSelectedProjectsFilter] = useState<string[]>([])
   const [selectedClientsFilter, setSelectedClientsFilter] = useState<string[]>([])
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('abertos')
@@ -2247,11 +2276,11 @@ const EmployeeDetail = () => {
   // Listener para mudanças no hash da URL (para navegação via notificações)
   useEffect(() => {
     const hash = location.hash.replace('#', '')
-    const validTabs = ['tarefas', 'registro', 'feedbacks', 'avaliacoes', 'pdi', 'acompanhamento', 'acessos', 'quizzes']
-    if (validTabs.includes(hash)) {
-      setActiveTab(hash as 'tarefas' | 'registro' | 'feedbacks' | 'avaliacoes' | 'pdi' | 'acompanhamento' | 'acessos' | 'quizzes')
+    const validTabKeys = visibleTabs.map(t => t.key)
+    if (validTabKeys.includes(hash as TabKey)) {
+      setActiveTab(hash as TabKey)
     }
-  }, [location.hash]);
+  }, [location.hash, visibleTabs]);
 
   // Listener para mudanças no estado de full screen
   useEffect(() => {
@@ -2672,88 +2701,21 @@ const EmployeeDetail = () => {
               <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex justify-between items-center -mb-px px-6">
                   <div className="flex">
-                    <button
-                      onClick={() => setActiveTab('tarefas')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'tarefas'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Tarefas Atribuídas
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('registro')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'registro'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Registro de Horas
-                    </button>
+                    {visibleTabs.map((tab, index) => (
                       <button
-                      onClick={() => setActiveTab('acompanhamento')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'acompanhamento'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Acompanhamento
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('feedbacks')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'feedbacks'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Feedbacks
-                    </button>
-                    
-                    <button
-                      onClick={() => setActiveTab('avaliacoes')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'avaliacoes'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Avaliações
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('pdi')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'pdi'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      PDI
-                    </button>
-                  
-                    <button
-                      onClick={() => setActiveTab('acessos')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        activeTab === 'acessos'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Acessos
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('quizzes')}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'quizzes'
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Quizzes
-                    </button>
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                          index < visibleTabs.length - 1 ? 'mr-8' : ''
+                        } ${
+                          activeTab === tab.key
+                            ? 'border-primary-500 text-primary-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
                   </div>
                   <button
                     onClick={toggleFullScreen}

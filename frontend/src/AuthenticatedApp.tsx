@@ -8,8 +8,10 @@
 import { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { usePermissionStore } from '@/stores/permissionStore'
 import Layout from '@/components/Layout'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import { ProtectedRouteByPermission } from '@/components/ProtectedComponents'
 import { supabase } from './lib/supabaseClient'
 
 // Lazy loading para páginas
@@ -40,6 +42,9 @@ const QuizModelDetail = lazy(() => import('@/pages/QuizModelDetail'))
 // Quiz - Uso/Acompanhamento (menu Funcionários)
 const EmployeeQuizzes = lazy(() => import('@/pages/EmployeeQuizzes'))
 const EmployeeQuizDetail = lazy(() => import('@/pages/EmployeeQuizDetail'))
+// Perfis de Acesso
+const AccessProfiles = lazy(() => import('@/pages/AccessProfiles'))
+const AccessProfileDetail = lazy(() => import('@/pages/AccessProfileDetail'))
 
 // Fallback de loading
 const LazyLoadingFallback = () => (
@@ -56,12 +61,24 @@ const LazyLoadingFallback = () => (
 
 function AuthenticatedApp() {
   const { isAuthenticated, loading, initializeAuth } = useAuthStore()
+  const { loadPermissions, loaded: permissionsLoaded, loading: permissionsLoading, clearPermissions } = usePermissionStore()
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
     void initializeAuth()
   }, [initializeAuth])
+
+  // Carregar permissões quando autenticado
+  useEffect(() => {
+    if (isAuthenticated && !permissionsLoaded && !permissionsLoading) {
+      void loadPermissions()
+    }
+    // Limpar permissões quando deslogar
+    if (!isAuthenticated && permissionsLoaded) {
+      clearPermissions()
+    }
+  }, [isAuthenticated, permissionsLoaded, permissionsLoading, loadPermissions, clearPermissions])
 
   useEffect(() => {
     // Check for invite link on initial load and set a flag.
@@ -111,28 +128,31 @@ function AuthenticatedApp() {
         <Route path="/*" element={
           <Layout>
             <Routes>
-              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/time-entries" element={<ProtectedRoute><TimeEntries /></ProtectedRoute>} />
-              <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
-              <Route path="/employees/:id" element={<ProtectedRoute><EmployeeDetail /></ProtectedRoute>} />
-              <Route path="/allocations" element={<ProtectedRoute><Allocations /></ProtectedRoute>} />
-              <Route path="/feedbacks" element={<ProtectedRoute><Feedbacks /></ProtectedRoute>} />
-              <Route path="/employee-evaluations" element={<ProtectedRoute><EmployeeEvaluations /></ProtectedRoute>} />
-              <Route path="/employee-evaluations/:id" element={<ProtectedRoute><EvaluationResponse /></ProtectedRoute>} />
-              <Route path="/evaluations" element={<ProtectedRoute><EvaluationModels /></ProtectedRoute>} />
-              <Route path="/evaluations/:id" element={<ProtectedRoute><EvaluationDetail /></ProtectedRoute>} />
-              <Route path="/pdi" element={<ProtectedRoute><PDI /></ProtectedRoute>} />
-              <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-              <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-              <Route path="/domains" element={<ProtectedRoute><Domains /></ProtectedRoute>} />
-              <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRouteByPermission screenKey="dashboard"><Dashboard /></ProtectedRouteByPermission>} />
+              <Route path="/dashboard" element={<ProtectedRouteByPermission screenKey="dashboard"><Dashboard /></ProtectedRouteByPermission>} />
+              <Route path="/time-entries" element={<ProtectedRouteByPermission screenKey="dashboard"><TimeEntries /></ProtectedRouteByPermission>} />
+              <Route path="/employees" element={<ProtectedRouteByPermission screenKey="employees"><Employees /></ProtectedRouteByPermission>} />
+              <Route path="/employees/:id" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeDetail /></ProtectedRouteByPermission>} />
+              <Route path="/allocations" element={<ProtectedRouteByPermission screenKey="allocations"><Allocations /></ProtectedRouteByPermission>} />
+              <Route path="/feedbacks" element={<ProtectedRouteByPermission screenKey="employees"><Feedbacks /></ProtectedRouteByPermission>} />
+              <Route path="/employee-evaluations" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeEvaluations /></ProtectedRouteByPermission>} />
+              <Route path="/employee-evaluations/:id" element={<ProtectedRouteByPermission screenKey="employees"><EvaluationResponse /></ProtectedRouteByPermission>} />
+              <Route path="/evaluations" element={<ProtectedRouteByPermission screenKey="evaluation_models"><EvaluationModels /></ProtectedRouteByPermission>} />
+              <Route path="/evaluations/:id" element={<ProtectedRouteByPermission screenKey="evaluation_models"><EvaluationDetail /></ProtectedRouteByPermission>} />
+              <Route path="/pdi" element={<ProtectedRouteByPermission screenKey="employees"><PDI /></ProtectedRouteByPermission>} />
+              <Route path="/projects" element={<ProtectedRouteByPermission screenKey="projects"><Projects /></ProtectedRouteByPermission>} />
+              <Route path="/users" element={<ProtectedRouteByPermission screenKey="users"><Users /></ProtectedRouteByPermission>} />
+              <Route path="/domains" element={<ProtectedRouteByPermission screenKey="domains"><Domains /></ProtectedRouteByPermission>} />
+              <Route path="/notifications" element={<ProtectedRouteByPermission screenKey="notifications"><Notifications /></ProtectedRouteByPermission>} />
               {/* Quiz - Configuração (menu Configurações) */}
-              <Route path="/quizzes" element={<ProtectedRoute><QuizModel /></ProtectedRoute>} />
-              <Route path="/quizzes/:id" element={<ProtectedRoute><QuizModelDetail /></ProtectedRoute>} />
+              <Route path="/quizzes" element={<ProtectedRouteByPermission screenKey="quizzes"><QuizModel /></ProtectedRouteByPermission>} />
+              <Route path="/quizzes/:id" element={<ProtectedRouteByPermission screenKey="quizzes"><QuizModelDetail /></ProtectedRouteByPermission>} />
               {/* Quiz - Uso/Acompanhamento (menu Funcionários) */}
-              <Route path="/employee-quizzes" element={<ProtectedRoute><EmployeeQuizzes /></ProtectedRoute>} />
-              <Route path="/employee-quizzes/:id" element={<ProtectedRoute><EmployeeQuizDetail /></ProtectedRoute>} />
+              <Route path="/employee-quizzes" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeQuizzes /></ProtectedRouteByPermission>} />
+              <Route path="/employee-quizzes/:id" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeQuizDetail /></ProtectedRouteByPermission>} />
+              {/* Perfis de Acesso */}
+              <Route path="/access-profiles" element={<ProtectedRouteByPermission screenKey="access_profiles"><AccessProfiles /></ProtectedRouteByPermission>} />
+              <Route path="/access-profiles/:id" element={<ProtectedRouteByPermission screenKey="access_profiles"><AccessProfileDetail /></ProtectedRouteByPermission>} />
             </Routes>
           </Layout>
         } />

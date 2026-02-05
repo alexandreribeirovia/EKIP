@@ -251,7 +251,7 @@ export interface UserWithSkills {
   name?: string
   email?: string
   is_active?: boolean
-  users_skill: UserSkillData[]
+  employees_skill: UserSkillData[]
 }
 
 export interface AllocationFilterParams {

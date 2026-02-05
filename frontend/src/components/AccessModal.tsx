@@ -257,7 +257,7 @@ const AccessModal = ({ isOpen, onClose, onSuccess, projectId, accessData = null,
   const loadEmployees = async () => {
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('employees')
         .select('user_id, name')
         .eq('is_active', true)
         .order('name');

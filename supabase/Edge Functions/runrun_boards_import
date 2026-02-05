@@ -1,0 +1,161 @@
+/**
+ * [ARIBEIRO] 16/12/2025 - CRIAÇÃO
+ * Busca, processa e salva boards e boards_stages do Runrun.it
+ * Exemplo de chamada
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_boards_import
+ */
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import axios from "https://esm.sh/axios@1.7.2";
+
+console.log('Função "runrun_boards_import" inicializada.');
+
+type RunrunBoard = {
+  id: number;
+  name: string;
+  created_at?: string;
+};
+
+type RunrunStage = {
+  id: number;
+  name: string;
+  description?: string | null;
+  stage_group: string;
+  board_id: number;
+  position: number;
+};
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+/**
+ * Pool simples pra limitar concorrência (evita estourar rate limit).
+ */
+async function asyncPool<T, R>(
+  poolLimit: number,
+  array: T[],
+  iteratorFn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const ret: Promise<R>[] = [];
+  const executing: Promise<any>[] = [];
+
+  for (const item of array) {
+    const p = Promise.resolve().then(() => iteratorFn(item));
+    ret.push(p);
+
+    if (poolLimit <= array.length) {
+      const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+      executing.push(e);
+      if (executing.length >= poolLimit) {
+        await Promise.race(executing);
+      }
+    }
+  }
+  return Promise.all(ret);
+}
+
+Deno.serve(async (_req) => {
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const RUNRUNIT_APP_KEY = Deno.env.get("RUNRUNIT_APP_KEY");
+    const RUNRUNIT_USER_TOKEN = Deno.env.get("RUNRUNIT_USER_TOKEN");
+
+    if (!RUNRUNIT_APP_KEY || !RUNRUNIT_USER_TOKEN) {
+      throw new Error("Variáveis RUNRUNIT_APP_KEY e/ou RUNRUNIT_USER_TOKEN não configuradas.");
+    }
+
+    const runrunApi = axios.create({
+      baseURL: "https://runrun.it",
+      headers: {
+        "App-Key": RUNRUNIT_APP_KEY,
+        "User-Token": RUNRUNIT_USER_TOKEN,
+      },
+    });
+
+    // 1) Buscar boards
+    console.log("Buscando boards na API do Runrun.it...");
+    const boardsResp = await runrunApi.get<RunrunBoard[]>("/api/v1.0/boards");
+    const boards = boardsResp.data ?? [];
+    console.log(`Sucesso! ${boards.length} boards encontrados.`);
+
+    // 2) Upsert boards
+    const boardsForSupabase = boards.map((b) => ({
+      board_id: b.id,
+      name: b.name,
+      updated_at: new Date().toISOString(),
+    }));
+
+    if (boardsForSupabase.length > 0) {
+      const { error: boardsError } = await supabase
+        .from("boards")
+        .upsert(boardsForSupabase, { onConflict: "board_id" });
+
+      if (boardsError) throw boardsError;
+      console.log("Upsert de boards concluído com sucesso!");
+    }
+
+    // 3) Buscar stages por board (com concorrência limitada)
+    console.log("Buscando stages por board...");
+    const concurrency = 6; // ajuste se quiser mais/menos agressivo
+    const stagesByBoard = await asyncPool(concurrency, boards, async (b) => {
+      const resp = await runrunApi.get<RunrunStage[]>(`/api/v1.0/boards/${b.id}/stages`);
+      const stages = resp.data ?? [];
+      console.log(`Board ${b.id} (${b.name}): ${stages.length} stages.`);
+      return stages;
+    });
+
+    const allStages = stagesByBoard.flat();
+    console.log(`Total de stages coletados: ${allStages.length}`);
+
+    // 4) Upsert stages em lote
+    const stagesForSupabase = allStages.map((s) => ({
+      stage_id: s.id, // IMPORTANTE: precisa existir na sua tabela (recomendado acima)
+      board_id: s.board_id,
+      name: s.name,
+      stage_group: s.stage_group,
+      position: s.position,
+      description: s.description ?? null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    if (stagesForSupabase.length > 0) {
+      // lotes pra não mandar payload gigante
+      const batches = chunkArray(stagesForSupabase, 1000);
+
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        console.log(`Upsert batch stages ${i + 1}/${batches.length} (itens: ${batch.length})...`);
+
+        const { error: stagesError } = await supabase
+          .from("boards_stages")
+          .upsert(batch, { onConflict: "stage_id" });
+
+        if (stagesError) throw stagesError;
+      }
+
+      console.log("Upsert de boards_stages concluído com sucesso!");
+    }
+
+    return new Response(
+      JSON.stringify({
+        message: "Sincronização concluída com sucesso.",
+        boards: boards.length,
+        stages: allStages.length,
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
+  } catch (err) {
+    console.error("Erro na execução da função:", err?.message ?? err);
+    return new Response(JSON.stringify({ error: err?.message ?? String(err) }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});

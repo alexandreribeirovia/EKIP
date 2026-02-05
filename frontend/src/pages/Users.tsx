@@ -4,6 +4,7 @@ import { ColDef } from 'ag-grid-community'
 import { Plus, Edit, Users as UsersIcon, UserCheck, UserX, Shield } from 'lucide-react'
 import UserModal from '@/components/UserModal'
 import * as apiClient from '../lib/apiClient'
+import { ProtectedAction } from '../components/ProtectedComponents'
 
 interface UserData {
   id: string
@@ -13,6 +14,8 @@ interface UserData {
   status: string
   avatar?: string
   runrun_user_id?: string
+  profile_id?: number | null
+  profile_name?: string | null
   created_at: string
 }
 
@@ -157,7 +160,7 @@ const Users = () => {
       minWidth: 250,
     },
     {
-      headerName: 'Perfil',
+      headerName: 'Tipo de Usuário',
       field: 'role',
       flex: 1,
       minWidth: 120,
@@ -178,6 +181,27 @@ const Users = () => {
               }`}
           >
             {roleLabels[params.value] || params.value}
+          </span>
+        )
+      },
+    },
+    {
+      headerName: 'Perfil de Acesso',
+      field: 'profile_name',
+      flex: 1.2,
+      minWidth: 150,
+      cellRenderer: (params: any) => {
+        if (!params.value) {
+          return (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+              Não definido
+            </span>
+          )
+        }
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+            <Shield className="w-3 h-3" />
+            {params.value}
           </span>
         )
       },
@@ -290,13 +314,15 @@ const Users = () => {
 
           {/* Botão Novo Usuário */}
           <div className="flex items-end">
-            <button
-              onClick={handleCreateUser}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Usuário
-            </button>
+            <ProtectedAction screenKey="users" action="create">
+              <button
+                onClick={handleCreateUser}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Usuário
+              </button>
+            </ProtectedAction>
           </div>
         </div>
 

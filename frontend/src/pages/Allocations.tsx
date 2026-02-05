@@ -509,9 +509,9 @@ const scrollToNowFallbackDOM = () => {
         // Filtra usuários que possuem a skill pesquisada
         const filtered = resources.filter(resource => {
           const user = (result.data || []).find((u: UserWithSkills) => u.user_id === resource.id);
-          if (!user || !user.users_skill) return false;
+          if (!user || !user.employees_skill) return false;
           
-          const userSkillsText = formatUserSkills(user.users_skill);
+          const userSkillsText = formatUserSkills(user.employees_skill);
           return userSkillsText.toLowerCase().includes(skillFilter.toLowerCase());
         });
 

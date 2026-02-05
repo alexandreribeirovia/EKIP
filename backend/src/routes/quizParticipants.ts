@@ -78,7 +78,7 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
     // 2. Buscar participantes
     const { data: participants, error: participantsError } = await supabaseAdmin
       .from('quiz_participant')
-      .select('id, user_id, users(name)')
+      .select('id, user_id, employees(name)')
       .eq('quiz_id', quizIdInt)
 
     if (participantsError) {
@@ -106,7 +106,7 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
         wrong_count,
         submitted_at,
         metadata,
-        users!user_id(name)
+        employees!user_id(name)
       `)
       .eq('quiz_id', quizIdInt)
       .eq('status', 'completed')
@@ -164,7 +164,7 @@ router.get('/:quizId/analytics', async (req: Request, res: Response, next: NextF
     const ranking = bestAttempts
       .map((attempt: any) => ({
         user_id: attempt.user_id,
-        name: attempt.users?.name || 'Participante',
+        name: attempt.employees?.name || 'Participante',
         score: attempt.score || 0,
         total_points: attempt.total_points || quiz.pass_score || 0,
         percentage: getPercentage(attempt),
@@ -455,7 +455,7 @@ router.get('/:quizId', async (req: Request, res: Response, next: NextFunction) =
       })
     }
 
-    // Buscar participantes com dados do usuário
+    // Buscar participantes com dados do funcionário
     const { data: participants, error: participantsError } = await supabaseAdmin
       .from('quiz_participant')
       .select(`
@@ -463,7 +463,7 @@ router.get('/:quizId', async (req: Request, res: Response, next: NextFunction) =
         quiz_id,
         user_id,
         created_at,
-        users (
+        employees (
           user_id,
           name,
           email
@@ -559,8 +559,8 @@ router.get('/:quizId', async (req: Request, res: Response, next: NextFunction) =
         id: p.id,
         quiz_id: p.quiz_id,
         user_id: p.user_id,
-        user_name: p.users?.name || p.user_id,
-        user_email: p.users?.email || null,
+        user_name: p.employees?.name || p.user_id,
+        user_email: p.employees?.email || null,
         created_at: p.created_at,
         // Status do link
         link_status: linkStatus,
