@@ -859,3 +859,89 @@ export interface EmployeeQuizData {
   // Todas as tentativas completas (para gráfico)
   attempts: EmployeeQuizAttempt[];
 }
+
+// ============================================================================
+// ACCESS PROFILE TYPES
+// ============================================================================
+
+/**
+ * Perfil de acesso
+ */
+export interface AccessProfile {
+  id: number
+  name: string
+  description: string | null
+  is_system: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Permissão individual armazenada no banco
+ */
+export interface Permission {
+  id?: number
+  profile_id: number
+  screen_key: string
+  action: string
+  allowed: boolean
+}
+
+/**
+ * Mapa de permissões por tela (screen_key) e ação
+ * Usado internamente para gerenciar o estado no frontend
+ */
+export interface PermissionMap {
+  [screenKey: string]: {
+    [action: string]: boolean
+  }
+}
+
+/**
+ * Estado de habilitação de entidades e sub-entidades
+ * Separado das ações (CRUD), controla se a entidade aparece no menu
+ * 
+ * Exemplo:
+ * {
+ *   'employees': true,      // Entidade habilitada
+ *   'employees.feedbacks': false,  // Sub-entidade desabilitada
+ *   'employees.pdi': true,         // Sub-entidade habilitada
+ * }
+ */
+export interface EnabledMap {
+  [screenKey: string]: boolean
+}
+
+/**
+ * Estado completo de permissões de um perfil
+ * Combina habilitação (enabled) + ações (CRUD)
+ */
+export interface ProfilePermissionState {
+  /** Mapa de habilitação de entidades/sub-entidades */
+  enabled: EnabledMap
+  /** Mapa de ações por screen_key */
+  actions: PermissionMap
+}
+
+/**
+ * Payload enviado ao backend para salvar permissões
+ */
+export interface SavePermissionsPayload {
+  permissions: Array<{
+    screen_key: string
+    action: string
+    allowed: boolean
+  }>
+}
+
+/**
+ * Resposta do endpoint GET /api/access-profiles/user/permissions
+ */
+export interface UserPermissionsResponse {
+  profileId: number | null
+  profileName: string | null
+  isAdmin: boolean
+  permissions: Permission[]
+  noProfile?: boolean
+}

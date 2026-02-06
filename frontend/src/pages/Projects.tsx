@@ -5,15 +5,20 @@ import { Search, FolderOpen, FolderCheck, Layers } from 'lucide-react';
 import * as apiClient from '../lib/apiClient';
 import { DbProject } from '../types';
 import ProjectDetail from './ProjectDetail';
-import ProjectOwnersGridRenderer from '../components/ProjectOwnersGridRenderer'; 
+import ProjectOwnersGridRenderer from '../components/ProjectOwnersGridRenderer';
+import { usePermissionStore } from '../stores/permissionStore'; 
 
 
 
 const Projects = () => {
+  const { hasScreenAccess, isAdmin } = usePermissionStore()
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('open');
   const [selectedProject, setSelectedProject] = useState<DbProject | null>(null);
+  
+  // Verificar se tem acesso ao detalhe do projeto
+  const hasDetailAccess = isAdmin || hasScreenAccess('projects.detail')
   
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);
@@ -119,7 +124,10 @@ const Projects = () => {
   
 
   const handleRowClick = (event: RowClickedEvent<DbProject>) => {
-    setSelectedProject(event.data!);
+    // Só abre detalhe se tiver acesso
+    if (hasDetailAccess) {
+      setSelectedProject(event.data!);
+    }
   };
   
   const handleGoBackToList = () => {
@@ -196,11 +204,11 @@ const Projects = () => {
 
           {/* Card com Tabela */}
           <div className="card p-6 pt-3 flex-1 flex flex-col overflow-hidden">
-            <div className="ag-theme-alpine w-full flex-1">
+            <div className={`ag-theme-alpine w-full flex-1 ${!hasDetailAccess ? 'cursor-default' : ''}`}>
               <AgGridReact
                 columnDefs={columnDefs}
                 rowData={filteredProjects}
-                onRowClicked={handleRowClick} 
+                onRowClicked={hasDetailAccess ? handleRowClick : undefined} 
                 pagination={false}
                 defaultColDef={{ sortable: true, filter: true, resizable: true }}
                 rowSelection="single"
@@ -209,6 +217,7 @@ const Projects = () => {
                 // suppressRowClickSelection={true} <-- REMOVIDO
                 rowHeight={48}
                 headerHeight={48}
+                rowClass={!hasDetailAccess ? 'cursor-default' : 'cursor-pointer'}
               />
             </div>
           </div>

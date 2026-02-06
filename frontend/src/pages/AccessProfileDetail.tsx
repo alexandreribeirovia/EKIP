@@ -1,65 +1,49 @@
 /**
  * Página de Detalhe do Perfil de Acesso
  * 
- * Layout Master-Detail:
- * - Sidebar esquerda: Lista de entidades do sistema
- * - Área direita: Configuração de permissões da entidade selecionada
- *   - Tabs para subtabs da entidade
- *   - Checkboxes para cada ação
+ * Layout Master-Detail com hierarquia de 3 níveis:
+ * - NÍVEL 1: Entidades (Dashboard, Funcionários, Projetos, etc.)
+ * - NÍVEL 2: SubEntidades (páginas de menu OU páginas de detalhe)
+ * - NÍVEL 3: Tabs (abas dentro das páginas de detalhe)
+ * 
+ * Estrutura visual:
+ * - Sidebar esquerda: Lista colapsável de entidades → sub-entidades → tabs
+ * - Área direita: Configuração de ações CRUD do item selecionado
+ * 
+ * Comportamento:
+ * - Desabilitar entidade = desabilita todas sub-entidades e tabs
+ * - Desabilitar sub-entidade de detalhe = desabilita todas tabs
+ * - Habilitar item = view marcado por padrão
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { 
-  Shield, ArrowLeft, Save, X, CheckCircle, XCircle, Check,
-  LayoutDashboard, Users, FolderKanban, CalendarDays, ClipboardList,
-  FileCheck, Database, UserCog, Bell
+  Shield, ArrowLeft, Save, X, CheckCircle, XCircle,
+  LayoutDashboard, Users, ClipboardList, CalendarRange, Settings,
+  Clock, MessageSquare, FileCheck, Target, HelpCircle,
+  ClipboardCheck, Database, ChevronDown, ChevronRight,
+  User, FolderOpen, TrendingUp, Key, AlertTriangle, BarChart
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import apiClient from '../lib/apiClient'
-import { ENTITIES_CONFIG, Entity, Subtab, Action } from '../constants/permissions'
-
-// =====================================================
-// TYPES
-// =====================================================
-
-interface AccessProfile {
-  id: number
-  name: string
-  description: string | null
-  is_system: boolean
-  is_active: boolean
-}
-
-interface Permission {
-  id?: number
-  profile_id: number
-  screen_key: string
-  action: string
-  allowed: boolean
-}
-
-interface PermissionMap {
-  [screenKey: string]: {
-    [action: string]: boolean
-  }
-}
+import { ENTITIES_CONFIG, Entity, SubEntity, Action, TabEntity } from '../constants/permissions'
+import { AccessProfile, EnabledMap, PermissionMap } from '../types'
 
 // =====================================================
 // ICON MAPPING
 // =====================================================
 
-const iconMap: Record<string, React.ReactNode> = {
-  LayoutDashboard: <LayoutDashboard className="w-5 h-5" />,
-  Users: <Users className="w-5 h-5" />,
-  FolderKanban: <FolderKanban className="w-5 h-5" />,
-  CalendarDays: <CalendarDays className="w-5 h-5" />,
-  ClipboardList: <ClipboardList className="w-5 h-5" />,
-  FileCheck: <FileCheck className="w-5 h-5" />,
-  Database: <Database className="w-5 h-5" />,
-  UserCog: <UserCog className="w-5 h-5" />,
-  Shield: <Shield className="w-5 h-5" />,
-  Bell: <Bell className="w-5 h-5" />,
+const getIcon = (iconName: string, size: 'sm' | 'md' = 'md') => {
+  const sizeClass = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5'
+  const icons: Record<string, React.ElementType> = {
+    LayoutDashboard, Users, ClipboardList, CalendarRange, Settings,
+    Clock, MessageSquare, FileCheck, Target, HelpCircle,
+    ClipboardCheck, Database, Shield, User, FolderOpen,
+    TrendingUp, Key, AlertTriangle, BarChart
+  }
+  const IconComponent = icons[iconName] || Shield
+  return <IconComponent className={sizeClass} />
 }
 
 // =====================================================
@@ -113,6 +97,7 @@ const NotificationToast = ({
   useEffect(() => {
     startTimers()
     return () => clearTimers()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const toastContent = (
@@ -151,49 +136,324 @@ const NotificationToast = ({
 }
 
 // =====================================================
-// ENTITY SIDEBAR ITEM
+// TOGGLE SWITCH COMPONENT
 // =====================================================
 
-interface EntitySidebarItemProps {
-  entity: Entity
-  isSelected: boolean
-  onClick: () => void
-  permissionCount: { allowed: number; total: number }
+interface ToggleSwitchProps {
+  enabled: boolean
+  onChange: (enabled: boolean) => void
+  disabled?: boolean
+  size?: 'sm' | 'md'
 }
 
-const EntitySidebarItem = ({ entity, isSelected, onClick, permissionCount }: EntitySidebarItemProps) => {
-  const allAllowed = permissionCount.allowed === permissionCount.total && permissionCount.total > 0
-  const someAllowed = permissionCount.allowed > 0 && permissionCount.allowed < permissionCount.total
-  
+const ToggleSwitch = ({ enabled, onChange, disabled, size = 'md' }: ToggleSwitchProps) => {
+  const sizeClasses = size === 'sm' 
+    ? 'w-8 h-4' 
+    : 'w-10 h-5'
+  const dotSizeClasses = size === 'sm'
+    ? 'w-3 h-3'
+    : 'w-4 h-4'
+  const translateClass = size === 'sm'
+    ? 'translate-x-4'
+    : 'translate-x-5'
+
   return (
     <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left ${
-        isSelected 
-          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md' 
-          : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        if (!disabled) onChange(!enabled)
+      }}
+      disabled={disabled}
+      className={`relative inline-flex items-center rounded-full transition-colors ${sizeClasses} ${
+        disabled 
+          ? 'opacity-50 cursor-not-allowed' 
+          : 'cursor-pointer'
+      } ${
+        enabled 
+          ? 'bg-green-500' 
+          : 'bg-gray-300 dark:bg-gray-600'
       }`}
     >
-      <div className={`${isSelected ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}>
-        {iconMap[entity.icon] || <Shield className="w-5 h-5" />}
+      <span
+        className={`inline-block ${dotSizeClasses} transform rounded-full bg-white shadow transition-transform ${
+          enabled ? translateClass : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  )
+}
+
+// =====================================================
+// ENTITY ACCORDION ITEM (NÍVEL 1)
+// =====================================================
+
+interface EntityAccordionItemProps {
+  entity: Entity
+  isExpanded: boolean
+  onToggleExpand: () => void
+  enabled: EnabledMap
+  onToggleEntity: (entityKey: string, enabled: boolean) => void
+  onToggleSubEntity: (subKey: string, enabled: boolean) => void
+  onToggleTab: (tabKey: string, enabled: boolean) => void
+  isSystemProfile: boolean
+  selectedKey: string | null
+  onSelectItem: (key: string, type: 'entity' | 'subentity' | 'tab') => void
+  expandedSubEntities: Set<string>
+  onToggleExpandSubEntity: (subKey: string) => void
+}
+
+const EntityAccordionItem = ({ 
+  entity, 
+  isExpanded, 
+  onToggleExpand,
+  enabled,
+  onToggleEntity,
+  onToggleSubEntity,
+  onToggleTab,
+  isSystemProfile,
+  selectedKey,
+  onSelectItem,
+  expandedSubEntities,
+  onToggleExpandSubEntity
+}: EntityAccordionItemProps) => {
+  const entityEnabled = enabled[entity.key] ?? true
+  const hasSubEntities = entity.subEntities.length > 0
+  
+  // Separar sub-entidades de menu das páginas de detalhe
+  const menuSubEntities = entity.subEntities.filter(s => !s.isDetailPage)
+  const detailSubEntities = entity.subEntities.filter(s => s.isDetailPage)
+  
+  const enabledSubCount = entity.subEntities.filter(s => enabled[s.key] ?? true).length
+
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      {/* Entity Header (Nível 1) */}
+      <div 
+        className={`flex items-center gap-2 px-3 py-2 ${
+          entityEnabled
+            ? 'bg-white dark:bg-gray-800' 
+            : 'bg-gray-50 dark:bg-gray-900 opacity-60'
+        }`}
+      >
+        {/* Expand/Collapse button */}
+        {hasSubEntities ? (
+          <button
+            onClick={onToggleExpand}
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+          >
+            {isExpanded 
+              ? <ChevronDown className="w-4 h-4 text-gray-500" />
+              : <ChevronRight className="w-4 h-4 text-gray-500" />
+            }
+          </button>
+        ) : (
+          <div className="w-6" />
+        )}
+
+        {/* Icon */}
+        <div className={`${entityEnabled ? 'text-gray-600 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}`}>
+          {getIcon(entity.icon)}
+        </div>
+
+        {/* Label */}
+        <div 
+          className="flex-1 cursor-pointer"
+          onClick={() => {
+            if (!hasSubEntities && entityEnabled) {
+              onSelectItem(entity.key, 'entity')
+            } else {
+              onToggleExpand()
+            }
+          }}
+        >
+          <p className={`font-medium text-sm ${
+            entityEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-500'
+          }`}>
+            {entity.label}
+          </p>
+          {hasSubEntities && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {enabledSubCount}/{entity.subEntities.length} habilitadas
+            </p>
+          )}
+        </div>
+
+        {/* Toggle Switch */}
+        <ToggleSwitch
+          enabled={entityEnabled}
+          onChange={(val) => onToggleEntity(entity.key, val)}
+          disabled={isSystemProfile}
+        />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className={`font-medium truncate ${isSelected ? 'text-white' : ''}`}>
-          {entity.label}
-        </p>
-        <p className={`text-xs truncate ${isSelected ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
-          {permissionCount.allowed}/{permissionCount.total} permissões
-        </p>
-      </div>
-      {allAllowed && (
-        <div className={`p-1 rounded-full ${isSelected ? 'bg-white/20' : 'bg-green-100 dark:bg-green-900/30'}`}>
-          <Check className={`w-3 h-3 ${isSelected ? 'text-white' : 'text-green-600 dark:text-green-400'}`} />
+
+      {/* Sub-entities (Nível 2) */}
+      {hasSubEntities && isExpanded && (
+        <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          {/* Páginas de detalhe primeiro (ex: Detalhes do Funcionário) */}
+          {detailSubEntities.map(subEntity => {
+            const subEnabled = enabled[subEntity.key] ?? true
+            const isSelected = selectedKey === subEntity.key
+            const isSubExpanded = expandedSubEntities.has(subEntity.key)
+            const hasTabs = subEntity.tabs && subEntity.tabs.length > 0
+            const enabledTabsCount = hasTabs 
+              ? subEntity.tabs!.filter(t => enabled[t.key] ?? true).length 
+              : 0
+            
+            return (
+              <div key={subEntity.key}>
+                {/* Sub-entity header */}
+                <div 
+                  className={`flex items-center gap-2 px-3 py-2 pl-8 border-b border-gray-200 dark:border-gray-700 ${
+                    isSelected 
+                      ? 'bg-orange-50 dark:bg-orange-900/20 border-l-2 border-l-orange-500' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                  } ${!subEnabled ? 'opacity-60' : ''}`}
+                >
+                  {/* Expand/Collapse for tabs */}
+                  {hasTabs ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onToggleExpandSubEntity(subEntity.key)
+                      }}
+                      className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    >
+                      {isSubExpanded 
+                        ? <ChevronDown className="w-3 h-3 text-gray-500" />
+                        : <ChevronRight className="w-3 h-3 text-gray-500" />
+                      }
+                    </button>
+                  ) : (
+                    <div className="w-5" />
+                  )}
+
+                  {/* Icon */}
+                  <div className={`${subEnabled ? 'text-orange-500 dark:text-orange-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                    {getIcon(subEntity.icon, 'sm')}
+                  </div>
+
+                  {/* Label */}
+                  <div 
+                    className="flex-1 cursor-pointer"
+                    onClick={() => {
+                      if (subEnabled) {
+                        onSelectItem(subEntity.key, 'subentity')
+                        if (hasTabs && !isSubExpanded) {
+                          onToggleExpandSubEntity(subEntity.key)
+                        }
+                      }
+                    }}
+                  >
+                    <span className={`text-sm font-medium ${
+                      subEnabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'
+                    }`}>
+                      {subEntity.label}
+                    </span>
+                    {hasTabs && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                        ({enabledTabsCount}/{subEntity.tabs!.length} abas)
+                      </span>
+                    )}
+                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                      Detalhe
+                    </span>
+                  </div>
+
+                  {/* Toggle */}
+                  <ToggleSwitch
+                    enabled={subEnabled}
+                    onChange={(val) => onToggleSubEntity(subEntity.key, val)}
+                    disabled={isSystemProfile || !entityEnabled}
+                    size="sm"
+                  />
+                </div>
+
+                {/* Tabs (Nível 3) */}
+                {hasTabs && isSubExpanded && subEnabled && (
+                  <div className="bg-gray-100 dark:bg-gray-800">
+                    {subEntity.tabs!.map(tab => {
+                      const tabEnabled = enabled[tab.key] ?? true
+                      const isTabSelected = selectedKey === tab.key
+                      
+                      return (
+                        <div 
+                          key={tab.key}
+                          className={`flex items-center gap-2 px-3 py-1.5 pl-16 border-b border-gray-200 dark:border-gray-700 cursor-pointer transition-colors ${
+                            isTabSelected 
+                              ? 'bg-orange-100 dark:bg-orange-900/30 border-l-2 border-l-orange-500' 
+                              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                          } ${!tabEnabled ? 'opacity-60' : ''}`}
+                          onClick={() => tabEnabled && onSelectItem(tab.key, 'tab')}
+                        >
+                          {/* Icon */}
+                          <div className={`${tabEnabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                            {getIcon(tab.icon, 'sm')}
+                          </div>
+
+                          {/* Label */}
+                          <span className={`flex-1 text-xs ${
+                            tabEnabled ? 'text-gray-600 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'
+                          }`}>
+                            {tab.label}
+                          </span>
+
+                          {/* Toggle */}
+                          <ToggleSwitch
+                            enabled={tabEnabled}
+                            onChange={(val) => onToggleTab(tab.key, val)}
+                            disabled={isSystemProfile || !subEnabled}
+                            size="sm"
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Sub-entidades de menu (itens normais) */}
+          {menuSubEntities.map(subEntity => {
+            const subEnabled = enabled[subEntity.key] ?? true
+            const isSelected = selectedKey === subEntity.key
+            
+            return (
+              <div 
+                key={subEntity.key}
+                className={`flex items-center gap-2 px-3 py-2 pl-10 border-b last:border-b-0 border-gray-200 dark:border-gray-700 cursor-pointer transition-colors ${
+                  isSelected 
+                    ? 'bg-orange-50 dark:bg-orange-900/20 border-l-2 border-l-orange-500' 
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                } ${!subEnabled ? 'opacity-60' : ''}`}
+                onClick={() => subEnabled && onSelectItem(subEntity.key, 'subentity')}
+              >
+                {/* Icon */}
+                <div className={`${subEnabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                  {getIcon(subEntity.icon, 'sm')}
+                </div>
+
+                {/* Label */}
+                <span className={`flex-1 text-sm ${
+                  subEnabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'
+                }`}>
+                  {subEntity.label}
+                </span>
+
+                {/* Toggle */}
+                <ToggleSwitch
+                  enabled={subEnabled}
+                  onChange={(val) => onToggleSubEntity(subEntity.key, val)}
+                  disabled={isSystemProfile || !entityEnabled}
+                  size="sm"
+                />
+              </div>
+            )
+          })}
         </div>
       )}
-      {someAllowed && (
-        <div className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white/50' : 'bg-yellow-500'}`} />
-      )}
-    </button>
+    </div>
   )
 }
 
@@ -233,6 +493,16 @@ const PermissionCheckbox = ({ action, checked, onChange, disabled }: PermissionC
 }
 
 // =====================================================
+// PERMISSION INTERFACE
+// =====================================================
+
+interface Permission {
+  screen_key: string
+  action: string
+  allowed: boolean
+}
+
+// =====================================================
 // COMPONENTE PRINCIPAL
 // =====================================================
 
@@ -240,15 +510,23 @@ export default function AccessProfileDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   
+  // Profile data
   const [profile, setProfile] = useState<AccessProfile | null>(null)
-  const [permissions, setPermissions] = useState<PermissionMap>({})
-  const [originalPermissions, setOriginalPermissions] = useState<PermissionMap>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   
-  const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
-  const [selectedSubtabKey, setSelectedSubtabKey] = useState<string | null>(null)
+  // Permissions state (separated: enabled map + actions map)
+  const [enabled, setEnabled] = useState<EnabledMap>({})
+  const [actions, setActions] = useState<PermissionMap>({})
+  const [originalEnabled, setOriginalEnabled] = useState<EnabledMap>({})
+  const [originalActions, setOriginalActions] = useState<PermissionMap>({})
+  
+  // UI state
+  const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set())
+  const [expandedSubEntities, setExpandedSubEntities] = useState<Set<string>>(new Set())
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [selectedType, setSelectedType] = useState<'entity' | 'subentity' | 'tab' | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
 
   // =====================================================
@@ -266,7 +544,7 @@ export default function AccessProfileDetail() {
         setNotification({ type: 'error', message: profileResponse.error?.message || 'Erro ao carregar perfil' })
         return
       }
-      setProfile(profileResponse.data)
+      setProfile(profileResponse.data as AccessProfile)
 
       // Fetch permissions
       const permResponse = await apiClient.get(`/api/access-profiles/${id}/permissions`)
@@ -275,42 +553,68 @@ export default function AccessProfileDetail() {
         return
       }
 
-      // Convert to map
-      const permMap: PermissionMap = {}
+      const permData = permResponse.data as { isSystemProfile: boolean; permissions: Permission[] }
+
+      // Initialize maps
+      const enabledMap: EnabledMap = {}
+      const actionsMap: PermissionMap = {}
       
-      // Initialize all entities and actions as false
+      // Initialize all entities, sub-entities, and tabs
       ENTITIES_CONFIG.forEach(entity => {
-        permMap[entity.key] = {}
+        // Entity enabled defaults to true
+        enabledMap[entity.key] = true
+        actionsMap[entity.key] = {}
         entity.actions.forEach(action => {
-          permMap[entity.key][action.key] = false
+          actionsMap[entity.key][action.key] = false
         })
-        entity.subtabs.forEach(subtab => {
-          permMap[subtab.key] = {}
-          subtab.actions.forEach(action => {
-            permMap[subtab.key][action.key] = false
+        
+        // Sub-entities
+        entity.subEntities.forEach(subEntity => {
+          enabledMap[subEntity.key] = true
+          actionsMap[subEntity.key] = {}
+          subEntity.actions.forEach(action => {
+            actionsMap[subEntity.key][action.key] = false
           })
+          
+          // Tabs (Nível 3)
+          if (subEntity.tabs) {
+            subEntity.tabs.forEach(tab => {
+              enabledMap[tab.key] = true
+              actionsMap[tab.key] = {}
+              tab.actions.forEach(action => {
+                actionsMap[tab.key][action.key] = false
+              })
+            })
+          }
         })
       })
 
-      // Set allowed permissions
-      if (!permResponse.data.isSystemProfile) {
-        permResponse.data.permissions.forEach((p: Permission) => {
-          if (!permMap[p.screen_key]) {
-            permMap[p.screen_key] = {}
+      // Set permissions from backend
+      if (!permData.isSystemProfile) {
+        // First pass: detect enabled state from 'enabled' action
+        permData.permissions.forEach((p: Permission) => {
+          if (p.action === 'enabled') {
+            enabledMap[p.screen_key] = p.allowed
           }
-          permMap[p.screen_key][p.action] = p.allowed
+        })
+        
+        // Second pass: set action permissions
+        permData.permissions.forEach((p: Permission) => {
+          if (p.action !== 'enabled' && actionsMap[p.screen_key]) {
+            actionsMap[p.screen_key][p.action] = p.allowed
+          }
         })
       }
 
-      setPermissions(permMap)
-      setOriginalPermissions(JSON.parse(JSON.stringify(permMap)))
+      setEnabled(enabledMap)
+      setActions(actionsMap)
+      setOriginalEnabled(JSON.parse(JSON.stringify(enabledMap)))
+      setOriginalActions(JSON.parse(JSON.stringify(actionsMap)))
 
-      // Select first entity
+      // Expand first entity by default
       if (ENTITIES_CONFIG.length > 0) {
-        setSelectedEntity(ENTITIES_CONFIG[0])
-        if (ENTITIES_CONFIG[0].subtabs.length > 0) {
-          setSelectedSubtabKey(ENTITIES_CONFIG[0].subtabs[0].key)
-        }
+        const firstEntity = ENTITIES_CONFIG[0]
+        setExpandedEntities(new Set([firstEntity.key]))
       }
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message || 'Erro ao carregar dados' })
@@ -325,16 +629,97 @@ export default function AccessProfileDetail() {
 
   // Check for changes
   useEffect(() => {
-    const changed = JSON.stringify(permissions) !== JSON.stringify(originalPermissions)
-    setHasChanges(changed)
-  }, [permissions, originalPermissions])
+    const enabledChanged = JSON.stringify(enabled) !== JSON.stringify(originalEnabled)
+    const actionsChanged = JSON.stringify(actions) !== JSON.stringify(originalActions)
+    setHasChanges(enabledChanged || actionsChanged)
+  }, [enabled, actions, originalEnabled, originalActions])
 
   // =====================================================
   // HANDLERS
   // =====================================================
 
-  const handlePermissionChange = (screenKey: string, actionKey: string, allowed: boolean) => {
-    setPermissions(prev => ({
+  const handleToggleEntity = (entityKey: string, isEnabled: boolean) => {
+    const entity = ENTITIES_CONFIG.find(e => e.key === entityKey)
+    if (!entity) return
+
+    setEnabled(prev => {
+      const newEnabled = { ...prev, [entityKey]: isEnabled }
+      
+      // If disabling, disable all sub-entities and their tabs too
+      if (!isEnabled) {
+        entity.subEntities.forEach(sub => {
+          newEnabled[sub.key] = false
+          if (sub.tabs) {
+            sub.tabs.forEach(tab => {
+              newEnabled[tab.key] = false
+            })
+          }
+        })
+      }
+      
+      return newEnabled
+    })
+  }
+
+  const handleToggleSubEntity = (subKey: string, isEnabled: boolean) => {
+    // Find the sub-entity to get its tabs
+    let subEntityWithTabs: SubEntity | undefined
+    for (const entity of ENTITIES_CONFIG) {
+      const found = entity.subEntities.find(s => s.key === subKey)
+      if (found) {
+        subEntityWithTabs = found
+        break
+      }
+    }
+
+    setEnabled(prev => {
+      const newEnabled = { ...prev, [subKey]: isEnabled }
+      
+      // If disabling, disable all tabs too
+      if (!isEnabled && subEntityWithTabs?.tabs) {
+        subEntityWithTabs.tabs.forEach(tab => {
+          newEnabled[tab.key] = false
+        })
+      }
+      
+      return newEnabled
+    })
+    
+    // If enabling, set default view permission
+    if (isEnabled) {
+      setActions(prev => ({
+        ...prev,
+        [subKey]: {
+          ...prev[subKey],
+          view: true
+        }
+      }))
+      // Select this sub-entity
+      setSelectedKey(subKey)
+      setSelectedType('subentity')
+    }
+  }
+
+  const handleToggleTab = (tabKey: string, isEnabled: boolean) => {
+    setEnabled(prev => ({ ...prev, [tabKey]: isEnabled }))
+    
+    // If enabling, set default view permission
+    if (isEnabled) {
+      setActions(prev => ({
+        ...prev,
+        [tabKey]: {
+          ...prev[tabKey],
+          view: true
+        }
+      }))
+      // Select this tab
+      setSelectedKey(tabKey)
+      setSelectedType('tab')
+    }
+  }
+
+  const handleActionChange = (screenKey: string, actionKey: string, allowed: boolean) => {
+    setActions(prev => ({
       ...prev,
       [screenKey]: {
         ...prev[screenKey],
@@ -343,13 +728,13 @@ export default function AccessProfileDetail() {
     }))
   }
 
-  const handleToggleAll = (screenKey: string, actions: Action[], allow: boolean) => {
+  const handleToggleAllActions = (screenKey: string, actionsList: Action[], allow: boolean) => {
     const updates: { [action: string]: boolean } = {}
-    actions.forEach(action => {
+    actionsList.forEach(action => {
       updates[action.key] = allow
     })
     
-    setPermissions(prev => ({
+    setActions(prev => ({
       ...prev,
       [screenKey]: {
         ...prev[screenKey],
@@ -358,24 +743,33 @@ export default function AccessProfileDetail() {
     }))
   }
 
-  const handleToggleEntity = (entity: Entity, allow: boolean) => {
-    const updates: PermissionMap = { ...permissions }
-    
-    // Toggle entity actions
-    updates[entity.key] = {}
-    entity.actions.forEach(action => {
-      updates[entity.key][action.key] = allow
+  const handleToggleExpandEntity = (entityKey: string) => {
+    setExpandedEntities(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(entityKey)) {
+        newSet.delete(entityKey)
+      } else {
+        newSet.add(entityKey)
+      }
+      return newSet
     })
-    
-    // Toggle all subtabs
-    entity.subtabs.forEach(subtab => {
-      updates[subtab.key] = {}
-      subtab.actions.forEach(action => {
-        updates[subtab.key][action.key] = allow
-      })
+  }
+
+  const handleToggleExpandSubEntity = (subKey: string) => {
+    setExpandedSubEntities(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(subKey)) {
+        newSet.delete(subKey)
+      } else {
+        newSet.add(subKey)
+      }
+      return newSet
     })
-    
-    setPermissions(updates)
+  }
+
+  const handleSelectItem = (key: string, type: 'entity' | 'subentity' | 'tab') => {
+    setSelectedKey(key)
+    setSelectedType(type)
   }
 
   const handleSave = async () => {
@@ -383,11 +777,17 @@ export default function AccessProfileDetail() {
 
     setSaving(true)
     try {
-      // Convert map to array
+      // Convert maps to array
       const permArray: Array<{ screen_key: string; action: string; allowed: boolean }> = []
       
-      Object.entries(permissions).forEach(([screenKey, actions]) => {
-        Object.entries(actions).forEach(([action, allowed]) => {
+      // Add enabled states
+      Object.entries(enabled).forEach(([screenKey, isEnabled]) => {
+        permArray.push({ screen_key: screenKey, action: 'enabled', allowed: isEnabled })
+      })
+      
+      // Add action permissions
+      Object.entries(actions).forEach(([screenKey, actionMap]) => {
+        Object.entries(actionMap).forEach(([action, allowed]) => {
           permArray.push({ screen_key: screenKey, action, allowed })
         })
       })
@@ -398,7 +798,8 @@ export default function AccessProfileDetail() {
 
       if (response.success) {
         setNotification({ type: 'success', message: 'Permissões salvas com sucesso!' })
-        setOriginalPermissions(JSON.parse(JSON.stringify(permissions)))
+        setOriginalEnabled(JSON.parse(JSON.stringify(enabled)))
+        setOriginalActions(JSON.parse(JSON.stringify(actions)))
       } else {
         setNotification({ type: 'error', message: response.error?.message || 'Erro ao salvar permissões' })
       }
@@ -409,46 +810,52 @@ export default function AccessProfileDetail() {
     }
   }
 
-  const handleSelectEntity = (entity: Entity) => {
-    setSelectedEntity(entity)
-    if (entity.subtabs.length > 0) {
-      setSelectedSubtabKey(entity.subtabs[0].key)
-    } else {
-      setSelectedSubtabKey(null)
-    }
-  }
-
   // =====================================================
   // HELPERS
   // =====================================================
 
-  const getEntityPermissionCount = (entity: Entity) => {
-    let allowed = 0
-    let total = 0
-
-    // Count entity actions
-    entity.actions.forEach(action => {
-      total++
-      if (permissions[entity.key]?.[action.key]) allowed++
-    })
-
-    // Count subtab actions
-    entity.subtabs.forEach(subtab => {
-      subtab.actions.forEach(action => {
-        total++
-        if (permissions[subtab.key]?.[action.key]) allowed++
-      })
-    })
-
-    return { allowed, total }
-  }
-
-  const getScreenPermissionCount = (screenKey: string, actions: Action[]) => {
-    let allowed = 0
-    actions.forEach(action => {
-      if (permissions[screenKey]?.[action.key]) allowed++
-    })
-    return { allowed, total: actions.length }
+  const getSelectedItem = (): { label: string; description: string; icon: string; actions: Action[] } | null => {
+    if (!selectedKey || !selectedType) return null
+    
+    if (selectedType === 'entity') {
+      const entity = ENTITIES_CONFIG.find(e => e.key === selectedKey)
+      if (!entity) return null
+      return { label: entity.label, description: entity.description, icon: entity.icon, actions: entity.actions }
+    }
+    
+    if (selectedType === 'subentity') {
+      for (const entity of ENTITIES_CONFIG) {
+        const sub = entity.subEntities.find(s => s.key === selectedKey)
+        if (sub) {
+          return { 
+            label: sub.label, 
+            description: sub.isDetailPage ? 'Página de detalhe' : 'Página de menu',
+            icon: sub.icon, 
+            actions: sub.actions 
+          }
+        }
+      }
+    }
+    
+    if (selectedType === 'tab') {
+      for (const entity of ENTITIES_CONFIG) {
+        for (const sub of entity.subEntities) {
+          if (sub.tabs) {
+            const tab = sub.tabs.find(t => t.key === selectedKey)
+            if (tab) {
+              return { 
+                label: tab.label, 
+                description: `Aba em ${sub.label}`,
+                icon: tab.icon, 
+                actions: tab.actions 
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return null
   }
 
   // =====================================================
@@ -477,9 +884,12 @@ export default function AccessProfileDetail() {
     )
   }
 
+  const selectedItem = getSelectedItem()
+  const isItemEnabled = selectedKey ? (enabled[selectedKey] ?? true) : false
+
   return (
     <div className="h-full flex flex-col space-y-2 overflow-hidden">
-      {/* Botão Voltar - fora do card */}
+      {/* Botão Voltar */}
       <button
         onClick={() => navigate('/access-profiles')}
         className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -547,20 +957,28 @@ export default function AccessProfileDetail() {
 
       {/* Main content - Master Detail */}
       <div className="card flex-1 flex gap-4 min-h-0 p-4 overflow-hidden">
-        {/* Sidebar - Entity List */}
-        <div className="w-64 flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+        {/* Sidebar - Entity Accordion */}
+        <div className="w-80 flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-white">Entidades</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Selecione para configurar</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Habilite e clique para configurar ações</p>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {ENTITIES_CONFIG.map(entity => (
-              <EntitySidebarItem
+              <EntityAccordionItem
                 key={entity.key}
                 entity={entity}
-                isSelected={selectedEntity?.key === entity.key}
-                onClick={() => handleSelectEntity(entity)}
-                permissionCount={getEntityPermissionCount(entity)}
+                isExpanded={expandedEntities.has(entity.key)}
+                onToggleExpand={() => handleToggleExpandEntity(entity.key)}
+                enabled={enabled}
+                onToggleEntity={handleToggleEntity}
+                onToggleSubEntity={handleToggleSubEntity}
+                onToggleTab={handleToggleTab}
+                isSystemProfile={profile.is_system}
+                selectedKey={selectedKey}
+                onSelectItem={handleSelectItem}
+                expandedSubEntities={expandedSubEntities}
+                onToggleExpandSubEntity={handleToggleExpandSubEntity}
               />
             ))}
           </div>
@@ -568,30 +986,30 @@ export default function AccessProfileDetail() {
 
         {/* Detail Panel */}
         <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
-          {selectedEntity ? (
+          {selectedItem && isItemEnabled ? (
             <>
-              {/* Entity Header */}
+              {/* Header */}
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
-                      {iconMap[selectedEntity.icon] || <Shield className="w-5 h-5" />}
+                      {getIcon(selectedItem.icon)}
                     </div>
                     <div>
-                      <h2 className="font-semibold text-gray-900 dark:text-white">{selectedEntity.label}</h2>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{selectedEntity.description}</p>
+                      <h2 className="font-semibold text-gray-900 dark:text-white">{selectedItem.label}</h2>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{selectedItem.description}</p>
                     </div>
                   </div>
                   {!profile.is_system && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleToggleEntity(selectedEntity, true)}
+                        onClick={() => handleToggleAllActions(selectedKey!, selectedItem.actions, true)}
                         className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
                       >
                         Permitir Todos
                       </button>
                       <button
-                        onClick={() => handleToggleEntity(selectedEntity, false)}
+                        onClick={() => handleToggleAllActions(selectedKey!, selectedItem.actions, false)}
                         className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                       >
                         Negar Todos
@@ -601,105 +1019,35 @@ export default function AccessProfileDetail() {
                 </div>
               </div>
 
-              {/* Tabs for subtabs */}
-              {selectedEntity.subtabs.length > 0 && (
-                <div className="border-b border-gray-200 dark:border-gray-700">
-                  <nav className="flex -mb-px px-4">
-                    {/* Entity root tab */}
-                    <button
-                      onClick={() => setSelectedSubtabKey(null)}
-                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                        selectedSubtabKey === null
-                          ? 'border-primary-500 text-primary-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      Geral
-                      <span className="ml-2 text-xs text-gray-400">
-                        ({getScreenPermissionCount(selectedEntity.key, selectedEntity.actions).allowed}/{selectedEntity.actions.length})
-                      </span>
-                    </button>
-                    
-                    {/* Subtab tabs */}
-                    {selectedEntity.subtabs.map(subtab => {
-                      const count = getScreenPermissionCount(subtab.key, subtab.actions)
-                      return (
-                        <button
-                          key={subtab.key}
-                          onClick={() => setSelectedSubtabKey(subtab.key)}
-                          className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm mr-8 ${
-                            selectedSubtabKey === subtab.key
-                              ? 'border-primary-500 text-primary-600'
-                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          {subtab.label}
-                          <span className="ml-2 text-xs text-gray-400">
-                            ({count.allowed}/{count.total})
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </nav>
-                </div>
-              )}
-
-              {/* Permissions Grid */}
+              {/* Actions grid */}
               <div className="flex-1 overflow-y-auto p-4">
-                {(() => {
-                  const currentScreenKey = selectedSubtabKey || selectedEntity.key
-                  const currentActions = selectedSubtabKey 
-                    ? selectedEntity.subtabs.find(s => s.key === selectedSubtabKey)?.actions || []
-                    : selectedEntity.actions
-
-                  if (currentActions.length === 0) {
-                    return (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                        Nenhuma ação disponível para esta seção
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <>
-                      {/* Toggle all for current screen */}
-                      {!profile.is_system && (
-                        <div className="flex justify-end gap-2 mb-4">
-                          <button
-                            onClick={() => handleToggleAll(currentScreenKey, currentActions, true)}
-                            className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
-                          >
-                            Permitir Todos
-                          </button>
-                          <button
-                            onClick={() => handleToggleAll(currentScreenKey, currentActions, false)}
-                            className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
-                          >
-                            Negar Todos
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Actions grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {currentActions.map(action => (
-                          <PermissionCheckbox
-                            key={action.key}
-                            action={action}
-                            checked={profile.is_system ? true : (permissions[currentScreenKey]?.[action.key] || false)}
-                            onChange={(checked) => handlePermissionChange(currentScreenKey, action.key, checked)}
-                            disabled={profile.is_system}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )
-                })()}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {selectedItem.actions.map(action => (
+                    <PermissionCheckbox
+                      key={action.key}
+                      action={action}
+                      checked={profile.is_system ? true : (actions[selectedKey!]?.[action.key] || false)}
+                      onChange={(checked) => handleActionChange(selectedKey!, action.key, checked)}
+                      disabled={profile.is_system}
+                    />
+                  ))}
+                </div>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
-              Selecione uma entidade para configurar
+            /* No item selected or item disabled */
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-8">
+              <Shield className="w-12 h-12 mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">
+                {selectedKey && !isItemEnabled 
+                  ? 'Item desabilitado' 
+                  : 'Selecione um item'}
+              </p>
+              <p className="text-sm text-center max-w-md">
+                {selectedKey && !isItemEnabled 
+                  ? 'Habilite o item na lista à esquerda para configurar suas permissões.'
+                  : 'Escolha uma entidade, sub-entidade ou aba na lista à esquerda para configurar suas ações.'}
+              </p>
             </div>
           )}
         </div>
@@ -714,7 +1062,8 @@ export default function AccessProfileDetail() {
           <div className="flex gap-2">
             <button
               onClick={() => {
-                setPermissions(JSON.parse(JSON.stringify(originalPermissions)))
+                setEnabled(JSON.parse(JSON.stringify(originalEnabled)))
+                setActions(JSON.parse(JSON.stringify(originalActions)))
               }}
               className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >

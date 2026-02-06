@@ -32,14 +32,14 @@ interface TabConfig {
 }
 
 const TAB_CONFIG: TabConfig[] = [
-  { key: 'tarefas', label: 'Tarefas Atribuídas', permissionKey: 'employees.tasks' },
-  { key: 'registro', label: 'Registro de Horas', permissionKey: 'employees.timerecord' },
-  { key: 'acompanhamento', label: 'Acompanhamento', permissionKey: 'employees.followup' },
-  { key: 'feedbacks', label: 'Feedbacks', permissionKey: 'employees.feedbacks' },
-  { key: 'avaliacoes', label: 'Avaliações', permissionKey: 'employees.evaluations' },
-  { key: 'pdi', label: 'PDI', permissionKey: 'employees.pdi' },
-  { key: 'acessos', label: 'Acessos', permissionKey: 'employees.access' },
-  { key: 'quizzes', label: 'Quizzes', permissionKey: 'employees.quizzes' },
+  { key: 'tarefas', label: 'Tarefas Atribuídas', permissionKey: 'employees.detail.tasks' },
+  { key: 'registro', label: 'Registro de Horas', permissionKey: 'employees.detail.timerecord' },
+  { key: 'acompanhamento', label: 'Acompanhamento', permissionKey: 'employees.detail.followup' },
+  { key: 'feedbacks', label: 'Feedbacks', permissionKey: 'employees.detail.feedbacks' },
+  { key: 'avaliacoes', label: 'Avaliações', permissionKey: 'employees.detail.evaluations' },
+  { key: 'pdi', label: 'PDI', permissionKey: 'employees.detail.pdi' },
+  { key: 'acessos', label: 'Acessos', permissionKey: 'employees.detail.access' },
+  { key: 'quizzes', label: 'Quizzes', permissionKey: 'employees.detail.quizzes' },
 ]
 
 const EmployeeDetail = () => {

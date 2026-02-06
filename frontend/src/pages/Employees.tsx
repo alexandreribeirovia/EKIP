@@ -5,13 +5,18 @@ import { ColDef, RowClickedEvent } from 'ag-grid-community'
 import { Search, User, Users, UserCheck, UserX } from 'lucide-react'
 import { DbUser } from '../types'
 import * as apiClient from '../lib/apiClient'
+import { usePermissionStore } from '../stores/permissionStore'
 
 const Employees = () => {
   const navigate = useNavigate()
+  const { hasScreenAccess, isAdmin } = usePermissionStore()
   const [employees, setEmployees] = useState<DbUser[]>([]);
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active')
+  
+  // Verificar se tem acesso ao detalhe do funcionário
+  const hasDetailAccess = isAdmin || hasScreenAccess('employees.detail')
   
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);
@@ -178,7 +183,10 @@ const Employees = () => {
   }
 
   const handleRowClick = (event: RowClickedEvent) => {
-    navigate(`/employees/${event.data.user_id}`)
+    // Só navega se tiver acesso ao detalhe
+    if (hasDetailAccess) {
+      navigate(`/employees/${event.data.user_id}`)
+    }
   }
 
    return (
@@ -268,11 +276,11 @@ const Employees = () => {
 
       {/* Card com Tabela */}
       <div className="card p-6 pt-3 flex-1 flex flex-col overflow-hidden">
-        <div className="ag-theme-alpine w-full mt-2 flex-1">
+        <div className={`ag-theme-alpine w-full mt-2 flex-1 ${!hasDetailAccess ? 'cursor-default' : ''}`}>
           <AgGridReact
             columnDefs={columnDefs}
             rowData={filteredEmployees}
-            onRowClicked={handleRowClick}
+            onRowClicked={hasDetailAccess ? handleRowClick : undefined}
             pagination={false}
             paginationPageSize={10}
             defaultColDef={{
@@ -286,6 +294,7 @@ const Employees = () => {
             className="w-full"
             rowHeight={40}
             headerHeight={40}
+            rowClass={!hasDetailAccess ? 'cursor-default' : 'cursor-pointer'}
           />
         </div>
       </div>

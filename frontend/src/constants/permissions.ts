@@ -1,13 +1,24 @@
 /**
  * Constantes de Permissões do Sistema EKIP
  * 
- * Este arquivo define todas as entidades, subtabs e ações disponíveis
- * para configuração de perfis de acesso.
+ * Este arquivo define todas as entidades e sub-entidades baseadas no menu,
+ * com suas respectivas ações disponíveis para configuração de perfis de acesso.
  * 
- * Estrutura:
- * - ENTITIES_CONFIG: Mapeamento completo de entidades e suas configurações
- * - ACTIONS: Ações disponíveis (view, create, edit, delete)
- * - Helpers: Funções utilitárias para trabalhar com permissões
+ * Estrutura hierárquica de 3 níveis:
+ * 
+ * NÍVEL 1 - Entidades (menu principal):
+ * - Dashboard, Funcionários, Projetos, Alocações, Configurações
+ * 
+ * NÍVEL 2 - SubEntidades:
+ * - Itens de menu (route definida, aparecem no menu lateral)
+ * - Páginas de detalhe (isDetailPage: true, não aparecem no menu, acessadas via click no grid)
+ * 
+ * NÍVEL 3 - Tabs (dentro de páginas de detalhe):
+ * - Abas dentro de EmployeeDetail ou ProjectDetail
+ * - Cada aba tem suas próprias ações CRUD
+ * 
+ * Exemplo:
+ * - Funcionários (entidade) → Detalhes do Funcionário (subentidade detalhe) → Feedbacks (tab)
  */
 
 // =====================================================
@@ -20,10 +31,24 @@ export interface Action {
   description: string;
 }
 
-export interface Subtab {
+/** Aba dentro de uma página de detalhe (3º nível) */
+export interface TabEntity {
   key: string;
   label: string;
+  icon: string;
   actions: Action[];
+}
+
+export interface SubEntity {
+  key: string;
+  label: string;
+  route: string;
+  icon: string;
+  actions: Action[];
+  /** Se true, é uma página de detalhe (não aparece no menu, acessada via click no grid) */
+  isDetailPage?: boolean;
+  /** Abas dentro desta página de detalhe (3º nível de permissões) */
+  tabs?: TabEntity[];
 }
 
 export interface Entity {
@@ -32,10 +57,14 @@ export interface Entity {
   icon: string;
   description: string;
   route: string;
-  subtabs: Subtab[];
-  /** Ações disponíveis na entidade raiz (listagem) */
+  /** Sub-entidades (itens de submenu ou páginas de detalhe) */
+  subEntities: SubEntity[];
+  /** Ações disponíveis na entidade raiz (quando não tem sub-entidades ou para a listagem principal) */
   actions: Action[];
 }
+
+/** @deprecated Use SubEntity instead */
+export type Subtab = SubEntity;
 
 // =====================================================
 // AÇÕES PADRÃO
@@ -64,7 +93,7 @@ const VIEW_ONLY_ACTIONS: Action[] = [
 ];
 
 // =====================================================
-// CONFIGURAÇÃO DE ENTIDADES
+// CONFIGURAÇÃO DE ENTIDADES (Baseado no Menu)
 // =====================================================
 
 export const ENTITIES_CONFIG: Entity[] = [
@@ -78,7 +107,15 @@ export const ENTITIES_CONFIG: Entity[] = [
     description: 'Painel principal com indicadores e gráficos',
     route: '/dashboard',
     actions: VIEW_ONLY_ACTIONS,
-    subtabs: [],
+    subEntities: [
+      {
+        key: 'dashboard.time-entries',
+        label: 'Lançamento de Horas',
+        route: '/time-entries',
+        icon: 'Clock',
+        actions: CRUD_ACTIONS,
+      },
+    ],
   },
 
   // -------------------------
@@ -91,45 +128,53 @@ export const ENTITIES_CONFIG: Entity[] = [
     description: 'Gestão de funcionários e colaboradores',
     route: '/employees',
     actions: CRUD_ACTIONS,
-    subtabs: [
+    subEntities: [
+      // Página de detalhe (não aparece no menu)
       {
-        key: 'employees.tasks',
-        label: 'Tarefas',
-        actions: CRUD_ACTIONS,
+        key: 'employees.detail',
+        label: 'Detalhes do Funcionário',
+        route: '/employees/:id',
+        icon: 'User',
+        isDetailPage: true,
+        actions: VIEW_ONLY_ACTIONS,
+        tabs: [
+          { key: 'employees.detail.tasks', label: 'Tarefas Atribuídas', icon: 'ClipboardList', actions: VIEW_ONLY_ACTIONS },
+          { key: 'employees.detail.timerecord', label: 'Registro de Horas', icon: 'Clock', actions: VIEW_ONLY_ACTIONS },
+          { key: 'employees.detail.followup', label: 'Acompanhamento', icon: 'TrendingUp', actions: VIEW_ONLY_ACTIONS },
+          { key: 'employees.detail.feedbacks', label: 'Feedbacks', icon: 'MessageSquare', actions: CRUD_ACTIONS },
+          { key: 'employees.detail.evaluations', label: 'Avaliações', icon: 'FileCheck', actions: CRUD_ACTIONS },
+          { key: 'employees.detail.pdi', label: 'PDI', icon: 'Target', actions: CRUD_ACTIONS },
+          { key: 'employees.detail.access', label: 'Acessos', icon: 'Key', actions: CRUD_ACTIONS },
+          { key: 'employees.detail.quizzes', label: 'Quizzes', icon: 'HelpCircle', actions: VIEW_ONLY_ACTIONS },
+        ],
       },
-      {
-        key: 'employees.timerecord',
-        label: 'Registro de Ponto',
-        actions: [...CRUD_ACTIONS, ACTIONS.EXPORT],
-      },
+      // Itens de menu (páginas separadas)
       {
         key: 'employees.feedbacks',
         label: 'Feedbacks',
+        route: '/feedbacks',
+        icon: 'MessageSquare',
         actions: CRUD_ACTIONS,
       },
       {
         key: 'employees.evaluations',
-        label: 'Avaliações',
+        label: 'Avaliação',
+        route: '/employee-evaluations',
+        icon: 'FileCheck',
         actions: CRUD_ACTIONS,
       },
       {
         key: 'employees.pdi',
         label: 'PDI',
-        actions: CRUD_ACTIONS,
-      },
-      {
-        key: 'employees.followup',
-        label: 'Acompanhamento',
-        actions: CRUD_ACTIONS,
-      },
-      {
-        key: 'employees.access',
-        label: 'Acessos',
+        route: '/pdi',
+        icon: 'Target',
         actions: CRUD_ACTIONS,
       },
       {
         key: 'employees.quizzes',
-        label: 'Quizzes',
+        label: 'Quiz',
+        route: '/employee-quizzes',
+        icon: 'HelpCircle',
         actions: VIEW_ONLY_ACTIONS,
       },
     ],
@@ -141,144 +186,90 @@ export const ENTITIES_CONFIG: Entity[] = [
   {
     key: 'projects',
     label: 'Projetos',
-    icon: 'FolderKanban',
+    icon: 'ClipboardList',
     description: 'Gestão de projetos e entregas',
     route: '/projects',
     actions: CRUD_ACTIONS,
-    subtabs: [
+    subEntities: [
+      // Página de detalhe (não aparece no menu)
       {
-        key: 'projects.tasks',
-        label: 'Tarefas',
-        actions: CRUD_ACTIONS,
-      },
-      {
-        key: 'projects.risks',
-        label: 'Riscos',
-        actions: CRUD_ACTIONS,
-      },
-      {
-        key: 'projects.statusreport',
-        label: 'Status Report',
-        actions: [...VIEW_ONLY_ACTIONS, ACTIONS.EXPORT],
-      },
-      {
-        key: 'projects.progress',
-        label: 'Progresso',
-        actions: [...VIEW_ONLY_ACTIONS, ACTIONS.IMPORT],
+        key: 'projects.detail',
+        label: 'Detalhes do Projeto',
+        route: '/projects/:id',
+        icon: 'FolderOpen',
+        isDetailPage: true,
+        actions: VIEW_ONLY_ACTIONS,
+        tabs: [
+          { key: 'projects.detail.tracking', label: 'Acompanhamento', icon: 'TrendingUp', actions: VIEW_ONLY_ACTIONS },
+          { key: 'projects.detail.tasks', label: 'Tarefas do Projeto', icon: 'ClipboardList', actions: CRUD_ACTIONS },
+          { key: 'projects.detail.risks', label: 'Riscos/Ações', icon: 'AlertTriangle', actions: CRUD_ACTIONS },
+          { key: 'projects.detail.statusreport', label: 'Status Report', icon: 'BarChart', actions: VIEW_ONLY_ACTIONS },
+          { key: 'projects.detail.access', label: 'Acesso', icon: 'Key', actions: CRUD_ACTIONS },
+        ],
       },
     ],
   },
 
   // -------------------------
-  // ALOCAÇÕES
+  // ALOCAÇÕES (sem sub-entidades)
   // -------------------------
   {
     key: 'allocations',
     label: 'Alocações',
-    icon: 'CalendarDays',
+    icon: 'CalendarRange',
     description: 'Gestão de alocações de funcionários em projetos',
     route: '/allocations',
     actions: CRUD_ACTIONS,
-    subtabs: [],
+    subEntities: [],
   },
 
   // -------------------------
-  // QUIZZES
+  // CONFIGURAÇÕES
   // -------------------------
   {
-    key: 'quizzes',
-    label: 'Quizzes',
-    icon: 'ClipboardList',
-    description: 'Gestão de quizzes e avaliações de conhecimento',
-    route: '/quizzes',
-    actions: CRUD_ACTIONS,
-    subtabs: [
-      {
-        key: 'quizzes.questions',
-        label: 'Perguntas',
-        actions: CRUD_ACTIONS,
-      },
-      {
-        key: 'quizzes.participants',
-        label: 'Participantes',
-        actions: CRUD_ACTIONS,
-      },
-      {
-        key: 'quizzes.results',
-        label: 'Resultados',
-        actions: VIEW_ONLY_ACTIONS,
-      },
-    ],
-  },
-
-  // -------------------------
-  // MODELOS DE AVALIAÇÃO
-  // -------------------------
-  {
-    key: 'evaluation_models',
-    label: 'Modelos de Avaliação',
-    icon: 'FileCheck',
-    description: 'Templates para avaliações de desempenho',
-    route: '/evaluations',
-    actions: CRUD_ACTIONS,
-    subtabs: [],
-  },
-
-  // -------------------------
-  // CONFIGURAÇÕES - DOMÍNIOS
-  // -------------------------
-  {
-    key: 'domains',
-    label: 'Domínios',
-    icon: 'Database',
-    description: 'Gestão de tabelas de domínio do sistema',
-    route: '/domains',
-    actions: CRUD_ACTIONS,
-    subtabs: [],
-  },
-
-  // -------------------------
-  // CONFIGURAÇÕES - USUÁRIOS
-  // -------------------------
-  {
-    key: 'users',
-    label: 'Usuários',
-    icon: 'UserCog',
-    description: 'Gestão de usuários do sistema',
-    route: '/users',
-    actions: CRUD_ACTIONS,
-    subtabs: [],
-  },
-
-  // -------------------------
-  // CONFIGURAÇÕES - PERFIS DE ACESSO
-  // -------------------------
-  {
-    key: 'access_profiles',
-    label: 'Perfis de Acesso',
-    icon: 'Shield',
-    description: 'Gestão de perfis e permissões de acesso',
-    route: '/access-profiles',
-    actions: [
-      ACTIONS.VIEW,
-      ACTIONS.CREATE,
-      ACTIONS.EDIT,
-      ACTIONS.DELETE,
-    ],
-    subtabs: [],
-  },
-
-  // -------------------------
-  // NOTIFICAÇÕES
-  // -------------------------
-  {
-    key: 'notifications',
-    label: 'Notificações',
-    icon: 'Bell',
-    description: 'Central de notificações do sistema',
-    route: '/notifications',
+    key: 'settings',
+    label: 'Configurações',
+    icon: 'Settings',
+    description: 'Configurações do sistema',
+    route: '/settings',
     actions: VIEW_ONLY_ACTIONS,
-    subtabs: [],
+    subEntities: [
+      {
+        key: 'settings.evaluations',
+        label: 'Avaliações Modelo',
+        route: '/evaluations',
+        icon: 'ClipboardList',
+        actions: CRUD_ACTIONS,
+      },
+      {
+        key: 'settings.quizzes',
+        label: 'Quiz',
+        route: '/quizzes',
+        icon: 'ClipboardCheck',
+        actions: CRUD_ACTIONS,
+      },
+      {
+        key: 'settings.access-profiles',
+        label: 'Perfis de Acesso',
+        route: '/access-profiles',
+        icon: 'Shield',
+        actions: CRUD_ACTIONS,
+      },
+      {
+        key: 'settings.users',
+        label: 'Usuários',
+        route: '/users',
+        icon: 'Users',
+        actions: CRUD_ACTIONS,
+      },
+      {
+        key: 'settings.domains',
+        label: 'Domínios',
+        route: '/domains',
+        icon: 'Database',
+        actions: CRUD_ACTIONS,
+      },
+    ],
   },
 ];
 
@@ -294,29 +285,58 @@ export function getEntityByKey(key: string): Entity | undefined {
 }
 
 /**
- * Busca uma subtab pelo key completo (ex: 'employees.feedbacks')
+ * Busca uma sub-entidade pelo key completo (ex: 'employees.feedbacks' ou 'employees.detail')
  */
-export function getSubtabByKey(fullKey: string): { entity: Entity; subtab: Subtab } | undefined {
+export function getSubEntityByKey(fullKey: string): { entity: Entity; subEntity: SubEntity } | undefined {
   const [entityKey] = fullKey.split('.');
   const entity = getEntityByKey(entityKey);
   if (!entity) return undefined;
   
-  const subtab = entity.subtabs.find(s => s.key === fullKey);
-  if (!subtab) return undefined;
+  const subEntity = entity.subEntities.find(s => s.key === fullKey);
+  if (!subEntity) return undefined;
   
-  return { entity, subtab };
+  return { entity, subEntity };
 }
 
 /**
+ * Busca uma tab pelo key completo (ex: 'employees.detail.tasks')
+ */
+export function getTabByKey(fullKey: string): { entity: Entity; subEntity: SubEntity; tab: TabEntity } | undefined {
+  const parts = fullKey.split('.');
+  if (parts.length !== 3) return undefined;
+  
+  const [entityKey, subKey] = parts;
+  const subEntityKey = `${entityKey}.${subKey}`;
+  
+  const result = getSubEntityByKey(subEntityKey);
+  if (!result || !result.subEntity.tabs) return undefined;
+  
+  const tab = result.subEntity.tabs.find(t => t.key === fullKey);
+  if (!tab) return undefined;
+  
+  return { ...result, tab };
+}
+
+/** @deprecated Use getSubEntityByKey instead */
+export const getSubtabByKey = getSubEntityByKey;
+
+/**
  * Gera a lista completa de screen_keys para uso em permissões
+ * Inclui entidades, sub-entidades e tabs
  */
 export function getAllScreenKeys(): string[] {
   const keys: string[] = [];
   
   ENTITIES_CONFIG.forEach(entity => {
     keys.push(entity.key);
-    entity.subtabs.forEach(subtab => {
-      keys.push(subtab.key);
+    entity.subEntities.forEach(subEntity => {
+      keys.push(subEntity.key);
+      // Incluir tabs se existirem
+      if (subEntity.tabs) {
+        subEntity.tabs.forEach(tab => {
+          keys.push(tab.key);
+        });
+      }
     });
   });
   
@@ -339,14 +359,26 @@ export function getAllPermissionCombinations(): Array<{ screenKey: string; actio
       });
     });
     
-    // Ações das subtabs
-    entity.subtabs.forEach(subtab => {
-      subtab.actions.forEach(action => {
+    // Ações das sub-entidades
+    entity.subEntities.forEach(subEntity => {
+      subEntity.actions.forEach(action => {
         combinations.push({
-          screenKey: subtab.key,
+          screenKey: subEntity.key,
           action: action.key,
         });
       });
+      
+      // Ações das tabs (3º nível)
+      if (subEntity.tabs) {
+        subEntity.tabs.forEach(tab => {
+          tab.actions.forEach(action => {
+            combinations.push({
+              screenKey: tab.key,
+              action: action.key,
+            });
+          });
+        });
+      }
     });
   });
   
@@ -361,14 +393,78 @@ export function isValidScreenKey(key: string): boolean {
 }
 
 /**
- * Agrupa entidades por categoria para exibição no menu
+ * Busca entidade ou sub-entidade pela rota
  */
-export function getEntitiesByCategory(): Record<string, Entity[]> {
-  return {
-    'Principal': ENTITIES_CONFIG.filter(e => ['dashboard'].includes(e.key)),
-    'Gestão': ENTITIES_CONFIG.filter(e => ['employees', 'projects', 'allocations'].includes(e.key)),
-    'Avaliações': ENTITIES_CONFIG.filter(e => ['quizzes', 'evaluation_models'].includes(e.key)),
-    'Configurações': ENTITIES_CONFIG.filter(e => ['domains', 'users', 'access_profiles'].includes(e.key)),
-    'Sistema': ENTITIES_CONFIG.filter(e => ['notifications'].includes(e.key)),
-  };
+export function getEntityByRoute(route: string): { entity: Entity; subEntity?: SubEntity } | undefined {
+  for (const entity of ENTITIES_CONFIG) {
+    if (entity.route === route) {
+      return { entity };
+    }
+    for (const subEntity of entity.subEntities) {
+      if (subEntity.route === route) {
+        return { entity, subEntity };
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Retorna a estrutura para configuração de habilitação
+ * Cada entidade, sub-entidade e tab tem um campo 'enabled' que pode ser true/false
+ */
+export function getDefaultEnabledState(): Record<string, boolean> {
+  const state: Record<string, boolean> = {};
+  
+  ENTITIES_CONFIG.forEach(entity => {
+    state[entity.key] = true;
+    entity.subEntities.forEach(subEntity => {
+      state[subEntity.key] = true;
+      // Incluir tabs se existirem
+      if (subEntity.tabs) {
+        subEntity.tabs.forEach(tab => {
+          state[tab.key] = true;
+        });
+      }
+    });
+  });
+  
+  return state;
+}
+
+/**
+ * Retorna apenas as sub-entidades que são páginas de detalhe
+ */
+export function getDetailPages(): Array<{ entity: Entity; subEntity: SubEntity }> {
+  const detailPages: Array<{ entity: Entity; subEntity: SubEntity }> = [];
+  
+  ENTITIES_CONFIG.forEach(entity => {
+    entity.subEntities
+      .filter(sub => sub.isDetailPage)
+      .forEach(subEntity => {
+        detailPages.push({ entity, subEntity });
+      });
+  });
+  
+  return detailPages;
+}
+
+/**
+ * Retorna apenas as sub-entidades que aparecem no menu (não são páginas de detalhe)
+ */
+export function getMenuSubEntities(entityKey: string): SubEntity[] {
+  const entity = getEntityByKey(entityKey);
+  if (!entity) return [];
+  
+  return entity.subEntities.filter(sub => !sub.isDetailPage);
+}
+
+/**
+ * Retorna a página de detalhe de uma entidade, se existir
+ */
+export function getDetailPageForEntity(entityKey: string): SubEntity | undefined {
+  const entity = getEntityByKey(entityKey);
+  if (!entity) return undefined;
+  
+  return entity.subEntities.find(sub => sub.isDetailPage);
 }

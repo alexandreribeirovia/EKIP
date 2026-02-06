@@ -41,6 +41,10 @@ interface PermissionState {
   hasPermission: (screenKey: string, action: string) => boolean
   hasScreenAccess: (screenKey: string) => boolean
   hasAnyPermission: (screenKey: string) => boolean
+  /** Verifica se uma entidade ou sub-entidade está habilitada */
+  isEnabled: (screenKey: string) => boolean
+  /** Verifica acesso considerando habilitação + permissão view */
+  hasFullAccess: (screenKey: string) => boolean
 }
 
 // =====================================================
@@ -157,6 +161,39 @@ export const usePermissionStore = create<PermissionState>((set, get) => ({
     if (!state.profileId) return true
 
     return state.permissions.some(p => p.screen_key === screenKey)
+  },
+
+  /**
+   * Verifica se uma entidade ou sub-entidade está habilitada
+   * Usa action='enabled' para verificar habilitação
+   */
+  isEnabled: (screenKey: string): boolean => {
+    const state = get()
+
+    // Admin tem tudo habilitado
+    if (state.isAdmin) return true
+
+    // Usuário sem perfil - libera acesso (backwards compatibility)
+    if (!state.profileId) return true
+
+    // Busca a permissão de habilitação
+    const perm = state.permissions.find(
+      p => p.screen_key === screenKey && p.action === 'enabled'
+    )
+
+    // Se não encontrou permissão de habilitação, considera habilitado por padrão
+    // Isso garante backwards compatibility com perfis existentes
+    if (!perm) return true
+
+    return perm.allowed !== false
+  },
+
+  /**
+   * Verifica acesso completo: entidade habilitada + permissão view
+   * Usado para filtrar menus e rotas
+   */
+  hasFullAccess: (screenKey: string): boolean => {
+    return get().isEnabled(screenKey) && get().hasScreenAccess(screenKey)
   }
 }))
 
@@ -198,5 +235,73 @@ export function usePermissionCheck() {
     if (isAdmin) return true
     if (!profileId) return false
     return permissions.some(p => p.screen_key === screenKey && p.action === action)
+  }
+}
+
+/**
+ * Hook para verificar se entidade/sub-entidade está habilitada
+ */
+export function useIsEnabled(screenKey: string): boolean {
+  const isAdmin = usePermissionStore(state => state.isAdmin)
+  const profileId = usePermissionStore(state => state.profileId)
+  const permissions = usePermissionStore(state => state.permissions)
+
+  if (isAdmin) return true
+  if (!profileId) return true
+
+  const perm = permissions.find(
+    p => p.screen_key === screenKey && p.action === 'enabled'
+  )
+
+  return perm ? perm.allowed !== false : true
+}
+
+/**
+ * Hook para verificar acesso completo (habilitado + view) para uma tela específica
+ * Útil para verificar acesso a uma única tela
+ */
+export function useHasFullAccessFor(screenKey: string): boolean {
+  const isAdmin = usePermissionStore(state => state.isAdmin)
+  const profileId = usePermissionStore(state => state.profileId)
+  const permissions = usePermissionStore(state => state.permissions)
+
+  if (isAdmin) return true
+  if (!profileId) return true
+
+  const isEnabled = permissions.find(
+    p => p.screen_key === screenKey && p.action === 'enabled'
+  )
+  const enabledResult = isEnabled ? isEnabled.allowed !== false : true
+
+  const hasView = permissions.some(
+    p => p.screen_key === screenKey && p.action === 'view'
+  )
+  
+  return enabledResult && hasView
+}
+
+/**
+ * Hook que retorna função para verificar acesso completo (habilitado + view)
+ * Útil para callbacks e verificações múltiplas em um componente
+ */
+export function useHasFullAccess() {
+  const isAdmin = usePermissionStore(state => state.isAdmin)
+  const profileId = usePermissionStore(state => state.profileId)
+  const permissions = usePermissionStore(state => state.permissions)
+
+  return (screenKey: string): boolean => {
+    if (isAdmin) return true
+    if (!profileId) return true
+
+    const isEnabled = permissions.find(
+      p => p.screen_key === screenKey && p.action === 'enabled'
+    )
+    const enabledResult = isEnabled ? isEnabled.allowed !== false : true
+
+    const hasView = permissions.some(
+      p => p.screen_key === screenKey && p.action === 'view'
+    )
+    
+    return enabledResult && hasView
   }
 }

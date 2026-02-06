@@ -27,11 +27,11 @@ interface ProjectTabConfig {
 }
 
 const PROJECT_TAB_CONFIG: ProjectTabConfig[] = [
-  { key: 'tracking', label: 'Acompanhamento', permissionKey: 'projects' },
-  { key: 'tasks', label: 'Tarefas do Projeto', permissionKey: 'projects.tasks' },
-  { key: 'risks', label: 'Riscos/Ações', permissionKey: 'projects.risks' },
-  { key: 'status-report', label: 'Status Report', permissionKey: 'projects.statusreport' },
-  { key: 'access', label: 'Acesso', permissionKey: 'projects' },
+  { key: 'tracking', label: 'Acompanhamento', permissionKey: 'projects.detail.tracking' },
+  { key: 'tasks', label: 'Tarefas do Projeto', permissionKey: 'projects.detail.tasks' },
+  { key: 'risks', label: 'Riscos/Ações', permissionKey: 'projects.detail.risks' },
+  { key: 'status-report', label: 'Status Report', permissionKey: 'projects.detail.statusreport' },
+  { key: 'access', label: 'Acesso', permissionKey: 'projects.detail.access' },
 ]
 
 interface SelectOption {

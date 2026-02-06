@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { usePermissionStore } from '@/stores/permissionStore'
+import { usePermissionStore, useIsEnabled, useHasFullAccess } from '@/stores/permissionStore'
 import NotificationBell from './NotificationBell'
 import {
   LayoutDashboard,
@@ -38,41 +38,54 @@ const Layout = ({ children }: LayoutProps) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const { user, logout } = useAuthStore()
   const { hasScreenAccess, isAdmin, loaded: permissionsLoaded } = usePermissionStore()
+  const isEnabled = useIsEnabled()
+  const hasFullAccess = useHasFullAccess()
   const location = useLocation()
 
-  // Mapeamento de rotas para screenKey
+  /**
+   * Mapeamento de rotas para screenKey
+   * Usa o formato de sub-entidade: 'entity.sub-entity'
+   */
   const getScreenKeyFromHref = (href: string): string => {
     // Mapeamento de rotas para screen_key conforme definido em permissions.ts (ENTITIES_CONFIG)
     const map: Record<string, string> = {
+      // Dashboard e sub-entidades
       '/dashboard': 'dashboard',
-      '/time-entries': 'dashboard',          // Parte do Dashboard
+      '/time-entries': 'dashboard.time-entries',
+      // Funcionários e sub-entidades
       '/employees': 'employees',
-      '/feedbacks': 'employees',             // Subtab de Employees (employees.feedbacks)
-      '/employee-evaluations': 'employees',  // Subtab de Employees (employees.evaluations)
-      '/pdi': 'employees',                   // Subtab de Employees (employees.pdi)
-      '/employee-quizzes': 'employees',      // Subtab de Employees (employees.quizzes)
+      '/feedbacks': 'employees.feedbacks',
+      '/employee-evaluations': 'employees.evaluations',
+      '/pdi': 'employees.pdi',
+      '/employee-quizzes': 'employees.quizzes',
+      // Projetos (sem sub-entidades)
       '/projects': 'projects',
+      // Alocações (sem sub-entidades)
       '/allocations': 'allocations',
-      '/evaluations': 'evaluation_models',   // Modelos de Avaliação
-      '/quizzes': 'quizzes',
-      '/access-profiles': 'access_profiles', // Perfis de Acesso
-      '/users': 'users',
-      '/domains': 'domains',
+      // Configurações e sub-entidades
+      '/settings': 'settings',
+      '/evaluations': 'settings.evaluation_models',
+      '/quizzes': 'settings.quizzes',
+      '/access-profiles': 'settings.access_profiles',
+      '/users': 'settings.users',
+      '/domains': 'settings.domains',
       '/notifications': 'notifications',
-      '/settings': 'settings'
     }
     return map[href] || href.replace('/', '') || 'dashboard'
   }
 
-  // Verificar se usuário tem acesso a um item de menu
+  /**
+   * Verificar se usuário tem acesso a um item de menu
+   * Agora verifica tanto o estado 'enabled' quanto as permissões de ação
+   */
   const hasMenuAccess = (href: string): boolean => {
     // Enquanto não carregou permissões, mostra tudo (evita flash)
     if (!permissionsLoaded) return true
     // Admin vê tudo
     if (isAdmin) return true
-    // Verifica permissão
+    // Verifica se está habilitado E tem acesso
     const screenKey = getScreenKeyFromHref(href)
-    return hasScreenAccess(screenKey)
+    return hasFullAccess(screenKey)
   }
 
   const toggleDarkMode = () => {
