@@ -1,13 +1,16 @@
 /**
  * [ARIBEIRO] 10/08/2025 - CRIAÇÃO
- * Busca, processa e salva todos usuários
+ * [ARIBEIRO] 10/02/2026 - RENOMEADO: runrun_users_import → runrun_employees_import
+ *                         Tabela alterada de 'users' para 'employees' (migração 001)
+ * 
+ * Busca, processa e salva todos os funcionários (employees) do Runrun.it
  * Exemplo de chamada
- * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_user_import
+ * https://<SEU_PROJETO>.supabase.co/functions/v1/runrun_employees_import
  * 
  */ 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import axios from 'https://esm.sh/axios@1.7.2';
-console.log('Função "runrun-importer" inicializada.');
+console.log('Função "runrun-employees-importer" inicializada.');
 Deno.serve(async (req)=>{
   try {
     // As variáveis de ambiente são injetadas automaticamente pelo Supabase
@@ -24,10 +27,10 @@ Deno.serve(async (req)=>{
       }
     });
     const response = await runrunApi.get('/api/v1.0/users?sort=name');
-    const users = response.data;
-    console.log(`Sucesso! ${users.length} usuários encontrados.`);
-    // 2. Mapear e sincronizar com a tabela 'users' do Supabase
-    const usersForSupabase = users.map((user)=>({
+    const employees = response.data;
+    console.log(`Sucesso! ${employees.length} funcionários encontrados.`);
+    // 2. Mapear e sincronizar com a tabela 'employees' do Supabase
+    const employeesForSupabase = employees.map((user)=>({
         user_id: user.id,
         name: user.name,
         email: user.email,
@@ -38,7 +41,7 @@ Deno.serve(async (req)=>{
         phone: user.phone,
         in_company_since: user.in_company_since
       }));
-    const { error } = await supabase.from('users').upsert(usersForSupabase, {
+    const { error } = await supabase.from('employees').upsert(employeesForSupabase, {
       onConflict: 'user_id'
     });
     if (error) {
@@ -47,7 +50,7 @@ Deno.serve(async (req)=>{
     console.log('Sincronização com o Supabase concluída com sucesso!');
     // Retorna uma resposta de sucesso
     return new Response(JSON.stringify({
-      message: `Sincronizados ${users.length} usuários com sucesso.`
+      message: `Sincronizados ${employees.length} funcionários com sucesso.`
     }), {
       headers: {
         "Content-Type": "application/json"
