@@ -8,6 +8,7 @@ import { PdiData } from '@/types';
 import PDIModal from '@/components/PDIModal';
 import NotificationToast from '@/components/NotificationToast';
 import { ProtectedAction } from '@/components/ProtectedComponents';
+import { usePermissionStore } from '@/stores/permissionStore';
 
 interface ConsultantOption {
   value: string;
@@ -15,6 +16,7 @@ interface ConsultantOption {
 }
 
 const PDI = () => {
+  const { hasPermission } = usePermissionStore();
   const [pdis, setPdis] = useState<PdiData[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
   const [managers, setManagers] = useState<ConsultantOption[]>([]);
@@ -370,16 +372,18 @@ const PDI = () => {
         
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => handleEditPdi(params.value)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title={isClosed ? "Visualizar PDI" : "Editar PDI"}
-            >
-              <Edit className="w-4 h-4" />
-            </button>
+            {(isClosed ? hasPermission('employees.pdi', 'view') : hasPermission('employees.pdi', 'edit')) && (
+              <button
+                onClick={() => handleEditPdi(params.value)}
+                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                title={isClosed ? "Visualizar PDI" : "Editar PDI"}
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+            )}
             
             {/* Botão deletar só aparece se o PDI não estiver encerrado */}
-            {!isClosed && (
+            {!isClosed && hasPermission('employees.pdi', 'delete') && (
               <button
                 onClick={() => handleDeletePdi(params.value)}
                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

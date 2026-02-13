@@ -11,9 +11,10 @@ interface ProjectOwnerRendererProps {
   onOwnerChange?: (newOwner: DbUser | null) => void;
   onOwnerRemove?: (removedOwnerId: number) => void;
   onError?: (message: string) => void;
+  readOnly?: boolean;
 }
 
-const ProjectOwnerRenderer = ({ owners, projectId, onOwnerChange, onOwnerRemove, onError }: ProjectOwnerRendererProps) => {
+const ProjectOwnerRenderer = ({ owners, projectId, onOwnerChange, onOwnerRemove, onError, readOnly = false }: ProjectOwnerRendererProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const tippyInstances = useRef<TippyInstance[]>([]);
 
@@ -91,13 +92,15 @@ const ProjectOwnerRenderer = ({ owners, projectId, onOwnerChange, onOwnerRemove,
               src={owner.users?.avatar_large_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(owner.users?.name || '')}&background=random`}
               alt={owner.users?.name || ''}
             />
-            <button
-              onClick={() => handleRemoveOwner(owner)}
-              className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Remover responsável"
-            >
-              <X className="w-2.5 h-2.5" />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => handleRemoveOwner(owner)}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Remover responsável"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            )}
           </div>
         ))
       ) : (
@@ -110,12 +113,14 @@ const ProjectOwnerRenderer = ({ owners, projectId, onOwnerChange, onOwnerRemove,
           +{hiddenCount}
         </div>
       )}
-      <ManagerSelector
-        projectId={projectId}
-        currentOwners={currentOwnerIds}
-        onOwnerChange={onOwnerChange || (() => {})}
-        onError={onError}
-      />
+      {!readOnly && (
+        <ManagerSelector
+          projectId={projectId}
+          currentOwners={currentOwnerIds}
+          onOwnerChange={onOwnerChange || (() => {})}
+          onError={onError}
+        />
+      )}
     </div>
   );
 };

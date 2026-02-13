@@ -121,7 +121,6 @@ router.get('/user/permissions', async (req: Request, res: Response, next: NextFu
       .from('access_permissions')
       .select('screen_key, action, allowed')
       .eq('profile_id', user.profile_id)
-      .eq('allowed', true)
 
     if (error) {
       console.error('Erro ao buscar permissões do usuário:', error)
@@ -590,14 +589,13 @@ router.put('/:id/permissions', async (req: Request, res: Response, next: NextFun
       })
     }
 
-    // Insere as novas permissões (apenas as que estão allowed=true)
+    // Insere todas as permissões (incluindo allowed=false para estados desabilitados)
     const permissionsToInsert = permissions
-      .filter((p: { allowed: boolean }) => p.allowed === true)
-      .map((p: { screen_key: string; action: string }) => ({
+      .map((p: { screen_key: string; action: string; allowed: boolean }) => ({
         profile_id: Number(id),
         screen_key: p.screen_key,
         action: p.action,
-        allowed: true
+        allowed: p.allowed === true
       }))
 
     if (permissionsToInsert.length > 0) {

@@ -543,7 +543,7 @@ router.get('/:id/owners', async (req: Request, res: Response, next: NextFunction
         updated_at,
         project_id,
         user_id,
-        users!inner(
+        employees!inner(
           user_id,
           name,
           avatar_large_url
@@ -559,19 +559,19 @@ router.get('/:id/owners', async (req: Request, res: Response, next: NextFunction
       })
     }
 
-    // Transformar os dados para o formato esperado
+    // Transformar os dados para o formato esperado pelo frontend (mantém campo 'users' para compatibilidade)
     const transformedData = (data || []).map((item: any) => {
-      const userData = Array.isArray(item.users) && item.users.length > 0 ? item.users[0] : item.users
+      const empData = Array.isArray(item.employees) && item.employees.length > 0 ? item.employees[0] : item.employees
       return {
         id: item.id,
         created_at: item.created_at,
         updated_at: item.updated_at,
         project_id: item.project_id,
         user_id: item.user_id,
-        users: userData && !Array.isArray(userData) ? {
-          user_id: userData.user_id,
-          name: userData.name,
-          avatar_large_url: userData.avatar_large_url
+        users: empData && !Array.isArray(empData) ? {
+          user_id: empData.user_id,
+          name: empData.name,
+          avatar_large_url: empData.avatar_large_url
         } : null
       }
     })
@@ -644,7 +644,7 @@ router.get('/:id/accesses', async (req: Request, res: Response, next: NextFuncti
     // Buscar acessos do cliente com nome do funcionário
     const { data, error } = await supabase
       .from('access_platforms')
-      .select('*, users!access_platforms_user_id_fkey(name)')
+      .select('*, employees!access_platforms_user_id_fkey(name)')
       .eq('client_id', clientData.client_id)
       .eq('is_active', true)
       .order('platform_name')
@@ -680,7 +680,7 @@ router.get('/:id/accesses', async (req: Request, res: Response, next: NextFuncti
       
       return {
         ...access,
-        user_name: access.users?.name || 'Funcionário não encontrado',
+        user_name: access.employees?.name || 'Funcionário não encontrado',
         access_policies: policies,
         data_types: dataTypes,
       }

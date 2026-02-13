@@ -7,6 +7,8 @@ import DomainModal from '@/components/DomainModal'
 import NotificationToast from '@/components/NotificationToast'
 import * as apiClient from '@/lib/apiClient'
 import { DbDomain } from '@/types'
+import { ProtectedAction } from '../components/ProtectedComponents'
+import { usePermissionStore } from '../stores/permissionStore'
 
 interface TypeOption {
   value: string;
@@ -14,6 +16,7 @@ interface TypeOption {
 }
 
 const Domains = () => {
+  const { hasPermission } = usePermissionStore()
   const [domains, setDomains] = useState<DbDomain[]>([])
   const [filteredDomains, setFilteredDomains] = useState<DbDomain[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -237,20 +240,24 @@ const Domains = () => {
       cellRenderer: (params: any) => {
         return (
           <div className="flex items-center justify-center gap-1 h-full">
-            <button
-              onClick={() => handleEditDomain(params.data)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Editar domínio"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleCloneDomain(params.data)}
-              className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 p-1 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-              title="Clonar domínio"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+            {hasPermission('settings.domains', 'edit') && (
+              <button
+                onClick={() => handleEditDomain(params.data)}
+                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                title="Editar domínio"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+            )}
+            {hasPermission('settings.domains', 'create') && (
+              <button
+                onClick={() => handleCloneDomain(params.data)}
+                className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 p-1 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                title="Clonar domínio"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )
       },
@@ -302,15 +309,17 @@ const Domains = () => {
           </div>
 
           {/* Botão Novo Domínio */}
-          <div className="flex items-end">
-            <button
-              onClick={handleCreateDomain}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Domínio
-            </button>
-          </div>
+          <ProtectedAction screenKey="settings.domains" action="create">
+            <div className="flex items-end">
+              <button
+                onClick={handleCreateDomain}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Domínio
+              </button>
+            </div>
+          </ProtectedAction>
         </div>
 
         {/* Cards de Estatísticas */}

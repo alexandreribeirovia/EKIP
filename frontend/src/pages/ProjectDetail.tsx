@@ -16,6 +16,7 @@ import RiskModal from '../components/RiskModal.tsx';
 import AccessModal from '../components/AccessModal.tsx';
 import HtmlCellRenderer from '../components/HtmlCellRenderer.tsx';
 import { usePermissionStore } from '../stores/permissionStore';
+import { ProtectedAction } from '../components/ProtectedComponents';
 
 // Configuração das abas com permissões
 type ProjectTabKey = 'tracking' | 'tasks' | 'risks' | 'status-report' | 'access'
@@ -486,6 +487,8 @@ const RiskActionsRenderer = ({
   onDelete: (riskId: number) => void,
   onEdit: (riskId: number) => void
 }) => {
+  const { hasPermission } = usePermissionStore();
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (data.id) {
@@ -502,20 +505,24 @@ const RiskActionsRenderer = ({
 
   return (
     <div className="flex items-center justify-center gap-1 h-full">
-      <button
-        onClick={handleEdit}
-        className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
-        title="Editar risco"
-      >
-        <Edit className="w-4 h-4" />
-      </button>
-      <button
-        onClick={handleDelete}
-        className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
-        title="Excluir risco"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      {hasPermission('projects.detail.risks', 'edit') && (
+        <button
+          onClick={handleEdit}
+          className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
+          title="Editar risco"
+        >
+          <Edit className="w-4 h-4" />
+        </button>
+      )}
+      {hasPermission('projects.detail.risks', 'delete') && (
+        <button
+          onClick={handleDelete}
+          className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
+          title="Excluir risco"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 };
@@ -569,7 +576,7 @@ interface TaskStatusCount {
 }
 
 const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
-  const { hasScreenAccess, isAdmin } = usePermissionStore();
+  const { isEnabled, isAdmin, hasPermission } = usePermissionStore();
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [risks, setRisks] = useState<DbRisk[]>([]);
@@ -584,11 +591,11 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
   const [isLoadingPhases, setIsLoadingPhases] = useState(true);
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
   
-  // Filtrar tabs baseado em permissões
+  // Filtrar tabs baseado em permissões (tabs são controladas pelo toggle enabled)
   const visibleTabs = useMemo(() => {
     if (isAdmin) return PROJECT_TAB_CONFIG
-    return PROJECT_TAB_CONFIG.filter(tab => hasScreenAccess(tab.permissionKey))
-  }, [isAdmin, hasScreenAccess])
+    return PROJECT_TAB_CONFIG.filter(tab => isEnabled(tab.permissionKey))
+  }, [isAdmin, isEnabled])
   
   // Tab ativa - inicia com a primeira tab visível
   const getInitialTab = (): ProjectTabKey => {
@@ -1543,27 +1550,33 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
       width: 140,
       cellRenderer: (params: any) => (
         <div className="flex items-center justify-center gap-1 h-full">
-          <button
-            onClick={() => openEditAccessModal(params.data.id)}
-            className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
-            title="Editar acesso"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => openCloneAccessModal(params.data.id)}
-            className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
-            title="Clonar acesso"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => deleteAccess(params.data.id)}
-            className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
-            title="Excluir acesso"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {hasPermission('projects.detail.access', 'edit') && (
+            <button
+              onClick={() => openEditAccessModal(params.data.id)}
+              className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
+              title="Editar acesso"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+          )}
+          {hasPermission('projects.detail.access', 'create') && (
+            <button
+              onClick={() => openCloneAccessModal(params.data.id)}
+              className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
+              title="Clonar acesso"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          )}
+          {hasPermission('projects.detail.access', 'delete') && (
+            <button
+              onClick={() => deleteAccess(params.data.id)}
+              className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
+              title="Excluir acesso"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ),
       sortable: false,
@@ -2357,13 +2370,24 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                 <span className="text-sm text-gray-500">Carregando...</span>
               </div>
             ) : (
-              <ProjectOwnerRenderer 
-                owners={projectOwners} 
-                projectId={project.project_id}
-                onOwnerChange={handleOwnerChange}
-                onOwnerRemove={handleOwnerRemove}
-                onError={(message) => setErrorNotification(message)}
-              />
+              <ProtectedAction screenKey="projects.detail.tracking" action="edit" fallback={
+                <ProjectOwnerRenderer 
+                  owners={projectOwners} 
+                  projectId={project.project_id}
+                  onOwnerChange={() => {}}
+                  onOwnerRemove={() => {}}
+                  onError={() => {}}
+                  readOnly
+                />
+              }>
+                <ProjectOwnerRenderer 
+                  owners={projectOwners} 
+                  projectId={project.project_id}
+                  onOwnerChange={handleOwnerChange}
+                  onOwnerRemove={handleOwnerRemove}
+                  onError={(message) => setErrorNotification(message)}
+                />
+              </ProtectedAction>
             )}
           </div>
           <div>
@@ -2614,14 +2638,16 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       <span>Total: <span className="font-bold text-gray-800 dark:text-gray-200">{risks.length} Riscos</span></span>
                       <span className="border-l border-gray-300 dark:border-gray-600 pl-6">Filtrados: <span className="font-bold text-blue-600 dark:text-blue-400">{filteredRisks.length}</span></span>
                     </div>
-                    <button
-                      onClick={openAddRiskModal}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
-                      title="Adicionar novo risco"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Adicionar Risco
-                    </button>
+                    <ProtectedAction screenKey="projects.detail.risks" action="create">
+                      <button
+                        onClick={openAddRiskModal}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+                        title="Adicionar novo risco"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Risco
+                      </button>
+                    </ProtectedAction>
                   </div>
 
                   <div className="ag-theme-alpine w-full flex-1 p-6 pt-0">
@@ -2693,14 +2719,16 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                       <span className="text-gray-400">|</span>
                       <span><span className="font-bold text-gray-800 dark:text-gray-200">{accesses.length}</span> Acessos</span>
                     </div>
-                    <button
-                      onClick={openAddAccessModal}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
-                      title="Adicionar novo acesso"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Adicionar Acesso
-                    </button>
+                    <ProtectedAction screenKey="projects.detail.access" action="create">
+                      <button
+                        onClick={openAddAccessModal}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+                        title="Adicionar novo acesso"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Acesso
+                      </button>
+                    </ProtectedAction>
                   </div>
 
                   {/* Tabela de plataformas com detalhes expandidos inline */}
@@ -3229,25 +3257,27 @@ const ProjectDetail = ({ project, onBack }: ProjectDetailProps) => {
                 {!isFullScreen && (
                   <div className="flex justify-end mb-2">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={async () => {
-                          // Calcular semanas do projeto
-                          const weeks = calculateProjectWeeks();
-                          setProjectWeeks(weeks);
-                          
-                          // Definir primeira semana como padrão se há semanas disponíveis
-                          const initialWeek = weeks.length > 0 ? 1 : 1;
-                          setSelectedWeek(initialWeek);
+                      <ProtectedAction screenKey="projects.detail.statusreport" action="import">
+                        <button
+                          onClick={async () => {
+                            // Calcular semanas do projeto
+                            const weeks = calculateProjectWeeks();
+                            setProjectWeeks(weeks);
+                            
+                            // Definir primeira semana como padrão se há semanas disponíveis
+                            const initialWeek = weeks.length > 0 ? 1 : 1;
+                            setSelectedWeek(initialWeek);
 
-                          // Abrir novo modal
-                          setIsProgressModalOpen(true);
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        title="Editar progresso das fases"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Editar Progresso
-                      </button>
+                            // Abrir novo modal
+                            setIsProgressModalOpen(true);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          title="Editar progresso das fases"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Editar Progresso
+                        </button>
+                      </ProtectedAction>
                     </div>
                   </div>
                 )}

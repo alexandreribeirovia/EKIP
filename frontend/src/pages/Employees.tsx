@@ -9,14 +9,14 @@ import { usePermissionStore } from '../stores/permissionStore'
 
 const Employees = () => {
   const navigate = useNavigate()
-  const { hasScreenAccess, isAdmin } = usePermissionStore()
+  const { isEnabled, isAdmin } = usePermissionStore()
   const [employees, setEmployees] = useState<DbUser[]>([]);
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active')
   
-  // Verificar se tem acesso ao detalhe do funcionário
-  const hasDetailAccess = isAdmin || hasScreenAccess('employees.detail')
+  // Verificar se tem acesso ao detalhe do funcionário (usa isEnabled pois detail pages são controladas por toggle)
+  const hasDetailAccess = isAdmin || isEnabled('employees.detail')
   
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);

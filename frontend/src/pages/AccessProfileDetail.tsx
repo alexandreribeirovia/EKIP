@@ -685,15 +685,8 @@ export default function AccessProfileDetail() {
       return newEnabled
     })
     
-    // If enabling, set default view permission
+    // If enabling, select this sub-entity
     if (isEnabled) {
-      setActions(prev => ({
-        ...prev,
-        [subKey]: {
-          ...prev[subKey],
-          view: true
-        }
-      }))
       // Select this sub-entity
       setSelectedKey(subKey)
       setSelectedType('subentity')
@@ -703,15 +696,8 @@ export default function AccessProfileDetail() {
   const handleToggleTab = (tabKey: string, isEnabled: boolean) => {
     setEnabled(prev => ({ ...prev, [tabKey]: isEnabled }))
     
-    // If enabling, set default view permission
+    // If enabling, select this tab
     if (isEnabled) {
-      setActions(prev => ({
-        ...prev,
-        [tabKey]: {
-          ...prev[tabKey],
-          view: true
-        }
-      }))
       // Select this tab
       setSelectedKey(tabKey)
       setSelectedType('tab')
@@ -929,20 +915,7 @@ export default function AccessProfileDetail() {
             </div>
           </div>
 
-          {!profile.is_system && (
-            <button
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                hasChanges 
-                  ? 'bg-green-500 text-white hover:bg-green-600' 
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'Salvando...' : 'Salvar Alterações'}
-            </button>
-          )}
+
         </div>
       </div>
 
@@ -1000,7 +973,7 @@ export default function AccessProfileDetail() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">{selectedItem.description}</p>
                     </div>
                   </div>
-                  {!profile.is_system && (
+                  {!profile.is_system && selectedItem.actions.length > 0 && (
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleToggleAllActions(selectedKey!, selectedItem.actions, true)}
@@ -1019,20 +992,33 @@ export default function AccessProfileDetail() {
                 </div>
               </div>
 
-              {/* Actions grid */}
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {selectedItem.actions.map(action => (
-                    <PermissionCheckbox
-                      key={action.key}
-                      action={action}
-                      checked={profile.is_system ? true : (actions[selectedKey!]?.[action.key] || false)}
-                      onChange={(checked) => handleActionChange(selectedKey!, action.key, checked)}
-                      disabled={profile.is_system}
-                    />
-                  ))}
+              {/* Actions grid or no-actions message */}
+              {selectedItem.actions.length > 0 ? (
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {selectedItem.actions.map(action => (
+                      <PermissionCheckbox
+                        key={action.key}
+                        action={action}
+                        checked={profile.is_system ? true : (actions[selectedKey!]?.[action.key] || false)}
+                        onChange={(checked) => handleActionChange(selectedKey!, action.key, checked)}
+                        disabled={profile.is_system}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-8">
+                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
+                    <Shield className="w-8 h-8 text-green-600 dark:text-green-400" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sem ações configuráveis</p>
+                  <p className="text-xs text-center max-w-sm">
+                    Este item não possui funcionalidades que necessitem de permissão. 
+                    O acesso é controlado apenas pelo toggle de habilitação na lista à esquerda.
+                  </p>
+                </div>
+              )}
             </>
           ) : (
             /* No item selected or item disabled */
@@ -1053,28 +1039,45 @@ export default function AccessProfileDetail() {
         </div>
       </div>
 
-      {/* Unsaved changes warning */}
-      {hasChanges && !profile.is_system && (
-        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center justify-between">
-          <p className="text-yellow-700 dark:text-yellow-300 text-sm">
-            Você tem alterações não salvas
-          </p>
-          <div className="flex gap-2">
+      {/* Barra inferior - padrão EvaluationResponse */}
+      {!profile.is_system && (
+        <div className="flex justify-between items-center gap-3 p-1 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {hasChanges ? (
+              <span className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                <AlertTriangle className="w-4 h-4" />
+                Você tem alterações não salvas
+              </span>
+            ) : null}
+          </div>
+          <div className="flex gap-3">
             <button
-              onClick={() => {
-                setEnabled(JSON.parse(JSON.stringify(originalEnabled)))
-                setActions(JSON.parse(JSON.stringify(originalActions)))
-              }}
-              className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              type="button"
+              onClick={() => navigate('/access-profiles')}
+              className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              Descartar
+              Voltar
             </button>
+            {hasChanges && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEnabled(JSON.parse(JSON.stringify(originalEnabled)))
+                  setActions(JSON.parse(JSON.stringify(originalActions)))
+                }}
+                className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Descartar
+              </button>
+            )}
             <button
+              type="button"
               onClick={handleSave}
-              disabled={saving}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+              disabled={saving || !hasChanges}
+              className="px-6 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {saving ? 'Salvando...' : 'Salvar'}
+              <Save className="w-4 h-4" />
+              {saving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
         </div>

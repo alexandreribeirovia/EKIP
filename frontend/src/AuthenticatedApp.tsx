@@ -132,27 +132,27 @@ function AuthenticatedApp() {
               <Route path="/dashboard" element={<ProtectedRouteByPermission screenKey="dashboard"><Dashboard /></ProtectedRouteByPermission>} />
               <Route path="/time-entries" element={<ProtectedRouteByPermission screenKey="dashboard"><TimeEntries /></ProtectedRouteByPermission>} />
               <Route path="/employees" element={<ProtectedRouteByPermission screenKey="employees"><Employees /></ProtectedRouteByPermission>} />
-              <Route path="/employees/:id" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeDetail /></ProtectedRouteByPermission>} />
+              <Route path="/employees/:id" element={<ProtectedRouteByPermission screenKey="employees.detail"><EmployeeDetail /></ProtectedRouteByPermission>} />
               <Route path="/allocations" element={<ProtectedRouteByPermission screenKey="allocations"><Allocations /></ProtectedRouteByPermission>} />
-              <Route path="/feedbacks" element={<ProtectedRouteByPermission screenKey="employees"><Feedbacks /></ProtectedRouteByPermission>} />
-              <Route path="/employee-evaluations" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeEvaluations /></ProtectedRouteByPermission>} />
-              <Route path="/employee-evaluations/:id" element={<ProtectedRouteByPermission screenKey="employees"><EvaluationResponse /></ProtectedRouteByPermission>} />
-              <Route path="/evaluations" element={<ProtectedRouteByPermission screenKey="evaluation_models"><EvaluationModels /></ProtectedRouteByPermission>} />
-              <Route path="/evaluations/:id" element={<ProtectedRouteByPermission screenKey="evaluation_models"><EvaluationDetail /></ProtectedRouteByPermission>} />
-              <Route path="/pdi" element={<ProtectedRouteByPermission screenKey="employees"><PDI /></ProtectedRouteByPermission>} />
+              <Route path="/feedbacks" element={<ProtectedRouteByPermission screenKey="employees.feedbacks"><Feedbacks /></ProtectedRouteByPermission>} />
+              <Route path="/employee-evaluations" element={<ProtectedRouteByPermission screenKey="employees.evaluations"><EmployeeEvaluations /></ProtectedRouteByPermission>} />
+              <Route path="/employee-evaluations/:id" element={<ProtectedRouteByPermission screenKey="employees.evaluations"><EvaluationResponse /></ProtectedRouteByPermission>} />
+              <Route path="/evaluations" element={<ProtectedRouteByPermission screenKey="settings.evaluations"><EvaluationModels /></ProtectedRouteByPermission>} />
+              <Route path="/evaluations/:id" element={<ProtectedRouteByPermission screenKey="settings.evaluations"><EvaluationDetail /></ProtectedRouteByPermission>} />
+              <Route path="/pdi" element={<ProtectedRouteByPermission screenKey="employees.pdi"><PDI /></ProtectedRouteByPermission>} />
               <Route path="/projects" element={<ProtectedRouteByPermission screenKey="projects"><Projects /></ProtectedRouteByPermission>} />
-              <Route path="/users" element={<ProtectedRouteByPermission screenKey="users"><Users /></ProtectedRouteByPermission>} />
-              <Route path="/domains" element={<ProtectedRouteByPermission screenKey="domains"><Domains /></ProtectedRouteByPermission>} />
+              <Route path="/users" element={<ProtectedRouteByPermission screenKey="settings.users"><Users /></ProtectedRouteByPermission>} />
+              <Route path="/domains" element={<ProtectedRouteByPermission screenKey="settings.domains"><Domains /></ProtectedRouteByPermission>} />
               <Route path="/notifications" element={<ProtectedRouteByPermission screenKey="notifications"><Notifications /></ProtectedRouteByPermission>} />
               {/* Quiz - Configuração (menu Configurações) */}
-              <Route path="/quizzes" element={<ProtectedRouteByPermission screenKey="quizzes"><QuizModel /></ProtectedRouteByPermission>} />
-              <Route path="/quizzes/:id" element={<ProtectedRouteByPermission screenKey="quizzes"><QuizModelDetail /></ProtectedRouteByPermission>} />
+              <Route path="/quizzes" element={<ProtectedRouteByPermission screenKey="settings.quizzes"><QuizModel /></ProtectedRouteByPermission>} />
+              <Route path="/quizzes/:id" element={<ProtectedRouteByPermission screenKey="settings.quizzes"><QuizModelDetail /></ProtectedRouteByPermission>} />
               {/* Quiz - Uso/Acompanhamento (menu Funcionários) */}
-              <Route path="/employee-quizzes" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeQuizzes /></ProtectedRouteByPermission>} />
-              <Route path="/employee-quizzes/:id" element={<ProtectedRouteByPermission screenKey="employees"><EmployeeQuizDetail /></ProtectedRouteByPermission>} />
+              <Route path="/employee-quizzes" element={<ProtectedRouteByPermission screenKey="employees.quizzes"><EmployeeQuizzes /></ProtectedRouteByPermission>} />
+              <Route path="/employee-quizzes/:id" element={<ProtectedRouteByPermission screenKey="employees.quizzes"><EmployeeQuizDetail /></ProtectedRouteByPermission>} />
               {/* Perfis de Acesso */}
-              <Route path="/access-profiles" element={<ProtectedRouteByPermission screenKey="access_profiles"><AccessProfiles /></ProtectedRouteByPermission>} />
-              <Route path="/access-profiles/:id" element={<ProtectedRouteByPermission screenKey="access_profiles"><AccessProfileDetail /></ProtectedRouteByPermission>} />
+              <Route path="/access-profiles" element={<ProtectedRouteByPermission screenKey="settings.access-profiles"><AccessProfiles /></ProtectedRouteByPermission>} />
+              <Route path="/access-profiles/:id" element={<ProtectedRouteByPermission screenKey="settings.access-profiles"><AccessProfileDetail /></ProtectedRouteByPermission>} />
             </Routes>
           </Layout>
         } />

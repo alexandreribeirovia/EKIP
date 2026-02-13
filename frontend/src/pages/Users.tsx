@@ -5,6 +5,7 @@ import { Plus, Edit, Users as UsersIcon, UserCheck, UserX, Shield } from 'lucide
 import UserModal from '@/components/UserModal'
 import * as apiClient from '../lib/apiClient'
 import { ProtectedAction } from '../components/ProtectedComponents'
+import { usePermissionStore } from '../stores/permissionStore'
 
 interface UserData {
   id: string
@@ -20,6 +21,7 @@ interface UserData {
 }
 
 const Users = () => {
+  const { hasPermission } = usePermissionStore()
   const [users, setUsers] = useState<UserData[]>([])
   const [filteredUsers, setFilteredUsers] = useState<UserData[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -254,13 +256,15 @@ const Users = () => {
       cellRenderer: (params: any) => {
         return (
           <div className="flex items-center justify-center h-full">
-            <button
-              onClick={() => handleEditUser(params.value)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Editar usuário"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
+            {hasPermission('settings.users', 'edit') && (
+              <button
+                onClick={() => handleEditUser(params.value)}
+                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                title="Editar usuário"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )
       },
@@ -314,7 +318,7 @@ const Users = () => {
 
           {/* Botão Novo Usuário */}
           <div className="flex items-end">
-            <ProtectedAction screenKey="users" action="create">
+            <ProtectedAction screenKey="settings.users" action="create">
               <button
                 onClick={handleCreateUser}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"

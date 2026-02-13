@@ -14,6 +14,7 @@ import HtmlCellRenderer from '../components/HtmlCellRenderer'
 import AccessModal from '../components/AccessModal'
 import apiClient from '../lib/apiClient'
 import { usePermissionStore } from '../stores/permissionStore'
+import { ProtectedAction } from '../components/ProtectedComponents'
 
 // Interface para acessos agrupados por cliente
 interface DbAccessClientGrouped {
@@ -46,7 +47,7 @@ const EmployeeDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { hasScreenAccess, isAdmin } = usePermissionStore()
+  const { isEnabled, isAdmin, hasPermission } = usePermissionStore()
   const [employee, setEmployee] = useState<DbUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [tasks, setTasks] = useState<DbTask[]>([])
@@ -55,8 +56,8 @@ const EmployeeDetail = () => {
   // Filtrar tabs baseado em permissões
   const visibleTabs = useMemo(() => {
     if (isAdmin) return TAB_CONFIG
-    return TAB_CONFIG.filter(tab => hasScreenAccess(tab.permissionKey))
-  }, [isAdmin, hasScreenAccess])
+    return TAB_CONFIG.filter(tab => isEnabled(tab.permissionKey))
+  }, [isAdmin, isEnabled])
   
   // Determinar aba inicial baseado no hash da URL e tabs visíveis
   const getInitialTab = (): TabKey => {
@@ -1537,25 +1538,37 @@ const EmployeeDetail = () => {
         const isClosed = params.data?.is_closed === true;
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => handleEditFeedback(params.value)}
-              className={`p-1 rounded transition-colors ${
-                isClosed
-                  ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
-                  : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              }`}
-              title={isClosed ? 'Visualizar feedback' : 'Editar feedback'}
-            >
-              {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-            </button>
-            {!isClosed && (
-              <button
-                onClick={() => handleDeleteFeedback(params.value)}
-                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                title="Deletar feedback"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+            {isClosed ? (
+              hasPermission('employees.detail.feedbacks', 'view') && (
+                <button
+                  onClick={() => handleEditFeedback(params.value)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20 p-1 rounded transition-colors"
+                  title="Visualizar feedback"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              )
+            ) : (
+              <>
+                {hasPermission('employees.detail.feedbacks', 'edit') && (
+                  <button
+                    onClick={() => handleEditFeedback(params.value)}
+                    className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-1 rounded transition-colors"
+                    title="Editar feedback"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                )}
+                {hasPermission('employees.detail.feedbacks', 'delete') && (
+                  <button
+                    onClick={() => handleDeleteFeedback(params.value)}
+                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    title="Deletar feedback"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </>
             )}
           </div>
         );
@@ -1703,21 +1716,25 @@ const EmployeeDetail = () => {
       cellRenderer: (params: any) => {
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => navigate(`/employee-evaluations/${params.value}`)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title="Ver avaliação"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </button>
+            {hasPermission('employees.detail.evaluations', 'view') && (
+              <button
+                onClick={() => navigate(`/employee-evaluations/${params.value}`)}
+                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                title="Ver avaliação"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            )}
             
-            <button
-              onClick={() => handleDeleteEvaluation(params.value)}
-              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              title="Deletar avaliação"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {hasPermission('employees.detail.evaluations', 'delete') && (
+              <button
+                onClick={() => handleDeleteEvaluation(params.value)}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Deletar avaliação"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         );
       },
@@ -1823,23 +1840,39 @@ const EmployeeDetail = () => {
         
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => handleEditPdi(params.value)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              title={isClosed ? "Visualizar PDI" : "Editar PDI"}
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            
-            {/* Botão deletar só aparece se o PDI não estiver encerrado */}
-            {!isClosed && (
-              <button
-                onClick={() => handleDeletePdi(params.value)}
-                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                title="Deletar PDI"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+            {isClosed ? (
+              hasPermission('employees.detail.pdi', 'view') && (
+                <button
+                  onClick={() => handleEditPdi(params.value)}
+                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  title="Visualizar PDI"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              )
+            ) : (
+              <>
+                {hasPermission('employees.detail.pdi', 'edit') && (
+                  <button
+                    onClick={() => handleEditPdi(params.value)}
+                    className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    title="Editar PDI"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                )}
+                
+                {/* Botão deletar só aparece se o PDI não estiver encerrado */}
+                {hasPermission('employees.detail.pdi', 'delete') && (
+                  <button
+                    onClick={() => handleDeletePdi(params.value)}
+                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    title="Deletar PDI"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </>
             )}
           </div>
         );
@@ -1940,27 +1973,33 @@ const EmployeeDetail = () => {
       width: 140,
       cellRenderer: (params: any) => (
         <div className="flex items-center justify-center gap-1 h-full">
-          <button
-            onClick={() => void openEditAccessModal(params.data.id)}
-            className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
-            title="Editar acesso"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => void openCloneAccessModal(params.data.id)}
-            className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
-            title="Clonar acesso"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => deleteAccess(params.data.id)}
-            className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
-            title="Excluir acesso"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {hasPermission('employees.detail.access', 'edit') && (
+            <button
+              onClick={() => void openEditAccessModal(params.data.id)}
+              className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 transition-colors"
+              title="Editar acesso"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+          )}
+          {hasPermission('employees.detail.access', 'create') && (
+            <button
+              onClick={() => void openCloneAccessModal(params.data.id)}
+              className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 transition-colors"
+              title="Clonar acesso"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          )}
+          {hasPermission('employees.detail.access', 'delete') && (
+            <button
+              onClick={() => deleteAccess(params.data.id)}
+              className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 transition-colors"
+              title="Excluir acesso"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ),
       sortable: false,
@@ -2505,6 +2544,7 @@ const EmployeeDetail = () => {
                     </span>
                     
                     {/* Botão toggle Status */}
+                    <ProtectedAction screenKey="employees.detail" action="edit">
                     <button
                       onClick={toggleEmployeeStatus}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
@@ -2520,6 +2560,7 @@ const EmployeeDetail = () => {
                         }`}
                       />
                     </button>
+                    </ProtectedAction>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -2537,6 +2578,7 @@ const EmployeeDetail = () => {
                     </span>
 
                     {/* Botão toggle Log Hours */}
+                    <ProtectedAction screenKey="employees.detail" action="edit">
                     <button
                       onClick={toggleEmployeeLogHours}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
@@ -2552,6 +2594,7 @@ const EmployeeDetail = () => {
                         }`}
                       />
                     </button>
+                    </ProtectedAction>
                   </div>
                 </div>
                 
@@ -2599,6 +2642,7 @@ const EmployeeDetail = () => {
               {/* Card de Habilidades */}
               <div className="card p-6">
                 <CardHeader icon={<Award className="w-5 h-5" />} title="Habilidades">
+                  <ProtectedAction screenKey="employees.detail" action="edit">
                   <button
                     onClick={() => setShowSkillSelector(!showSkillSelector)}
                     className="text-orange-500 hover:text-orange-600 transition-colors"
@@ -2606,6 +2650,7 @@ const EmployeeDetail = () => {
                   >
                     <Plus className="w-5 h-5" />
                   </button>
+                  </ProtectedAction>
                 </CardHeader>
 
                 {showSkillSelector && (
@@ -2632,6 +2677,7 @@ const EmployeeDetail = () => {
                         <span className="text-sm text-gray-700 dark:text-gray-300">
                           {formatSkillName(userSkill.skill)}
                         </span>
+                        <ProtectedAction screenKey="employees.detail" action="edit">
                         <button
                           onClick={() => removeSkillFromUser(userSkill.id)}
                           className="text-red-500 hover:text-red-600 transition-colors ml-2"
@@ -2639,6 +2685,7 @@ const EmployeeDetail = () => {
                         >
                           <X className="w-4 h-4" />
                         </button>
+                        </ProtectedAction>
                       </div>
                     ))
                   )}
@@ -2891,6 +2938,7 @@ const EmployeeDetail = () => {
               {activeTab === 'feedbacks' && (
                 <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
                   {/* Botão Novo Feedback */}
+                  <ProtectedAction screenKey="employees.detail.feedbacks" action="create">
                   <div className="flex justify-end mb-4">
                     <button
                       onClick={() => setIsFeedbackModalOpen(true)}
@@ -2900,6 +2948,7 @@ const EmployeeDetail = () => {
                       Novo Feedback
                     </button>
                   </div>
+                  </ProtectedAction>
 
                   <div className="ag-theme-alpine w-full flex-1">
                     {isLoadingFeedbacks ? (
@@ -2930,6 +2979,7 @@ const EmployeeDetail = () => {
 
               {activeTab === 'avaliacoes' && (
                 <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
+                  <ProtectedAction screenKey="employees.detail.evaluations" action="create">
                   <div className="flex justify-end mb-4">
                     <button
                       onClick={() => setIsEvaluationModalOpen(true)}
@@ -2939,6 +2989,7 @@ const EmployeeDetail = () => {
                       Nova Avaliação
                     </button>
                   </div>
+                  </ProtectedAction>
                   <div className="ag-theme-alpine w-full flex-1">
                     {isLoadingEvaluationsList ? (
                       <div className="flex justify-center py-8">
@@ -2962,6 +3013,7 @@ const EmployeeDetail = () => {
 
               {activeTab === 'pdi' && (
                 <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
+                  <ProtectedAction screenKey="employees.detail.pdi" action="create">
                   <div className="flex justify-end mb-4">
                     <button
                       onClick={() => setIsPDIModalOpen(true)}
@@ -2971,6 +3023,7 @@ const EmployeeDetail = () => {
                       Novo PDI
                     </button>
                   </div>
+                  </ProtectedAction>
                   <div className="ag-theme-alpine w-full flex-1">
                     {isLoadingPDIs ? (
                       <div className="flex justify-center py-8">
@@ -3421,6 +3474,7 @@ const EmployeeDetail = () => {
                             <span className="text-gray-400">|</span>
                             <span><span className="font-bold text-gray-800 dark:text-gray-200">{accesses.length}</span> Acessos</span>
                           </div>
+                          <ProtectedAction screenKey="employees.detail.access" action="create">
                           <button
                             onClick={() => void openAddAccessModal()}
                             className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
@@ -3428,6 +3482,7 @@ const EmployeeDetail = () => {
                             <Plus className="w-4 h-4" />
                             Adicionar Acesso
                           </button>
+                          </ProtectedAction>
                         </div>
 
                         {/* Tabela de clientes com detalhes expandidos inline */}

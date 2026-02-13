@@ -71,7 +71,7 @@ export type Subtab = SubEntity;
 // =====================================================
 
 export const ACTIONS = {
-  VIEW: { key: 'view', label: 'Visualizar', description: 'Permite visualizar os dados' },
+  VIEW: { key: 'view', label: 'Visualizar', description: 'Permite abrir/visualizar registros individuais no grid' },
   CREATE: { key: 'create', label: 'Criar', description: 'Permite criar novos registros' },
   EDIT: { key: 'edit', label: 'Editar', description: 'Permite editar registros existentes' },
   DELETE: { key: 'delete', label: 'Excluir', description: 'Permite excluir registros' },
@@ -79,7 +79,7 @@ export const ACTIONS = {
   IMPORT: { key: 'import', label: 'Importar', description: 'Permite importar dados' },
 } as const;
 
-/** Ações padrão CRUD */
+/** Ações padrão CRUD completo (view + create + edit + delete) */
 const CRUD_ACTIONS: Action[] = [
   ACTIONS.VIEW,
   ACTIONS.CREATE,
@@ -87,10 +87,26 @@ const CRUD_ACTIONS: Action[] = [
   ACTIONS.DELETE,
 ];
 
-/** Apenas visualização */
-const VIEW_ONLY_ACTIONS: Action[] = [
-  ACTIONS.VIEW,
+/** CRUD sem view (create + edit + delete) - para telas onde a listagem já é visível */
+const CED_ACTIONS: Action[] = [
+  ACTIONS.CREATE,
+  ACTIONS.EDIT,
+  ACTIONS.DELETE,
 ];
+
+/** Apenas criação e edição (sem delete) */
+const CE_ACTIONS: Action[] = [
+  ACTIONS.CREATE,
+  ACTIONS.EDIT,
+];
+
+/** Apenas edição */
+const EDIT_ONLY_ACTIONS: Action[] = [
+  ACTIONS.EDIT,
+];
+
+/** Sem ações configuráveis - acesso controlado apenas pelo toggle habilitado/desabilitado */
+const NO_ACTIONS: Action[] = [];
 
 // =====================================================
 // CONFIGURAÇÃO DE ENTIDADES (Baseado no Menu)
@@ -106,14 +122,14 @@ export const ENTITIES_CONFIG: Entity[] = [
     icon: 'LayoutDashboard',
     description: 'Painel principal com indicadores e gráficos',
     route: '/dashboard',
-    actions: VIEW_ONLY_ACTIONS,
+    actions: NO_ACTIONS,
     subEntities: [
       {
         key: 'dashboard.time-entries',
         label: 'Lançamento de Horas',
         route: '/time-entries',
         icon: 'Clock',
-        actions: CRUD_ACTIONS,
+        actions: NO_ACTIONS,
       },
     ],
   },
@@ -127,7 +143,7 @@ export const ENTITIES_CONFIG: Entity[] = [
     icon: 'Users',
     description: 'Gestão de funcionários e colaboradores',
     route: '/employees',
-    actions: CRUD_ACTIONS,
+    actions: NO_ACTIONS,
     subEntities: [
       // Página de detalhe (não aparece no menu)
       {
@@ -136,16 +152,16 @@ export const ENTITIES_CONFIG: Entity[] = [
         route: '/employees/:id',
         icon: 'User',
         isDetailPage: true,
-        actions: VIEW_ONLY_ACTIONS,
+        actions: EDIT_ONLY_ACTIONS, // toggle status, toggle log hours, add/remove skills
         tabs: [
-          { key: 'employees.detail.tasks', label: 'Tarefas Atribuídas', icon: 'ClipboardList', actions: VIEW_ONLY_ACTIONS },
-          { key: 'employees.detail.timerecord', label: 'Registro de Horas', icon: 'Clock', actions: VIEW_ONLY_ACTIONS },
-          { key: 'employees.detail.followup', label: 'Acompanhamento', icon: 'TrendingUp', actions: VIEW_ONLY_ACTIONS },
-          { key: 'employees.detail.feedbacks', label: 'Feedbacks', icon: 'MessageSquare', actions: CRUD_ACTIONS },
-          { key: 'employees.detail.evaluations', label: 'Avaliações', icon: 'FileCheck', actions: CRUD_ACTIONS },
-          { key: 'employees.detail.pdi', label: 'PDI', icon: 'Target', actions: CRUD_ACTIONS },
-          { key: 'employees.detail.access', label: 'Acessos', icon: 'Key', actions: CRUD_ACTIONS },
-          { key: 'employees.detail.quizzes', label: 'Quizzes', icon: 'HelpCircle', actions: VIEW_ONLY_ACTIONS },
+          { key: 'employees.detail.tasks', label: 'Tarefas Atribuídas', icon: 'ClipboardList', actions: NO_ACTIONS },
+          { key: 'employees.detail.timerecord', label: 'Registro de Horas', icon: 'Clock', actions: NO_ACTIONS },
+          { key: 'employees.detail.followup', label: 'Acompanhamento', icon: 'TrendingUp', actions: NO_ACTIONS },
+          { key: 'employees.detail.feedbacks', label: 'Feedbacks', icon: 'MessageSquare', actions: CRUD_ACTIONS }, // view(eye), create(novo), edit, delete
+          { key: 'employees.detail.evaluations', label: 'Avaliações', icon: 'FileCheck', actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.DELETE] }, // view(link), create(nova), delete
+          { key: 'employees.detail.pdi', label: 'PDI', icon: 'Target', actions: CRUD_ACTIONS }, // view(eye fechado), create(novo), edit, delete
+          { key: 'employees.detail.access', label: 'Acessos', icon: 'Key', actions: CED_ACTIONS }, // create(novo/clone), edit, delete
+          { key: 'employees.detail.quizzes', label: 'Quizzes', icon: 'HelpCircle', actions: NO_ACTIONS },
         ],
       },
       // Itens de menu (páginas separadas)
@@ -154,28 +170,28 @@ export const ENTITIES_CONFIG: Entity[] = [
         label: 'Feedbacks',
         route: '/feedbacks',
         icon: 'MessageSquare',
-        actions: CRUD_ACTIONS,
+        actions: CRUD_ACTIONS, // view(eye), create(novo), edit, delete
       },
       {
         key: 'employees.evaluations',
         label: 'Avaliação',
         route: '/employee-evaluations',
         icon: 'FileCheck',
-        actions: CRUD_ACTIONS,
+        actions: CRUD_ACTIONS, // view(eye), create(nova), edit, delete
       },
       {
         key: 'employees.pdi',
         label: 'PDI',
         route: '/pdi',
         icon: 'Target',
-        actions: CRUD_ACTIONS,
+        actions: CRUD_ACTIONS, // view(eye fechado), create(novo), edit, delete
       },
       {
         key: 'employees.quizzes',
         label: 'Quiz',
         route: '/employee-quizzes',
         icon: 'HelpCircle',
-        actions: VIEW_ONLY_ACTIONS,
+        actions: NO_ACTIONS,
       },
     ],
   },
@@ -189,7 +205,7 @@ export const ENTITIES_CONFIG: Entity[] = [
     icon: 'ClipboardList',
     description: 'Gestão de projetos e entregas',
     route: '/projects',
-    actions: CRUD_ACTIONS,
+    actions: NO_ACTIONS,
     subEntities: [
       // Página de detalhe (não aparece no menu)
       {
@@ -198,13 +214,13 @@ export const ENTITIES_CONFIG: Entity[] = [
         route: '/projects/:id',
         icon: 'FolderOpen',
         isDetailPage: true,
-        actions: VIEW_ONLY_ACTIONS,
+        actions: NO_ACTIONS,
         tabs: [
-          { key: 'projects.detail.tracking', label: 'Acompanhamento', icon: 'TrendingUp', actions: VIEW_ONLY_ACTIONS },
-          { key: 'projects.detail.tasks', label: 'Tarefas do Projeto', icon: 'ClipboardList', actions: CRUD_ACTIONS },
-          { key: 'projects.detail.risks', label: 'Riscos/Ações', icon: 'AlertTriangle', actions: CRUD_ACTIONS },
-          { key: 'projects.detail.statusreport', label: 'Status Report', icon: 'BarChart', actions: VIEW_ONLY_ACTIONS },
-          { key: 'projects.detail.access', label: 'Acesso', icon: 'Key', actions: CRUD_ACTIONS },
+          { key: 'projects.detail.tracking', label: 'Acompanhamento', icon: 'TrendingUp', actions: EDIT_ONLY_ACTIONS }, // add/remove owners
+          { key: 'projects.detail.tasks', label: 'Tarefas do Projeto', icon: 'ClipboardList', actions: NO_ACTIONS }, // somente leitura (RunRun)
+          { key: 'projects.detail.risks', label: 'Riscos/Ações', icon: 'AlertTriangle', actions: CED_ACTIONS }, // create(novo), edit, delete
+          { key: 'projects.detail.statusreport', label: 'Status Report', icon: 'BarChart', actions: [ACTIONS.IMPORT] }, // upload CSV
+          { key: 'projects.detail.access', label: 'Acesso', icon: 'Key', actions: CED_ACTIONS }, // create(novo/clone), edit, delete
         ],
       },
     ],
@@ -217,9 +233,9 @@ export const ENTITIES_CONFIG: Entity[] = [
     key: 'allocations',
     label: 'Alocações',
     icon: 'CalendarRange',
-    description: 'Gestão de alocações de funcionários em projetos',
+    description: 'Visualização de alocações de funcionários em projetos',
     route: '/allocations',
-    actions: CRUD_ACTIONS,
+    actions: NO_ACTIONS, // calendário somente leitura
     subEntities: [],
   },
 
@@ -232,42 +248,42 @@ export const ENTITIES_CONFIG: Entity[] = [
     icon: 'Settings',
     description: 'Configurações do sistema',
     route: '/settings',
-    actions: VIEW_ONLY_ACTIONS,
+    actions: NO_ACTIONS,
     subEntities: [
       {
         key: 'settings.evaluations',
         label: 'Avaliações Modelo',
         route: '/evaluations',
         icon: 'ClipboardList',
-        actions: CRUD_ACTIONS,
+        actions: CED_ACTIONS, // create(novo), edit, delete
       },
       {
         key: 'settings.quizzes',
         label: 'Quiz',
         route: '/quizzes',
         icon: 'ClipboardCheck',
-        actions: CRUD_ACTIONS,
+        actions: CRUD_ACTIONS, // view(detalhe), create(novo), edit, delete
       },
       {
         key: 'settings.access-profiles',
         label: 'Perfis de Acesso',
         route: '/access-profiles',
         icon: 'Shield',
-        actions: CRUD_ACTIONS,
+        actions: CRUD_ACTIONS, // view(detalhe), create(novo/clone), edit, delete
       },
       {
         key: 'settings.users',
         label: 'Usuários',
         route: '/users',
         icon: 'Users',
-        actions: CRUD_ACTIONS,
+        actions: CE_ACTIONS, // create(novo), edit
       },
       {
         key: 'settings.domains',
         label: 'Domínios',
         route: '/domains',
         icon: 'Database',
-        actions: CRUD_ACTIONS,
+        actions: CE_ACTIONS, // create(novo/clone), edit
       },
     ],
   },

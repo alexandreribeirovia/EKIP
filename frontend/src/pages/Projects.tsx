@@ -11,14 +11,14 @@ import { usePermissionStore } from '../stores/permissionStore';
 
 
 const Projects = () => {
-  const { hasScreenAccess, isAdmin } = usePermissionStore()
+  const { isEnabled, isAdmin } = usePermissionStore()
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('open');
   const [selectedProject, setSelectedProject] = useState<DbProject | null>(null);
   
-  // Verificar se tem acesso ao detalhe do projeto
-  const hasDetailAccess = isAdmin || hasScreenAccess('projects.detail')
+  // Verificar se tem acesso ao detalhe do projeto (usa isEnabled pois detail pages são controladas por toggle)
+  const hasDetailAccess = isAdmin || isEnabled('projects.detail')
   
   // useRef para controlar se já foi carregado (não causa re-render)
   const hasLoadedInitially = useRef(false);

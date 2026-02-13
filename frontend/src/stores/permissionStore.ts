@@ -181,19 +181,21 @@ export const usePermissionStore = create<PermissionState>((set, get) => ({
       p => p.screen_key === screenKey && p.action === 'enabled'
     )
 
-    // Se não encontrou permissão de habilitação, considera habilitado por padrão
-    // Isso garante backwards compatibility com perfis existentes
-    if (!perm) return true
+    // Se não encontrou permissão de habilitação, bloqueia por padrão
+    // Perfis devem ter permissões explícitas
+    if (!perm) return false
 
     return perm.allowed !== false
   },
 
   /**
-   * Verifica acesso completo: entidade habilitada + permissão view
+   * Verifica acesso completo: entidade habilitada
    * Usado para filtrar menus e rotas
+   * NOTA: view agora é uma ação de funcionalidade (abrir registro no grid),
+   * não mais requisito para acesso à tela. Acesso = enabled.
    */
   hasFullAccess: (screenKey: string): boolean => {
-    return get().isEnabled(screenKey) && get().hasScreenAccess(screenKey)
+    return get().isEnabled(screenKey)
   }
 }))
 
@@ -205,14 +207,22 @@ export const usePermissionStore = create<PermissionState>((set, get) => ({
  * Hook para verificar permissão de forma reativa
  */
 export function useHasPermission(screenKey: string, action: string): boolean {
-  const hasPermission = usePermissionStore(state => state.hasPermission)
   const isAdmin = usePermissionStore(state => state.isAdmin)
+  const profileId = usePermissionStore(state => state.profileId)
   const permissions = usePermissionStore(state => state.permissions)
   
-  // Re-calcula quando permissões mudam
-  return isAdmin || permissions.some(
+  // Admin tem acesso total
+  if (isAdmin) return true
+
+  // Usuário sem perfil - libera acesso (backwards compatibility)
+  if (!profileId) return true
+
+  // Mesma lógica do hasPermission do store: 
+  // perm encontrada e allowed !== false → permitido
+  const perm = permissions.find(
     p => p.screen_key === screenKey && p.action === action
   )
+  return perm !== undefined && perm.allowed !== false
 }
 
 /**
@@ -253,12 +263,13 @@ export function useIsEnabled(screenKey: string): boolean {
     p => p.screen_key === screenKey && p.action === 'enabled'
   )
 
-  return perm ? perm.allowed !== false : true
+  return perm ? perm.allowed !== false : false
 }
 
 /**
- * Hook para verificar acesso completo (habilitado + view) para uma tela específica
+ * Hook para verificar acesso completo (habilitado) para uma tela específica
  * Útil para verificar acesso a uma única tela
+ * NOTA: view agora é funcionalidade no grid, não requisito de acesso.
  */
 export function useHasFullAccessFor(screenKey: string): boolean {
   const isAdmin = usePermissionStore(state => state.isAdmin)
@@ -271,18 +282,13 @@ export function useHasFullAccessFor(screenKey: string): boolean {
   const isEnabled = permissions.find(
     p => p.screen_key === screenKey && p.action === 'enabled'
   )
-  const enabledResult = isEnabled ? isEnabled.allowed !== false : true
-
-  const hasView = permissions.some(
-    p => p.screen_key === screenKey && p.action === 'view'
-  )
-  
-  return enabledResult && hasView
+  return isEnabled ? isEnabled.allowed !== false : false
 }
 
 /**
- * Hook que retorna função para verificar acesso completo (habilitado + view)
+ * Hook que retorna função para verificar acesso completo (habilitado)
  * Útil para callbacks e verificações múltiplas em um componente
+ * NOTA: view agora é funcionalidade no grid, não requisito de acesso.
  */
 export function useHasFullAccess() {
   const isAdmin = usePermissionStore(state => state.isAdmin)
@@ -296,12 +302,6 @@ export function useHasFullAccess() {
     const isEnabled = permissions.find(
       p => p.screen_key === screenKey && p.action === 'enabled'
     )
-    const enabledResult = isEnabled ? isEnabled.allowed !== false : true
-
-    const hasView = permissions.some(
-      p => p.screen_key === screenKey && p.action === 'view'
-    )
-    
-    return enabledResult && hasView
+    return isEnabled ? isEnabled.allowed !== false : false
   }
 }

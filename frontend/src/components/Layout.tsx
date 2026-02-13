@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { usePermissionStore, useIsEnabled, useHasFullAccess } from '@/stores/permissionStore'
+import { usePermissionStore, useHasFullAccess } from '@/stores/permissionStore'
 import NotificationBell from './NotificationBell'
 import {
   LayoutDashboard,
@@ -37,8 +37,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const { user, logout } = useAuthStore()
-  const { hasScreenAccess, isAdmin, loaded: permissionsLoaded } = usePermissionStore()
-  const isEnabled = useIsEnabled()
+  const { isAdmin, loaded: permissionsLoaded } = usePermissionStore()
   const hasFullAccess = useHasFullAccess()
   const location = useLocation()
 
@@ -64,9 +63,9 @@ const Layout = ({ children }: LayoutProps) => {
       '/allocations': 'allocations',
       // Configurações e sub-entidades
       '/settings': 'settings',
-      '/evaluations': 'settings.evaluation_models',
+      '/evaluations': 'settings.evaluations',
       '/quizzes': 'settings.quizzes',
-      '/access-profiles': 'settings.access_profiles',
+      '/access-profiles': 'settings.access-profiles',
       '/users': 'settings.users',
       '/domains': 'settings.domains',
       '/notifications': 'notifications',
@@ -76,7 +75,8 @@ const Layout = ({ children }: LayoutProps) => {
 
   /**
    * Verificar se usuário tem acesso a um item de menu
-   * Agora verifica tanto o estado 'enabled' quanto as permissões de ação
+   * Verifica tanto o estado 'enabled' quanto as permissões de ação
+   * Para sub-entidades (ex: employees.feedbacks), também verifica se a entidade-pai está habilitada
    */
   const hasMenuAccess = (href: string): boolean => {
     // Enquanto não carregou permissões, mostra tudo (evita flash)
@@ -85,6 +85,11 @@ const Layout = ({ children }: LayoutProps) => {
     if (isAdmin) return true
     // Verifica se está habilitado E tem acesso
     const screenKey = getScreenKeyFromHref(href)
+    // Se é sub-entidade (tem ponto), verificar se a entidade-pai está habilitada
+    if (screenKey.includes('.')) {
+      const parentKey = screenKey.split('.')[0]
+      if (!hasFullAccess(parentKey)) return false
+    }
     return hasFullAccess(screenKey)
   }
 

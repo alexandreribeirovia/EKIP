@@ -12,7 +12,7 @@
 
 import { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { usePermissionStore, useHasPermission } from '../stores/permissionStore'
+import { usePermissionStore, useHasPermission, useIsEnabled } from '../stores/permissionStore'
 
 // =====================================================
 // PROTECTED ACTION
@@ -71,8 +71,6 @@ export function ProtectedAction({
 interface ProtectedRouteByPermissionProps {
   /** Chave da tela */
   screenKey: string
-  /** Ação requerida (padrão: 'view') */
-  action?: string
   /** Conteúdo da rota */
   children: ReactNode
   /** Rota de redirecionamento se não tiver acesso */
@@ -83,6 +81,9 @@ interface ProtectedRouteByPermissionProps {
  * Protege uma rota baseado em permissões
  * Redireciona para dashboard se não tiver acesso
  * 
+ * NOTA: Acesso à rota é controlado por isEnabled (toggle habilitado/desabilitado).
+ * A ação 'view' agora é funcionalidade do grid (abrir registro), não requisito de rota.
+ * 
  * @example
  * <Route path="/employees" element={
  *   <ProtectedRouteByPermission screenKey="employees">
@@ -92,12 +93,11 @@ interface ProtectedRouteByPermissionProps {
  */
 export function ProtectedRouteByPermission({ 
   screenKey, 
-  action = 'view', 
   children, 
   redirectTo = '/dashboard' 
 }: ProtectedRouteByPermissionProps) {
   const location = useLocation()
-  const hasPermission = useHasPermission(screenKey, action)
+  const isEnabled = useIsEnabled(screenKey)
   const { loaded, loading, isAdmin } = usePermissionStore()
 
   // Enquanto carrega, mostra loading ou nada
@@ -114,8 +114,8 @@ export function ProtectedRouteByPermission({
     return <>{children}</>
   }
 
-  // Verifica permissão
-  if (!hasPermission) {
+  // Verifica se está habilitado
+  if (!isEnabled) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 

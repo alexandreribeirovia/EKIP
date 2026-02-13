@@ -7,6 +7,7 @@ import { Plus, Trash2, ListTodo, ThumbsUp, MessageCircle, Trophy, TrendingUp, Ed
 import FeedbackModal from '../components/FeedbackModal';
 import HtmlCellRenderer from '../components/HtmlCellRenderer';
 import { ProtectedAction } from '../components/ProtectedComponents';
+import { usePermissionStore } from '../stores/permissionStore';
 
 interface ConsultantOption {
   value: string;
@@ -33,6 +34,7 @@ interface FeedbackData {
 }
 
 const Feedbacks = () => {
+  const { hasPermission } = usePermissionStore();
   const [feedbacks, setFeedbacks] = useState<FeedbackData[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -370,18 +372,20 @@ const Feedbacks = () => {
         const isClosed = params.data?.is_closed === true;
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => handleOpenEditModal(params.data)}
-              className={`p-1 rounded transition-colors ${
-                isClosed
-                  ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
-                  : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              }`}
-              title={isClosed ? 'Visualizar feedback' : 'Editar feedback'}
-            >
-              {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-            </button>
-            {!isClosed && (
+            {(isClosed ? hasPermission('employees.feedbacks', 'view') : hasPermission('employees.feedbacks', 'edit')) && (
+              <button
+                onClick={() => handleOpenEditModal(params.data)}
+                className={`p-1 rounded transition-colors ${
+                  isClosed
+                    ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
+                    : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                }`}
+                title={isClosed ? 'Visualizar feedback' : 'Editar feedback'}
+              >
+                {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+              </button>
+            )}
+            {!isClosed && hasPermission('employees.feedbacks', 'delete') && (
               <button
                 onClick={() => handleDeleteFeedback(params.value)}
                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

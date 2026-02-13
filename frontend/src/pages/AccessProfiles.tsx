@@ -15,6 +15,8 @@ import { ColDef, ICellRendererParams, GridReadyEvent } from 'ag-grid-community'
 import { Shield, Plus, Copy, Edit2, Trash2, Search, X, CheckCircle, XCircle, Layers, ShieldCheck, ShieldX } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import apiClient from '../lib/apiClient'
+import { ProtectedAction } from '../components/ProtectedComponents'
+import { usePermissionStore } from '../stores/permissionStore'
 
 // =====================================================
 // TYPES
@@ -335,6 +337,7 @@ const DeleteModal = ({ isOpen, onClose, onConfirm, profileName }: DeleteModalPro
 export default function AccessProfiles() {
   const navigate = useNavigate()
   const gridRef = useRef<AgGridReact>(null)
+  const { hasPermission } = usePermissionStore()
   
   const [profiles, setProfiles] = useState<AccessProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -443,21 +446,25 @@ export default function AccessProfiles() {
     
     return (
       <div className="flex items-center gap-1 h-full">
-        <button
-          onClick={() => handleEdit(profile)}
-          className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-          title="Editar"
-        >
-          <Edit2 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => handleCloneClick(profile)}
-          className="p-1.5 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
-          title="Clonar"
-        >
-          <Copy className="w-4 h-4" />
-        </button>
-        {!profile.is_system && (
+        {hasPermission('settings.access-profiles', 'view') && (
+          <button
+            onClick={() => handleEdit(profile)}
+            className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+            title="Editar"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+        )}
+        {hasPermission('settings.access-profiles', 'create') && (
+          <button
+            onClick={() => handleCloneClick(profile)}
+            className="p-1.5 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+            title="Clonar"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+        )}
+        {!profile.is_system && hasPermission('settings.access-profiles', 'delete') && (
           <button
             onClick={() => handleDeleteClick(profile)}
             className="p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
@@ -586,13 +593,15 @@ export default function AccessProfiles() {
           </div>
 
           {/* Botão Novo Perfil */}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Novo Perfil
-          </button>
+          <ProtectedAction screenKey="settings.access-profiles" action="create">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Perfil
+            </button>
+          </ProtectedAction>
         </div>
 
         {/* Cards de Estatísticas */}

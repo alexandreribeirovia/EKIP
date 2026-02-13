@@ -6,8 +6,11 @@ import { ColDef } from 'ag-grid-community';
 import { Plus, Trash2, FileText, Edit, CreditCard } from 'lucide-react';
 import { EvaluationData } from '../types';
 import EvaluationModelModal from '../components/EvaluationModelModal';
+import { ProtectedAction } from '../components/ProtectedComponents';
+import { usePermissionStore } from '../stores/permissionStore';
 
 const Evaluations = () => {
+  const { hasPermission } = usePermissionStore();
   const [evaluations, setEvaluations] = useState<EvaluationData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -164,13 +167,15 @@ const Evaluations = () => {
       cellRenderer: (params: any) => {
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => handleEditEvaluation(params.value)}
-              className="text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
-              title="Editar nome e descrição"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
+            {hasPermission('settings.evaluations', 'edit') && (
+              <button
+                onClick={() => handleEditEvaluation(params.value)}
+                className="text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                title="Editar nome e descrição"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={() => handleViewEvaluation(params.value)}
               className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
@@ -178,13 +183,15 @@ const Evaluations = () => {
             >
               <FileText className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => handleDeleteEvaluation(params.value)}
-              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              title="Deletar avaliação"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {hasPermission('settings.evaluations', 'delete') && (
+              <button
+                onClick={() => handleDeleteEvaluation(params.value)}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Deletar avaliação"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         );
       },
@@ -208,13 +215,15 @@ const Evaluations = () => {
           </div>
 
           {/* Botão Nova Avaliação */}
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Avaliação
-          </button>
+          <ProtectedAction screenKey="settings.evaluations" action="create">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Nova Avaliação
+            </button>
+          </ProtectedAction>
         </div>
 
         {/* Cards de Estatísticas */}

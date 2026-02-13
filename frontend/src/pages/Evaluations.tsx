@@ -8,6 +8,8 @@ import { Plus, Trash2, ListTodo, ClipboardCheck, Clock, CheckCircle, Edit, Eye }
 import EmployeeEvaluationModal from '../components/EmployeeEvaluationModal';
 import EvaluationsOverallRating from '../components/EvaluationsOverallRating';
 import { EmployeeEvaluationData } from '../types';
+import { ProtectedAction } from '../components/ProtectedComponents';
+import { usePermissionStore } from '../stores/permissionStore';
 
 interface ConsultantOption {
   value: string;
@@ -16,6 +18,7 @@ interface ConsultantOption {
 
 const Evaluations = () => {
   const navigate = useNavigate();
+  const { hasPermission } = usePermissionStore();
   const [evaluations, setEvaluations] = useState<EmployeeEvaluationData[]>([]);
   const [consultants, setConsultants] = useState<ConsultantOption[]>([]);
   const [managers, setManagers] = useState<ConsultantOption[]>([]);
@@ -394,20 +397,22 @@ const Evaluations = () => {
         
         return (
           <div className="flex items-center justify-center h-full gap-2">
-            <button
-              onClick={() => navigate(`/employee-evaluations/${params.value}`)}
-              className={`p-1 rounded transition-colors ${
-                isClosed
-                  ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
-                  : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              }`}
-              title={isClosed ? "Visualizar avaliação" : "Responder avaliação"}
-            >
-              {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-            </button>
+            {(isClosed ? hasPermission('employees.evaluations', 'view') : hasPermission('employees.evaluations', 'edit')) && (
+              <button
+                onClick={() => navigate(`/employee-evaluations/${params.value}`)}
+                className={`p-1 rounded transition-colors ${
+                  isClosed
+                    ? 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/20'
+                    : 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                }`}
+                title={isClosed ? "Visualizar avaliação" : "Responder avaliação"}
+              >
+                {isClosed ? <Eye className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+              </button>
+            )}
             
             {/* Botão deletar só aparece se a avaliação não estiver encerrada */}
-            {!isClosed && (
+            {!isClosed && hasPermission('employees.evaluations', 'delete') && (
               <button
                 onClick={() => handleDeleteEvaluation(params.value)}
                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -508,15 +513,17 @@ const Evaluations = () => {
           </div>
 
           {/* Botão Nova Avaliação */}
-          <div className="flex items-end">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              Nova Avaliação
-            </button>
-          </div>
+          <ProtectedAction screenKey="employees.evaluations" action="create">
+            <div className="flex items-end">
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                Nova Avaliação
+              </button>
+            </div>
+          </ProtectedAction>
         </div>
 
         {/* Cards de Estatísticas por Status */}
