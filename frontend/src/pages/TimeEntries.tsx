@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 import Select from 'react-select';
 import { ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Clock, CheckCircle, Zap, TrendingUp, TrendingDown, Plus, Minus, Scale, Percent } from 'lucide-react';
 import { TimeEntryData, DailyTimeEntry, ConsultantOption } from '../types';
@@ -81,18 +81,14 @@ const TimeEntries = () => {
   // Buscar consultores uma única vez (para dropdown)
   const fetchConsultants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('user_id, name, is_active')
-        .eq('log_hours', true)
-        .order('name', { ascending: true });
+      const response = await apiClient.get<any[]>('/api/time-entries/consultants');
 
-      if (error) {
-        console.error('Erro ao buscar consultores:', error);
+      if (!response.success) {
+        console.error('Erro ao buscar consultores:', response.error?.message);
         return;
       }
 
-      const options = (data || []).map(user => ({
+      const options = (response.data || []).map((user: any) => ({
         value: user.user_id,
         label: user.name
       }));
@@ -103,7 +99,7 @@ const TimeEntries = () => {
     }
   };
 
-  // Buscar dados de lançamento de horas - VERSÃO OTIMIZADA usando timesheet_detail_report
+  // Buscar dados de lançamento de horas - via backend API (PostgreSQL function)
   const fetchTimeEntries = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -111,57 +107,62 @@ const TimeEntries = () => {
     try {
       const dateRange = getDateRange();
       
-      // Preparar IDs de usuários selecionados (ou null para todos)
+      // Preparar IDs de usuários selecionados (comma-separated ou vazio)
       const userIds = selectedConsultants.length > 0 
-        ? selectedConsultants.map(c => c.value) 
-        : null;
+        ? selectedConsultants.map(c => c.value).join(',') 
+        : '';
 
-      // UMA ÚNICA CHAMADA ao banco!
-      const { data, error } = await supabase.rpc('timesheet_detail_report', {
-        p_start_date: dateRange.start,
-        p_end_date: dateRange.end,
-        p_user_ids: userIds,
-        p_status: statusFilter
+      // Montar query string
+      const params = new URLSearchParams({
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+        status: statusFilter
       });
+      if (userIds) params.set('userIds', userIds);
 
-      if (error) {
-        console.error('Erro ao buscar relatório:', error);
+      // UMA ÚNICA CHAMADA via apiClient → backend → PostgreSQL function
+      const response = await apiClient.get<any[]>(`/api/time-entries/report?${params.toString()}`);
+
+      if (!response.success) {
+        console.error('Erro ao buscar relatório:', response.error?.message);
         setTimeEntries([]);
         setDailyTimeEntries(new Map());
         return;
       }
 
-      // Dados já vêm prontos do banco! (colunas têm prefixo out_)
-      const entriesData: TimeEntryData[] = (data || []).map((row: any) => ({
-        user_id: row.out_user_id,
-        user_name: row.out_user_name,
-        expected_hours: Number(row.out_expected_hours) || 0,
-        worked_hours: Number(row.out_worked_hours) || 0,
-        expected_hours_until_yesterday: Number(row.out_expected_hours_until_yesterday) || 0,
-        overtime_hours_in_period: Number(row.out_overtime_hours_in_period) || 0,
-        positive_comp_hours_in_period: Number(row.out_positive_comp_hours_in_period) || 0,
-        negative_comp_hours_in_period: Number(row.out_negative_comp_hours_in_period) || 0,
-        total_positive_comp_hours: Number(row.out_total_positive_comp_hours) || 0,
-        total_negative_comp_hours: Number(row.out_total_negative_comp_hours) || 0,
-        time_balance: Number(row.out_time_balance) || 0
+      const data = response.data || [];
+
+      // Dados já vêm mapeados do backend (sem prefixo out_)
+      const entriesData: TimeEntryData[] = data.map((row: any) => ({
+        user_id: row.user_id,
+        user_name: row.user_name,
+        expected_hours: Number(row.expected_hours) || 0,
+        worked_hours: Number(row.worked_hours) || 0,
+        expected_hours_until_yesterday: Number(row.expected_hours_until_yesterday) || 0,
+        overtime_hours_in_period: Number(row.overtime_hours_in_period) || 0,
+        positive_comp_hours_in_period: Number(row.positive_comp_hours_in_period) || 0,
+        negative_comp_hours_in_period: Number(row.negative_comp_hours_in_period) || 0,
+        total_positive_comp_hours: Number(row.total_positive_comp_hours) || 0,
+        total_negative_comp_hours: Number(row.total_negative_comp_hours) || 0,
+        time_balance: Number(row.time_balance) || 0
       }));
 
       setTimeEntries(entriesData);
 
-      // Armazenar detalhes diários em cache (já vem do banco!)
+      // Armazenar detalhes diários em cache (já vem mapeado do backend)
       const newDailyEntries = new Map<string, DailyTimeEntry[]>();
-      (data || []).forEach((row: any) => {
-        const dailyData: DailyTimeEntry[] = (row.out_daily_details || []).map((day: any) => ({
+      data.forEach((row: any) => {
+        const dailyData: DailyTimeEntry[] = (row.daily_details || []).map((day: any) => ({
           date: day.date,
-          dayOfWeek: day.day_of_week || day.dayOfWeek,
+          dayOfWeek: day.dayOfWeek,
           expected_hours: Number(day.expected_hours) || 8,
           worked_hours: Number(day.worked_hours) || 0,
           comp_positive: Number(day.comp_positive) || 0,
           comp_negative: Number(day.comp_negative) || 0,
-          isInsufficient: day.is_insufficient ?? (Number(day.worked_hours) || 0) < 8,
-          isMoresufficient: (Number(day.worked_hours) || 0) > 8
+          isInsufficient: day.isInsufficient ?? (Number(day.worked_hours) || 0) < 8,
+          isMoresufficient: day.isMoresufficient ?? (Number(day.worked_hours) || 0) > 8
         }));
-        newDailyEntries.set(row.out_user_id, dailyData);
+        newDailyEntries.set(row.user_id, dailyData);
       });
       setDailyTimeEntries(newDailyEntries);
 

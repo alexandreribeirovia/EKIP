@@ -39,6 +39,7 @@ import quizRoutes from './routes/quiz'
 import quizParticipantsRoutes from './routes/quizParticipants'
 import quizAnswerRoutes from './routes/quizAnswer'
 import accessProfilesRoutes from './routes/accessProfiles'
+import timeEntriesRoutes from './routes/timeEntries'
 
 const app = express()
 const httpServer = createServer(app)
@@ -142,6 +143,7 @@ app.use('/api/quiz', quizRoutes) // Quiz - CRUD de quizzes, perguntas e opções
 app.use('/api/quiz-participants', quizParticipantsRoutes) // Participantes do Quiz
 app.use('/api/quiz-answer', quizAnswerRoutes) // Resposta do Quiz (rotas públicas e autenticadas)
 app.use('/api/access-profiles', accessProfilesRoutes) // Perfis de Acesso e Permissões
+app.use('/api/time-entries', timeEntriesRoutes) // Relatório de lançamento de horas
 
 // Error handling
 app.use(notFound)
