@@ -8,7 +8,7 @@ EKIP é um portal de gestão para alocação de consultores, projetado para otim
 
 ## 🚀 Arquitetura e Tecnologias
 
-O EKIP utiliza uma arquitetura full-stack com TypeScript, empregando um padrão de banco de dados duplo para combinar a robustez do PostgreSQL com a flexibilidade dos serviços da Supabase.
+O EKIP utiliza uma arquitetura full-stack com TypeScript e **Supabase** como plataforma de banco de dados e autenticação.
 
 ### Frontend
 - **Framework**: React 18 + Vite 7
@@ -24,26 +24,36 @@ O EKIP utiliza uma arquitetura full-stack com TypeScript, empregando um padrão 
   - React Quill para edição WYSIWYG de textos
   - Tippy.js para tooltips interativos
   - DnD Kit para funcionalidades de drag-and-drop
+  - Canvas Confetti para animações de celebração
 - **Roteamento**: React Router v6
 - **Gerenciamento de Estado**:
-  - Zustand (com `persist` middleware) para estado de autenticação
+  - Zustand (com `persist` middleware) para autenticação, notificações e permissões
   - React Hook Form para gerenciamento de formulários
 - **Comunicação em Tempo Real**: Socket.IO Client para notificações
+- **Segurança**: Cloudflare Turnstile (CAPTCHA) na tela de login
 
 ### Backend
 - **Framework**: Node.js + Express 4.18
 - **Linguagem**: TypeScript 5.3
-- **ORM**: Prisma 5.7 para interações com o banco de dados PostgreSQL
-- **Banco de Dados**:
-  - **PostgreSQL**: Gerenciado pelo Prisma para as entidades principais (Projetos, Funcionários, Alocações)
-  - **Supabase**: Utilizado para funcionalidades estendidas como autenticação, armazenamento e tabelas específicas (riscos, fases de projeto, etc.)
-- **Autenticação**: Supabase Auth com SSR + Passport.js (JWT e OAuth2)
+- **Banco de Dados**: PostgreSQL gerenciado pelo **Supabase**
+  - `supabaseAdmin` (Service Role) para operações no backend (bypass RLS)
+  - Supabase client no frontend para funcionalidades específicas
+- **Autenticação**: Supabase Auth com sessões server-side (cookies httpOnly)
+  - Session store criptografado no backend
+  - Refresh automático de sessão via middleware `sessionAuth`
 - **Segurança**:
   - Helmet para headers HTTP seguros
   - Express Rate Limit e Slow Down para proteção contra ataques
-  - Zod para validação de schemas
+  - Zod e Express Validator para validação de schemas
+  - Criptografia de sessões com chave AES-256
+  - Cloudflare Turnstile (CAPTCHA) para proteção contra bots
 - **Documentação da API**: Swagger (OpenAPI) gerado automaticamente
-- **Comunicação em Tempo Real**: Socket.IO para notificações push
+- **Comunicação em Tempo Real**: Socket.IO + Supabase Realtime para notificações push
+
+### Supabase Edge Functions
+- Importação de dados do RunRun.it (projetos, tarefas, clientes, funcionários, horas)
+- Importação de progresso de projetos via CSV
+- Importação de folgas e feriados
 
 ## 📁 Estrutura do Projeto
 
@@ -51,38 +61,39 @@ O EKIP utiliza uma arquitetura full-stack com TypeScript, empregando um padrão 
 EKIP/
 ├── frontend/              # Aplicação React (Vite)
 │   ├── src/
-│   │   ├── components/    # Componentes reutilizáveis (modais, renderers, etc.)
+│   │   ├── components/    # Componentes reutilizáveis (modais, renderers, toasts)
 │   │   ├── pages/         # Páginas/rotas da aplicação
-│   │   ├── stores/        # Zustand stores (auth, etc.)
-│   │   ├── hooks/         # Custom React hooks
-│   │   ├── lib/           # Utilitários e clientes (Supabase, Axios)
+│   │   ├── stores/        # Zustand stores (auth, notifications, permissions)
+│   │   ├── lib/           # Utilitários e clientes (apiClient, Supabase)
+│   │   ├── constants/     # Constantes (permissões)
 │   │   └── types.ts       # Tipos TypeScript do frontend
 │   └── img/               # Assets estáticos
-├── backend/               # API Node.js (Express + Prisma)
-│   ├── src/
-│   │   ├── routes/        # Rotas da API REST
-│   │   ├── middleware/    # Middlewares (auth, error handling)
-│   │   ├── lib/           # Utilitários (encryption, Supabase clients)
-│   │   └── websocket/     # Socket.IO para notificações em tempo real
-│   └── prisma/            # Schema e migrações do Prisma
+├── backend/               # API Node.js (Express + Supabase)
+│   └── src/
+│       ├── routes/        # Rotas da API REST
+│       ├── middleware/     # Middlewares (sessionAuth, checkPermission, errors)
+│       ├── lib/           # Utilitários (encryption, sessionStore, supabaseAdmin)
+│       └── websocket/     # Socket.IO para notificações em tempo real
 ├── shared/                # Tipos e interfaces compartilhados
 │   └── types/
+├── supabase/              # Supabase Edge Functions
+│   └── Edge Functions/    # Funções serverless (importações RunRun.it, CSV, etc.)
 ├── docs/                  # Documentação funcional e técnica
 │   ├── employees/         # Docs do módulo de funcionários
 │   ├── projects/          # Docs do módulo de projetos
 │   ├── login/             # Docs do fluxo de autenticação
-│   └── project-detail/    # Docs da página de detalhes do projeto
-├── template/              # Templates de email
+│   ├── project-detail/    # Docs da página de detalhes do projeto
+│   └── roles-management/  # Docs de gestão de perfis de acesso
+├── template/              # Templates de email (convite, reset de senha)
 │   └── email/
-└── docker-compose.yml     # Orquestração dos contêineres
+└── package.json           # Scripts de orquestração (dev, build, install)
 ```
 
 ## 🛠️ Instalação e Execução
 
 ### Pré-requisitos
 - Node.js 20+ (versão LTS recomendada)
-- Docker e Docker Compose (para a abordagem com contêineres)
-- PostgreSQL (se executar sem Docker)
+- Conta no [Supabase](https://supabase.com) com projeto configurado
 
 ### Desenvolvimento Local
 
@@ -101,43 +112,42 @@ EKIP/
    - Copie `backend/env.example` para `backend/.env`
    - Copie `frontend/env.example` para `frontend/.env`
    - Preencha as variáveis necessárias:
-     - `DATABASE_URL` - String de conexão do PostgreSQL
-     - `JWT_SECRET` - Chave secreta para tokens JWT
-     - `VITE_API_URL` - URL da API backend
-     - `VITE_SUPABASE_URL` - URL do projeto Supabase
-     - `VITE_SUPABASE_ANON_KEY` - Chave anônima do Supabase
 
-4. **Execute as migrações do banco de dados**
-   ```bash
-   cd backend
-   npx prisma migrate dev
-   npx prisma generate
-   ```
+   **Backend (`backend/.env`)**:
+   | Variável | Descrição |
+   |----------|-----------|
+   | `DATABASE_URL` | String de conexão do PostgreSQL |
+   | `SUPABASE_URL` | URL do projeto Supabase |
+   | `SUPABASE_ANON_KEY` | Chave anônima do Supabase |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Chave Service Role do Supabase |
+   | `ENCRYPTION_KEY` | Chave AES-256 para criptografia de sessões |
+   | `FRONTEND_URL` | URL do frontend (default: `http://localhost:3000`) |
 
-5. **Inicie os servidores de desenvolvimento**
+   **Frontend (`frontend/.env`)**:
+   | Variável | Descrição |
+   |----------|-----------|
+   | `VITE_API_URL` | URL da API backend (default: `http://localhost:5000/api`) |
+   | `VITE_SUPABASE_URL` | URL do projeto Supabase |
+   | `VITE_SUPABASE_ANON_KEY` | Chave anônima do Supabase |
+   | `VITE_TURNSTILE_SITE_KEY` | Chave do Cloudflare Turnstile (CAPTCHA) |
+
+4. **Inicie os servidores de desenvolvimento**
    ```bash
-   # Volte para a pasta raiz
-   cd ..
-   
-   # Inicia frontend e backend simultaneamente
    npm run dev
    ```
+
+   > No Windows, também é possível usar o script de instalação: `.\install-windows.ps1`
 
 ### Scripts Disponíveis
 
 | Script | Descrição |
 |--------|-----------|
 | `npm run dev` | Inicia frontend e backend simultaneamente |
-| `npm run dev:frontend` | Inicia apenas o frontend |
-| `npm run dev:backend` | Inicia apenas o backend |
+| `npm run dev:frontend` | Inicia apenas o frontend (porta 3000) |
+| `npm run dev:backend` | Inicia apenas o backend (porta 5000) |
 | `npm run build` | Build de produção (frontend + backend) |
 | `npm run install:all` | Instala dependências em todos os projetos |
-
-### Alternativa com Docker
-Para uma inicialização simplificada, use o Docker Compose:
-```bash
-docker-compose up --build
-```
+| `npm start` | Inicia o backend em modo produção |
 
 ## 🌐 URLs de Desenvolvimento
 
@@ -146,10 +156,7 @@ docker-compose up --build
 | Frontend | http://localhost:3000 | Aplicação React |
 | Backend API | http://localhost:5000 | API REST Express |
 | Swagger Docs | http://localhost:5000/api-docs | Documentação interativa da API |
-| Prisma Studio | http://localhost:5555 | GUI do banco de dados |
 | Health Check | http://localhost:5000/health | Verificação de saúde da API |
-
-> **Nota**: Para abrir o Prisma Studio, execute `npx prisma studio` na pasta `backend`
 
 ## 📋 Funcionalidades Principais
 
@@ -191,57 +198,57 @@ docker-compose up --build
 ### 💬 Feedbacks
 - Tela centralizada para visualizar e gerenciar todos os feedbacks
 - Editor WYSIWYG para formatação rica de textos
+- Fluxo de aceite de feedback pelo colaborador
 - Histórico completo de feedbacks por colaborador
 
 ### 📝 Avaliações de Desempenho
 - Acompanhamento de todas as avaliações realizadas
 - Modelos de avaliação customizáveis com categorias e perguntas
 - Rating visual com estrelas
+- Fluxo de aceite de avaliação pelo colaborador
 
 ### 🎯 PDI (Plano de Desenvolvimento Individual)
 - Gestão centralizada de todos os PDIs
 - Acompanhamento de metas e progresso
 - Vinculação com avaliações de desempenho
 
+### 📋 Pesquisas (Quiz)
+- Criação de modelos de pesquisa com perguntas customizáveis
+- Geração de links únicos para participantes
+- Respostas anônimas ou identificadas
+- Dashboard de resultados e estatísticas
+
 ### 🔔 Notificações em Tempo Real
-- Sistema de notificações push com Socket.IO
-- Bell de notificações com contador
+- Sistema de notificações push com Socket.IO + Supabase Realtime
+- Bell de notificações com contador de não lidas
+- Navegação direta para o contexto da notificação (deep linking com hash)
 - Histórico de notificações lidas/não lidas
 
 ### ⚙️ Administração
-- **Gestão de Usuários**: Controle de acesso com diferentes perfis (Admin, Gerente, Usuário)
+- **Gestão de Usuários**: Controle de acesso e convites por email
+- **Perfis de Acesso**: Sistema granular de permissões por funcionalidade (CRUD por módulo)
 - **Modelos de Avaliação**: Templates de avaliação com categorias e perguntas customizáveis
 - **Domínios**: Gestão de dados mestres e listas de seleção do sistema
 
-### 🔐 Autenticação
-- Sistema de login seguro com Supabase Auth
+### 🔐 Autenticação e Segurança
+- Sistema de login seguro com Supabase Auth e sessões server-side
+- Cookies httpOnly para refresh tokens (proteção contra XSS)
+- Cloudflare Turnstile (CAPTCHA) na tela de login
+- Proteção contra brute-force com rate limiting e slow down
 - Fluxo completo de recuperação e redefinição de senha
-- Rotas protegidas para garantir acesso seguro
-- Suporte a OAuth2 para integração com provedores externos
+- Controle de permissões por perfil de acesso (frontend + backend)
 
 ## 📖 Documentação
 
 A documentação completa do projeto está disponível na pasta `docs/`:
 
-| Documento | Descrição |
-|-----------|-----------|
-| [API.md](docs/API.md) | Documentação da API REST |
-| [ARCHITECTURE_API_SUPABASE.md](docs/ARCHITECTURE_API_SUPABASE.md) | Arquitetura do padrão dual-database |
-| [FRONTEND.md](docs/FRONTEND.md) | Guia de desenvolvimento frontend |
-| [QODANA_GUIDE.md](docs/QODANA_GUIDE.md) | Guia de análise de código com Qodana |
+
 
 ## 🧪 Qualidade de Código
 
-O projeto utiliza ferramentas de análise estática para manter a qualidade:
-
-- **ESLint**: Linting para TypeScript
-- **Qodana**: Análise de código estático (JetBrains)
+- **ESLint**: Linting para TypeScript (frontend e backend)
 - **TypeScript Strict Mode**: Verificação de tipos rigorosa
-
-Para executar a análise Qodana localmente:
-```powershell
-.\run-qodana.ps1
-```
+- **Swagger/OpenAPI**: Documentação interativa da API em `/api-docs`
 
 ## 🤝 Contribuindo
 
