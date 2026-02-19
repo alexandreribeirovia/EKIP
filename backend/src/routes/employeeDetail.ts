@@ -766,7 +766,7 @@ router.get('/off-days', async (req: Request, res: Response, next: NextFunction) 
 
     const { data, error } = await supabaseAdmin
       .from('off_days')
-      .select('day')
+      .select('day, description')
       .gte('day', startDate as string)
       .lt('day', endDate as string)
 

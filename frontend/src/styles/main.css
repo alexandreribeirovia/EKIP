@@ -168,6 +168,39 @@
   border-color: #4b5563; /* cinza escuro para grade (modo escuro) */
 }
 
+/* 4.1 SEPARADOR DE SEMANA (borda esquerda nas segundas-feiras) */
+.fc-week-start {
+  border-left: 2px solid #d1d5db !important; /* gray-300 */
+}
+.dark .fc-week-start {
+  border-left: 2px solid #4b5563 !important; /* gray-600 */
+}
+
+/* 4.2 DESTAQUE DA SEMANA ATUAL (fundo laranja bem clarinho) */
+.fc-current-week {
+  background-color: rgba(249, 115, 22, 0.06) !important; /* orange-500 @ 6% */
+}
+.dark .fc-current-week {
+  background-color: rgba(249, 115, 22, 0.10) !important; /* orange-500 @ 10% */
+}
+
+/* Label do header da semana atual */
+.fc-current-week-label {
+  background-color: rgba(249, 115, 22, 0.12) !important; /* orange-500 @ 12% */
+}
+.dark .fc-current-week-label {
+  background-color: rgba(249, 115, 22, 0.18) !important; /* orange-500 @ 18% */
+}
+
+/* 4.3 FERIADO (fundo amarelo clarinho) */
+.fc-holiday {
+  background-color: rgba(234, 179, 8, 0.25) !important; /* yellow-500 @ 12% */
+  cursor: pointer;
+}
+.dark .fc-holiday {
+  background-color: rgba(234, 179, 8, 0.25) !important; /* yellow-500 @ 15% */
+}
+
 /* 5. ESTILOS DOS EVENTOS */
 .fc-event {
   padding: 0.25rem 0.5rem !important;

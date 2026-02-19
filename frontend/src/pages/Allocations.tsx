@@ -141,6 +141,7 @@ const Allocations = () => {
   const [isFeriasFilter, setIsFeriasFilter] = useState(false);
   const [skillFilter, setSkillFilter] = useState<string>('');
   const [filteredResourcesBySkills, setFilteredResourcesBySkills] = useState<FullCalendarResource[]>([]);
+  const [holidayDates, setHolidayDates] = useState<Map<string, string>>(new Map());
 
   const menuPortalTarget = (isPresentationMode && cardRef.current) ? cardRef.current : document.body
 
@@ -302,8 +303,114 @@ const Allocations = () => {
     };
   }, []);
 
+  // Tooltip tippy nos dias de feriado em qualquer parte da coluna
+  useEffect(() => {
+    if (holidayDates.size === 0) return;
+
+    const container = document.getElementById('calendar-container');
+    if (!container) return;
+
+    // Cria um elemento invisível como âncora para o tippy
+    const anchor = document.createElement('div');
+    anchor.style.position = 'fixed';
+    anchor.style.width = '1px';
+    anchor.style.height = '1px';
+    anchor.style.pointerEvents = 'none';
+    anchor.style.zIndex = '-1';
+    document.body.appendChild(anchor);
+
+    let currentHolidayDate: string | null = null;
+    const tippyInstance = tippy(anchor, {
+      content: '',
+      allowHTML: true,
+      theme: 'light-border',
+      appendTo: () => (document.fullscreenElement ?? document.body),
+      placement: 'top',
+      trigger: 'manual',
+      hideOnClick: false,
+      offset: [0, 12],
+    });
+
+    // Encontra a data do feriado baseado na posição X do mouse
+    const getHolidayAtX = (clientX: number): { name: string; dateStr: string } | null => {
+      const headerCells = container.querySelectorAll<HTMLElement>(
+        '.fc-timeline-header-row:last-child th[data-date]'
+      );
+
+      for (const headerCell of headerCells) {
+        const rect = headerCell.getBoundingClientRect();
+        if (clientX >= rect.left && clientX <= rect.right) {
+          const dateStr = headerCell.getAttribute('data-date')?.slice(0, 10);
+          if (dateStr && holidayDates.has(dateStr)) {
+            return { name: holidayDates.get(dateStr)!, dateStr };
+          }
+          return null;
+        }
+      }
+      return null;
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const info = getHolidayAtX(e.clientX);
+
+      if (info) {
+        if (currentHolidayDate !== info.dateStr) {
+          currentHolidayDate = info.dateStr;
+          tippyInstance.setContent(
+            `<div class="p-2 text-xs leading-snug"><p class="font-medium text-gray-800">${info.name}</p><p class="text-gray-500">${info.dateStr.split('-').reverse().join('/')}</p></div>`
+          );
+        }
+        anchor.style.left = `${e.clientX}px`;
+        anchor.style.top = `${e.clientY}px`;
+        if (!tippyInstance.state.isVisible) {
+          tippyInstance.show();
+        }
+      } else {
+        if (tippyInstance.state.isVisible) {
+          tippyInstance.hide();
+          currentHolidayDate = null;
+        }
+      }
+    };
+
+    const handleMouseLeave = () => {
+      if (tippyInstance.state.isVisible) {
+        tippyInstance.hide();
+        currentHolidayDate = null;
+      }
+    };
+
+    container.addEventListener('mousemove', handleMouseMove);
+    container.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      container.removeEventListener('mousemove', handleMouseMove);
+      container.removeEventListener('mouseleave', handleMouseLeave);
+      tippyInstance.destroy();
+      anchor.remove();
+    };
+  }, [holidayDates, allEvents]);
+
   const getCurrentDateInSaoPaulo = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  
+
+  // Retorna o número da semana ISO (segunda = início da semana)
+  const getISOWeek = (year: number, month: number, day: number): { week: number; year: number } => {
+    const d = new Date(Date.UTC(year, month, day));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return { week, year: d.getUTCFullYear() };
+  };
+
+  // Verifica se uma data (slot do FullCalendar, UTC midnight) pertence à semana atual (São Paulo)
+  const isCurrentWeek = (slotDate: Date): boolean => {
+    const now = getCurrentDateInSaoPaulo();
+    const currentWeek = getISOWeek(now.getFullYear(), now.getMonth(), now.getDate());
+    // Slot dates do FullCalendar são UTC midnight — usar UTC methods
+    const slotWeek = getISOWeek(slotDate.getUTCFullYear(), slotDate.getUTCMonth(), slotDate.getUTCDate());
+    return currentWeek.week === slotWeek.week && currentWeek.year === slotWeek.year;
+  };
+
   const getInitialCalendarDate = () => {
     const date = getCurrentDateInSaoPaulo();
     date.setMonth(date.getMonth() - 8);
@@ -475,6 +582,29 @@ const scrollToNowFallbackDOM = () => {
       void fetchProjects();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Busca feriados (off_days) uma única vez
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      try {
+        const startDate = new Date();
+        startDate.setMonth(startDate.getMonth() - 18);
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 12);
+        const result = await apiClient.get<{ day: string; description: string }[]>(
+          `/api/employee-detail/off-days?startDate=${startDate.toISOString().slice(0, 10)}&endDate=${endDate.toISOString().slice(0, 10)}`
+        );
+        if (result.success && result.data) {
+          const map = new Map<string, string>();
+          result.data.forEach(d => map.set(d.day, d.description || 'Feriado'));
+          setHolidayDates(map);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar feriados:', err);
+      }
+    };
+    void fetchHolidays();
   }, []);
 
   // Effect para filtrar recursos por skills
@@ -955,6 +1085,28 @@ const handleDatesSet = () => {
                   return arg.text;
                 }
               }
+            }}
+            slotLaneClassNames={(arg) => {
+              const classes: string[] = [];
+              if (!arg.date) return classes;
+              if (arg.date.getUTCDay() === 1) classes.push('fc-week-start');
+              if (isCurrentWeek(arg.date)) classes.push('fc-current-week');
+              const dateStr = arg.date.toISOString().slice(0, 10);
+              if (holidayDates.has(dateStr)) classes.push('fc-holiday');
+              return classes;
+            }}
+            slotLabelClassNames={(arg) => {
+              const classes: string[] = [];
+              if (!arg.date) return classes;
+              if (arg.level === 1) {
+                if (arg.date.getUTCDay() === 1) classes.push('fc-week-start');
+                if (isCurrentWeek(arg.date)) classes.push('fc-current-week');
+                const dateStr = arg.date.toISOString().slice(0, 10);
+                if (holidayDates.has(dateStr)) classes.push('fc-holiday');
+              } else if (arg.level === 0) {
+                if (isCurrentWeek(arg.date)) classes.push('fc-current-week-label');
+              }
+              return classes;
             }}
             businessHours={{ daysOfWeek: [1, 2, 3, 4, 5] }}
             contentHeight={isPresentationMode ? undefined : "auto"}
