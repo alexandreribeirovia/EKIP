@@ -945,3 +945,88 @@ export interface UserPermissionsResponse {
   permissions: Permission[]
   noProfile?: boolean
 }
+
+// ============================================================================
+// Dashboard Types
+// ============================================================================
+
+export interface WeeklyUtilization {
+  week_index: number
+  week_label: string
+  week_start: string
+  week_end: string
+  allocated_count: number
+  total_consultants: number
+  utilization_pct: number
+}
+
+export interface MonthlyAllocation {
+  month_index: number
+  month_label: string
+  month_start: string
+  month_end: string
+  faturavel: number
+  nao_faturavel: number
+  investimento: number
+  sem_tipo: number
+}
+
+export interface DashboardStats {
+  activeProjects: number
+  closedProjects: number
+  activeConsultants: number
+  criticalRisksCount: number
+  pendingEvaluationsCount: number
+  pendingFeedbacksCount: number
+  criticalRisks: DashboardCriticalRisk[]
+  benchConsultants: DashboardBenchConsultant[]
+  upcomingVacations: DashboardVacation[]
+  projectStatusData: DashboardProjectStatus[]
+}
+
+export interface DashboardCriticalRisk {
+  id: number
+  description: string
+  project_id: number
+  priority: string
+  status: string
+  owner_name: string | null
+  project: { name: string }
+  created_at: string
+}
+
+export interface DashboardBenchConsultant {
+  user_id: string
+  name: string
+  position: string | null
+  avatar_url: string | null
+}
+
+export interface DashboardVacationProject {
+  project_name: string
+  manager_name: string | null
+}
+
+export interface DashboardVacation {
+  user_id: string
+  responsible_name: string
+  desired_start_date: string
+  desired_date: string
+  avatar_url: string | null
+  projects: DashboardVacationProject[]
+}
+
+export interface DashboardProjectStatus {
+  name: string
+  value: number
+  color: string
+}
+
+export interface DashboardMonthlyHours {
+  month_label: string
+  month_start: string
+  month_end: string
+  expected_hours: number
+  worked_hours: number
+  percentage: number
+}

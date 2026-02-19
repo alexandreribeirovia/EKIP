@@ -67,7 +67,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           updated_at: ownerData.updated_at,
           project_id: ownerData.project_id,
           user_id: ownerData.user_id,
-          employees: employeeData && !Array.isArray(employeeData) ? {
+          users: employeeData && !Array.isArray(employeeData) ? {
             user_id: employeeData.user_id,
             name: employeeData.name,
             avatar_large_url: employeeData.avatar_large_url
